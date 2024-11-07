@@ -11,9 +11,7 @@ import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.System
 
--- | Attempts to solve as many type-class constraints as possible. Takes in
--- the set of meta-variables solved since the solver was last run and outputs
--- the set of meta-variables solved during this run.
+-- | Attempts to solve as many type-class constraints as possible.
 runApplicationSolver :: (TCM builtin m) => Proxy builtin -> m ()
 runApplicationSolver proxy = do
   logCompilerPass MaxDetail ("application solver run" <> line) $

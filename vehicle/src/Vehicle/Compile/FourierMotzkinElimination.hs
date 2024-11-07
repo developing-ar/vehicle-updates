@@ -12,8 +12,7 @@ import Vehicle.Compile.Prelude
 import Vehicle.Data.Assertion
 import Vehicle.Data.Builtin.Core (Strictness (..))
 import Vehicle.Data.Code.LinearExpr
-import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RationalTensor, Tensor (..))
+import Vehicle.Data.Tensor (RationalTensor, pattern ZeroDimTensor)
 
 -- | TODO If performance proves unnacceptably poor look into
 -- Imbert's acceleration theorems:
@@ -71,9 +70,9 @@ partition var = foldr categorise (Bounds [] [], [])
 -- required variable that is missing from the assignment or the reconstructed
 -- value.
 reconstructFourierMotzkinVariableValue ::
-  Map ElementVariable RationalTensor ->
+  Map Variable RationalTensor ->
   Bounds RationalTensor ->
-  Either ElementVariable RationalTensor
+  Either Variable RationalTensor
 reconstructFourierMotzkinVariableValue assignment solution = do
   let initialMax = (-infinity, NonStrict)
   let initialMin = (infinity, NonStrict)
@@ -87,7 +86,7 @@ reconstructFourierMotzkinVariableValue assignment solution = do
           || (lowerBound == upperBound && minRel == NonStrict && maxRel == NonStrict)
 
   if validBound
-    then return $ Tensor mempty [pickValue lowerBound upperBound]
+    then return $ ZeroDimTensor (pickValue lowerBound upperBound)
     else do
       -- Only 99% sure about this. Can't find a good reference to the reconstruction phase of the
       -- algorithm. Closest to referencing this impossibility is:
@@ -97,7 +96,7 @@ reconstructFourierMotzkinVariableValue assignment solution = do
     evaluateMinValue ::
       (Rational, Strictness) ->
       LowerBound RationalTensor ->
-      Either ElementVariable (Rational, Strictness)
+      Either Variable (Rational, Strictness)
     evaluateMinValue current@(currentMin, _) (Bound rel expr) = do
       value <- extractRationalConstant <$> evaluateExpr expr assignment
       return $
@@ -108,7 +107,7 @@ reconstructFourierMotzkinVariableValue assignment solution = do
     evaluateMaxValue ::
       (Rational, Strictness) ->
       UpperBound RationalTensor ->
-      Either ElementVariable (Rational, Strictness)
+      Either Variable (Rational, Strictness)
     evaluateMaxValue current@(currentMax, _) (Bound rel expr) = do
       value <- extractRationalConstant <$> evaluateExpr expr assignment
       return $

@@ -136,28 +136,34 @@ instance BuiltinHasStandardData PolarityBuiltin where
     _ -> Nothing
 
 instance BuiltinHasBoolLiterals PolarityBuiltin where
-  mkBoolBuiltinLit b = PolarityConstructor (LBool b)
-  getBoolBuiltinLit = \case
-    PolarityConstructor (LBool b) -> Just b
+  getBoolBuiltinTensorLit = \case
+    PolarityConstructor (BoolTensorLiteral b) -> Just b
     _ -> Nothing
+  mkBoolBuiltinTensorLit b = PolarityConstructor (BoolTensorLiteral b)
 
 instance BuiltinHasIndexLiterals PolarityBuiltin where
   getIndexBuiltinLit e = case e of
-    PolarityConstructor (LIndex n) -> Just n
+    PolarityConstructor (IndexLiteral n) -> Just n
     _ -> Nothing
-  mkIndexBuiltinLit x = PolarityConstructor (LIndex x)
+  mkIndexBuiltinLit x = PolarityConstructor (IndexLiteral x)
 
 instance BuiltinHasNatLiterals PolarityBuiltin where
   getNatBuiltinLit e = case e of
-    PolarityConstructor (LNat b) -> Just b
+    PolarityConstructor (NatLiteral b) -> Just b
     _ -> Nothing
-  mkNatBuiltinLit x = PolarityConstructor (LNat x)
+  mkNatBuiltinLit x = PolarityConstructor (NatLiteral x)
 
 instance BuiltinHasRatLiterals PolarityBuiltin where
-  getRatBuiltinLit e = case e of
-    PolarityConstructor (LRat b) -> Just b
+  getRatBuiltinTensorLit = \case
+    PolarityConstructor (RatTensorLiteral b) -> Just b
     _ -> Nothing
-  mkRatBuiltinLit x = PolarityConstructor (LRat x)
+  mkRatBuiltinTensorLit b = PolarityConstructor (RatTensorLiteral b)
+
+instance BuiltinHasConstTensor PolarityBuiltin where
+  isConstTensorBuiltin e = case e of
+    PolarityFunction ConstTensor -> True
+    _ -> False
+  mkConstTensorBuiltin = PolarityFunction ConstTensor
 
 -----------------------------------------------------------------------------
 -- Type synonyms

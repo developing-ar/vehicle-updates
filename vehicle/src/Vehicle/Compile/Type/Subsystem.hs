@@ -7,7 +7,7 @@ where
 import Control.Monad.Except (runExceptT)
 import Data.List.NonEmpty qualified as NonEmpty
 import Vehicle.Compile.Error
-import Vehicle.Compile.Monomorphisation (monomorphise, removeLiteralCoercions)
+import Vehicle.Compile.Monomorphisation (monomorphise)
 import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin, findInstanceArg)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal)
@@ -29,8 +29,7 @@ typeCheckWithSubsystem instanceCandidates errorHandler prog = do
   typeClassFreeProg <- resolveInstanceArguments prog
   irrelevantFreeProg <- removeIrrelevantCodeFromProg typeClassFreeProg
   monomorphisedProg <- monomorphise isPropertyDecl "-" irrelevantFreeProg
-  literalFreeProg <- removeLiteralCoercions "-" monomorphisedProg
-  implicitFreeProg <- removeImplicitAndInstanceArgs literalFreeProg
+  implicitFreeProg <- removeImplicitAndInstanceArgs monomorphisedProg
 
   resultOrError <- runExceptT $ typeCheckProg instanceCandidates mempty implicitFreeProg
   case resultOrError of

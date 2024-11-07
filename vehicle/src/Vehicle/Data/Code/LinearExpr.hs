@@ -8,9 +8,14 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import GHC.Generics (Generic)
 import Vehicle.Data.DeBruijn (Lv)
-import Vehicle.Data.QuantifiedVariable (Variable)
-import Vehicle.Data.Tensor (RationalTensor, Tensor (..), allTensor, zipWithTensor)
+import Vehicle.Data.Tensor (RationalTensor, allTensor, zipWithTensor, pattern ZeroDimTensor)
 import Vehicle.Prelude
+
+-------------------------------------------------------------------------------
+-- Variables
+
+-- | A variable.
+type Variable = Lv
 
 -------------------------------------------------------------------------------
 -- Constants
@@ -39,7 +44,7 @@ extractTensorConstant Nothing = 0
 extractTensorConstant (Just v) = v
 -}
 extractRationalConstant :: RationalTensor -> Rational
-extractRationalConstant (Tensor [] [v]) = v
+extractRationalConstant (ZeroDimTensor v) = v
 extractRationalConstant _ = developerError "FM-elimination doesn't yet work over tensors"
 
 -------------------------------------------------------------------------------
@@ -120,16 +125,27 @@ evaluateExpr expr assignment = do
       Nothing -> Left var
       Just value -> Right $ addConstants 1 coeff total value
 
-eliminateVar :: (Constant constant) => Variable -> LinearExpr constant -> LinearExpr constant -> LinearExpr constant
-eliminateVar var solution row = do
-  let varCoefficient = lookupCoefficient row var
-  if varCoefficient == 0
-    then row
-    else do
-      let resultExpr = addExprs 1 varCoefficient row solution
-      resultExpr
-        { coefficients = Map.delete var $ coefficients resultExpr
-        }
+eliminateVars ::
+  forall constant.
+  (Constant constant) =>
+  Map Variable (LinearExpr constant) ->
+  LinearExpr constant ->
+  Either constant (LinearExpr constant)
+eliminateVars solutions expr@(Sparse coeffs _) = do
+  let relevantVars = Map.intersectionWith (,) solutions coeffs
+  let newExpr = foldr elim expr (Map.toList relevantVars)
+  case isConstant newExpr of
+    Just c -> Left c
+    Nothing -> Right newExpr
+  where
+    elim :: (Variable, (LinearExpr constant, Coefficient)) -> LinearExpr constant -> LinearExpr constant
+    elim (var, (sol, coef)) row
+      | coef == 0 = row
+      | otherwise = do
+          let resultExpr = addExprs 1 coef row sol
+          resultExpr
+            { coefficients = Map.delete var $ coefficients resultExpr
+            }
 
 -- | Takes an assertion `c_0*x_0 + ... + c_i*x_i + ... c_n * x_n` and
 -- returns (c_i, -(c_0/c_i)*x_0 ... - (c_n/c_i) * x_n), i.e.

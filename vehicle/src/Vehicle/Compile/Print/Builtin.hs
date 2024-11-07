@@ -1,13 +1,18 @@
 module Vehicle.Compile.Print.Builtin where
 
+import Data.Maybe (isJust)
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Linearity (LinearityBuiltin (..))
-import Vehicle.Data.Builtin.Loss (LossTensorBuiltin (..))
+import Vehicle.Data.Builtin.Loss (LossBuiltin (..), LossBuiltinConstructor, LossBuiltinFunction, LossBuiltinType)
+import Vehicle.Data.Builtin.Loss qualified as L
 import Vehicle.Data.Builtin.Polarity (PolarityBuiltin (..))
-import Vehicle.Data.Builtin.Tensor (TensorBuiltin (..))
-import Vehicle.Data.Code.Expr (Expr (..), mapBuiltins, normAppList, pattern App, pattern BuiltinExpr)
-import Vehicle.Data.Code.Interface (tensorToExpr)
-import Vehicle.Libraries.StandardLibrary.Definitions (StdLibFunction (..))
+import Vehicle.Data.Code.Expr
+  ( Arg,
+    Expr (..),
+    mapBuiltins,
+    normAppList,
+    pattern App,
+  )
 import Vehicle.Prelude
 
 --------------------------------------------------------------------------------
@@ -37,62 +42,46 @@ instance ConvertableBuiltin OrderOp Builtin where
 instance ConvertableBuiltin EqualityOp Builtin where
   convertBuiltin p = convertBuiltin p . EqualsTC
 
-instance ConvertableBuiltin DimensionTypeBuiltin Builtin where
-  convertBuiltin p = \case
-    TensorType -> FreeVar p (identifierOf StdTensor)
-    DimensionType -> convertBuiltin p Nat
-    DimensionsType -> BuiltinExpr p (BuiltinType List) [explicit (convertBuiltin p Nat)]
-    DimensionIndexType -> convertBuiltin p Index
+instance ConvertableBuiltin LossBuiltinType Builtin where
+  convertBuiltin p =
+    convertBuiltin p . \case
+      L.UnitType -> UnitType
+      L.IndexType -> IndexType
+      L.NatType -> NatType
+      L.RatType -> RatType
+      L.ListType -> ListType
+      L.TensorType -> TensorType
 
-instance ConvertableBuiltin DimensionDataBuiltin Builtin where
-  convertBuiltin p = \case
-    Dimension n -> convertBuiltin p (LNat n)
-    DimensionNil -> convertBuiltin p Nil
-    DimensionCons -> convertBuiltin p Cons
-    DimensionIndex n -> convertBuiltin p (LIndex n)
-    DimensionIndexTensor t -> tensorToExpr (convertBuiltin p . LIndex) t
-    DimensionLookup -> convertBuiltin p At
-    ConstTensor -> cheatConvertBuiltin p "const"
-    StackTensor {} -> cheatConvertBuiltin p "stack"
+instance ConvertableBuiltin LossBuiltinConstructor Builtin where
+  convertBuiltin p =
+    convertBuiltin p . \case
+      L.Nil -> Nil
+      L.Cons -> Cons
+      L.UnitLiteral -> UnitLiteral
+      L.IndexLiteral x -> IndexLiteral x
+      L.IndexTensorLiteral x -> IndexTensorLiteral x
+      L.NatLiteral x -> NatLiteral x
+      L.NatTensorLiteral x -> NatTensorLiteral x
+      L.RatTensorLiteral x -> RatTensorLiteral x
 
-instance ConvertableBuiltin TensorBuiltin Builtin where
+instance ConvertableBuiltin LossBuiltinFunction Builtin where
   convertBuiltin p b = case b of
-    TensorRat op -> convertBuiltin p op
-    TensorBool op -> convertBuiltin p op
-    TensorDimType op -> convertBuiltin p op
-    TensorDimData op -> convertBuiltin p op
-
-instance ConvertableBuiltin RatTensorBuiltin Builtin where
-  convertBuiltin p = \case
-    RatTensor vs -> tensorToExpr (convertBuiltin p . LRat) vs
-    RatType -> convertBuiltin p Rat
-    RatLiteral r -> convertBuiltin p (LRat r)
-    NegRatTensor -> convertBuiltin p NegTC
-    AddRatTensor -> convertBuiltin p AddTC
-    SubRatTensor -> convertBuiltin p SubTC
-    MulRatTensor -> convertBuiltin p MulTC
-    DivRatTensor -> convertBuiltin p DivTC
-    MinRatTensor -> convertBuiltin p MinRat
-    MaxRatTensor -> convertBuiltin p MaxRat
-    ReduceAddRatTensor -> cheatConvertBuiltin p "reduceAdd"
-    ReduceMulRatTensor -> cheatConvertBuiltin p "reduceMul"
-    ReduceMinRatTensor -> cheatConvertBuiltin p "reduceMin"
-    ReduceMaxRatTensor -> cheatConvertBuiltin p "reduceMax"
-    SearchRatTensor {} -> cheatConvertBuiltin p "search"
-
-instance ConvertableBuiltin BoolTensorBuiltin Builtin where
-  convertBuiltin p = \case
-    BoolType -> convertBuiltin p Bool
-    BoolLiteral b -> convertBuiltin p (LBool b)
-    BoolTensor vs -> tensorToExpr (convertBuiltin p . LBool) vs
-    AndBoolTensor -> convertBuiltin p And
-    OrBoolTensor -> convertBuiltin p Or
-    NotBoolTensor -> convertBuiltin p Not
-    QuantifyRatTensor q -> convertBuiltin p (Quantifier q)
-    EqualsRatTensor op -> convertBuiltin p op
-    OrderRatTensor op -> convertBuiltin p op
-    ReduceAndTensor -> cheatConvertBuiltin p "ReduceAnd"
-    ReduceOrTensor -> cheatConvertBuiltin p "ReduceOr"
+    L.Neg dom -> convertBuiltin p (L.Neg dom)
+    L.Sub dom -> convertBuiltin p (L.Sub dom)
+    L.Div dom -> convertBuiltin p (L.Div dom)
+    L.Min dom -> convertBuiltin p (L.Min dom)
+    L.Max dom -> convertBuiltin p (L.Max dom)
+    L.Add dom -> convertBuiltin p (L.Add dom)
+    L.Mul dom -> convertBuiltin p (L.Mul dom)
+    L.PowRat -> convertBuiltin p PowRat
+    L.ReduceAddRatTensor -> convertBuiltin p ReduceAddRatTensor
+    L.ReduceMulRatTensor -> convertBuiltin p ReduceMulRatTensor
+    L.ReduceMinRatTensor -> convertBuiltin p ReduceMinRatTensor
+    L.ReduceMaxRatTensor -> convertBuiltin p ReduceMaxRatTensor
+    L.At -> convertBuiltin p At
+    L.StackTensor -> convertBuiltin p StackTensor
+    L.ConstTensor -> convertBuiltin p ConstTensor
+    L.SearchRatTensor -> cheatConvertBuiltin p $ pretty b
 
 instance ConvertableBuiltin PolarityBuiltin Builtin where
   convertBuiltin p = \case
@@ -106,11 +95,11 @@ instance ConvertableBuiltin LinearityBuiltin Builtin where
     LinearityFunction f -> convertBuiltin p f
     b -> cheatConvertBuiltin p $ pretty b
 
-instance ConvertableBuiltin LossTensorBuiltin Builtin where
+instance ConvertableBuiltin LossBuiltin Builtin where
   convertBuiltin p b = case b of
-    LossTensorRat op -> convertBuiltin p op
-    LossTensorDimType op -> convertBuiltin p op
-    LossTensorDimData op -> convertBuiltin p op
+    LossBuiltinType op -> convertBuiltin p op
+    LossBuiltinConstructor op -> convertBuiltin p op
+    LossBuiltinFunction op -> convertBuiltin p op
 
 convertExprBuiltins ::
   forall builtin1 builtin2.
@@ -131,7 +120,7 @@ cheatConvertBuiltin p b = FreeVar p $ stdlibIdentifier $ layoutAsText b
 class (Show builtin, Pretty builtin, ConvertableBuiltin builtin Builtin) => PrintableBuiltin builtin where
   -- | Convert expressions with the builtin back to expressions with the standard
   -- builtin type. Used for printing.
-  isCoercion :: builtin -> Bool
+  coercionArgs :: builtin -> Maybe ([Arg builtin] -> Expr builtin)
 
   getBuiltinTypeClassOp :: builtin -> Maybe TypeClassOp
 
@@ -141,40 +130,35 @@ class (Show builtin, Pretty builtin, ConvertableBuiltin builtin Builtin) => Prin
     Nothing -> False
 
 instance PrintableBuiltin Builtin where
-  isCoercion = \case
-    BuiltinFunction FromNat {} -> True
-    BuiltinFunction FromRat {} -> True
-    TypeClassOp FromNatTC {} -> True
-    TypeClassOp FromRatTC {} -> True
-    TypeClassOp FromVecTC {} -> True
-    _ -> False
+  coercionArgs b = case b of
+    BuiltinFunction FromNat {} -> Just $ \args -> argExpr $ last args
+    BuiltinFunction FromRat {} -> Just $ \args -> argExpr $ last args
+    TypeClassOp FromNatTC {} -> Just $ \args -> argExpr $ last args
+    TypeClassOp FromRatTC {} -> Just $ \args -> argExpr $ last args
+    TypeClassOp VecLiteralTC {} -> Just $ \args -> normAppList (Builtin mempty b) args
+    _ -> Nothing
 
   getBuiltinTypeClassOp = \case
     TypeClassOp op -> Just op
     _ -> Nothing
 
 instance PrintableBuiltin PolarityBuiltin where
-  isCoercion = const False
+  coercionArgs _ = Nothing
 
   getBuiltinTypeClassOp = const Nothing
 
 instance PrintableBuiltin LinearityBuiltin where
-  isCoercion = const False
+  coercionArgs _ = Nothing
 
   getBuiltinTypeClassOp = const Nothing
 
-instance PrintableBuiltin TensorBuiltin where
-  isCoercion = const False
-
-  getBuiltinTypeClassOp = const Nothing
-
-instance PrintableBuiltin LossTensorBuiltin where
-  isCoercion = const False
+instance PrintableBuiltin LossBuiltin where
+  coercionArgs _ = Nothing
 
   getBuiltinTypeClassOp = const Nothing
 
 isCoercionExpr :: (PrintableBuiltin builtin) => Expr builtin -> Bool
 isCoercionExpr = \case
-  Builtin _ b -> isCoercion b
-  App (Builtin _ b) _ -> isCoercion b
+  Builtin _ b -> isJust $ coercionArgs b
+  App (Builtin _ b) _ -> isJust $ coercionArgs b
   _ -> False

@@ -15,7 +15,6 @@ import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class (addAuxiliaryInstanceConstraints)
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Polarity
-import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.Value
 
 solvePolarityConstraint ::
@@ -236,7 +235,8 @@ handleConstraintProgress ::
 handleConstraintProgress originalConstraint@(WithContext (Resolve _ m _ _) ctx) = \case
   Stuck metas -> addAuxiliaryInstanceConstraints [blockConstraintOn originalConstraint metas]
   Progress newUnificationConstraints newAuxiliaryConstraints -> do
-    solveMeta m (IUnitLiteral (provenanceOf ctx)) (boundContext ctx)
+    let solution = Builtin mempty (PolarityConstructor UnitLiteral)
+    solveMeta m solution (boundContext ctx)
     addUnificationConstraints newUnificationConstraints
     addAuxiliaryInstanceConstraints newAuxiliaryConstraints
 

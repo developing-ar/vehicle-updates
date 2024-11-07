@@ -27,14 +27,13 @@ import Vehicle.Data.Tensor (RationalTensor)
 -- no equalties at all.
 data ConstrainedAssertionTree
   = SingleEquality !(Equality RationalTensor) !(MaybeTrivial AssertionTree)
-  | Inequalities !(ConjunctAll (Inequality RationalTensor)) !(MaybeTrivial AssertionTree)
-  | NoConstraints !AssertionTree
+  | Inequalities ![Inequality RationalTensor] !(MaybeTrivial AssertionTree)
 
 instance Pretty ConstrainedAssertionTree where
   pretty = \case
     SingleEquality eq r -> "SingleEquality[" <+> prettyVerbose eq <> "," <+> prettyVerbose r <+> "]"
+    Inequalities [] r -> "NoConstraints[" <+> prettyVerbose r <+> "]"
     Inequalities ineqs r -> "Inequalities[" <+> prettyVerbose ineqs <> "," <+> prettyVerbose r <+> "]"
-    NoConstraints r -> "NoConstraints[" <+> prettyVerbose r <+> "]"
 
 -- | A scheme for pulling out constraints from assertions. Used to control
 -- which assertions are considered valid constraints.
@@ -92,16 +91,12 @@ findVariableConstraints fromAssertion var = go
       Either ConstrainedAssertionTree ConstrainedAssertionTree
     shortCircuitConstraints disjunctedTree constraint = case constraint of
       SingleEquality eq remaining -> Left $ SingleEquality eq (andTrivial andBoolExpr remaining (NonTrivial disjunctedTree))
-      Inequalities ineq remaining -> Right (Inequalities ineq remaining)
-      NoConstraints ineq -> Right (NoConstraints ineq)
+      Inequalities ineqs remaining -> Right (Inequalities ineqs remaining)
 
     mergeConstraints ::
       ConstrainedAssertionTree ->
       ConstrainedAssertionTree ->
       ConstrainedAssertionTree
     mergeConstraints c1 c2 = case (c1, c2) of
-      (NoConstraints t1, NoConstraints t2) -> NoConstraints (andBoolExpr t1 t2)
-      (NoConstraints t1, Inequalities ineqs2 t2) -> Inequalities ineqs2 (andTrivial andBoolExpr (NonTrivial t1) t2)
-      (Inequalities ineqs1 t1, NoConstraints t2) -> Inequalities ineqs1 (andTrivial andBoolExpr t1 (NonTrivial t2))
       (Inequalities ineqs1 t1, Inequalities ineqs2 t2) -> Inequalities (ineqs1 <> ineqs2) (andTrivial andBoolExpr t1 t2)
       _ -> developerError "Impossible - should be no equality constraints after short-circuiting"

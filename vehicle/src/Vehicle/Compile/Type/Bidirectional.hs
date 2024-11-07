@@ -200,7 +200,7 @@ inferExpr e = do
           let liftedCheckedType = liftDBIndices (Lv $ unIx i + 1) (typeOf binder)
           return (BoundVar p i, liftedCheckedType)
     FreeVar p ident -> do
-      originalType <- getDeclType (Proxy @builtin) currentPass ident
+      originalType <- getDeclType (Proxy @builtin) ident
       return (FreeVar p ident, originalType)
     Let p boundExpr binder body -> do
       -- Check that the type of the bound variable is a type
@@ -275,7 +275,7 @@ checkExprTypesEqual p expr expectedType actualType = do
   let origin =
         CheckingExprType $
           CheckingExpr
-            { checkedExpr = expr,
+            { checkedExpr = Right expr,
               checkedExprExpectedType = expectedType,
               checkedExprActualType = actualType
             }
@@ -292,11 +292,11 @@ checkBinderTypesEqual ::
 checkBinderTypesEqual p binderName expectedType actualType = do
   ctx <- getBoundCtx (Proxy @(Type builtin))
   let origin =
-        CheckingBinderType $
-          CheckingBinder
-            { checkedBinderName = binderName,
-              checkedBinderExpectedType = expectedType,
-              checkedBinderActualType = actualType
+        CheckingExprType $
+          CheckingExpr
+            { checkedExpr = Left binderName,
+              checkedExprExpectedType = expectedType,
+              checkedExprActualType = actualType
             }
   createFreshUnificationConstraint p ctx origin expectedType actualType
 
@@ -432,9 +432,6 @@ instantiateArgForNonExplicitBinder boundCtx p (fun, funArgs, funType) binder = d
 
 --------------------------------------------------------------------------------
 -- Debug functions
-
-currentPass :: Doc a
-currentPass = "bidirectional type-checking"
 
 showCheckEntry :: forall builtin m. (MonadBidirectional builtin m) => Type builtin -> Expr builtin -> m ()
 showCheckEntry t e = do

@@ -11,6 +11,7 @@ module Vehicle.Prelude.Logging.Class
     logCompilerPass,
     logCompilerPassOutput,
     logCompilerSection,
+    logIndent,
   )
 where
 
@@ -147,20 +148,22 @@ logDebug level text = logDebugM level (return text)
 
 logCompilerPass :: (MonadLogger m) => LoggingLevel -> Doc a -> m b -> m b
 logCompilerPass level passName performPass = do
-  logDebug level $ "Starting" <+> passName
-  incrCallDepth
-  result <- performPass
-  decrCallDepth
+  result <- logIndent level ("Starting" <+> passName) performPass
   logDebug level $ "Finished" <+> passName <> line
   return result
 
 logCompilerSection :: (MonadLogger m) => LoggingLevel -> Doc a -> m b -> m b
 logCompilerSection level sectionName performPass = do
+  result <- logIndent level sectionName performPass
+  logDebug level ""
+  return result
+
+logIndent :: (MonadLogger m) => LoggingLevel -> Doc a -> m b -> m b
+logIndent level sectionName performPass = do
   logDebug level sectionName
   incrCallDepth
   result <- performPass
   decrCallDepth
-  logDebug level ""
   return result
 
 logCompilerPassOutput :: (MonadLogger m) => Doc a -> m ()

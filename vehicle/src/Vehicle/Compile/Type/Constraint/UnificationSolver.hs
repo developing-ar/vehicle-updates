@@ -14,11 +14,12 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Proxy (Proxy (..))
 import Prettyprinter (sep)
+import Vehicle.Compile.Context.Free (getFreeEnv)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Normalise.Quote (Quote (..), unnormalise)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (prettyFriendly, prettyVerbose)
+import Vehicle.Compile.Print (prettyExternal, prettyFriendly, prettyVerbose)
 import Vehicle.Compile.Type.Builtin (TypableBuiltin (..))
 import Vehicle.Compile.Type.Constraint.Core (runConstraintSolver)
 import Vehicle.Compile.Type.Core
@@ -37,9 +38,7 @@ import Vehicle.Data.DeBruijn
 -- See https://github.com/AndrasKovacs/elaboration-zoo/
 -- for an excellent tutorial on the algorithm.
 
--- | Attempts to solve as many unification constraints as possible. Takes in
--- the set of meta-variables solved since unification was last run and outputs
--- the set of meta-variables solved during this run.
+-- | Attempts to solve as many unification constraints as possible.
 runUnificationSolver :: (MonadTypeChecker builtin m) => Proxy builtin -> m ()
 runUnificationSolver proxy =
   logCompilerPass MaxDetail "unification solver run" $
@@ -66,8 +65,9 @@ solveUnificationConstraint constraint = do
     Blocked blockedConstraints ->
       addUnificationConstraints blockedConstraints
     HardFailure failedConstraints -> do
+      freeEnv <- getFreeEnv
       finalFailedConstraints <- traverse substMetas failedConstraints
-      throwError $ TypingError $ FailedUnificationConstraints $ FailedUnificationConstraintsError finalFailedConstraints
+      throwError $ TypingError $ FailedUnificationConstraints $ FailedUnificationConstraintsError freeEnv finalFailedConstraints
 
 solve ::
   forall builtin m.
@@ -86,7 +86,9 @@ solve (WithContext (Unify origin e1 e2) ctx) = do
   let constraintInfo = (updatedConstraint, blockingMetas)
 
   -- Perform the unification
-  unification constraintInfo (ne1, ne2)
+  let prettyExpr e = prettyExternal (WithContext e (namedBoundCtxOf ctx))
+  logIndent MaxDetail ("unifying" <+> prettyExpr ne1 <+> "~" <+> prettyExpr ne2) $ do
+    unification constraintInfo (ne1, ne2)
 
 data UnificationResult builtin
   = Success

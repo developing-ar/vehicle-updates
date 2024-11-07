@@ -3,15 +3,12 @@ module Vehicle.Data.Assertion where
 import Control.DeepSeq (NFData)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.List.NonEmpty (NonEmpty (..))
-import Data.Map (Map)
-import Data.Map qualified as Map
 import GHC.Generics
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.Hashing ()
-import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RationalTensor, allTensor, zeroTensor)
+import Vehicle.Data.Tensor (RationalTensor, allTensor)
 import Vehicle.Prelude
 
 --------------------------------------------------------------------------------
@@ -69,9 +66,8 @@ checkInequalityTriviality (Inequality s e) = case isConstant e of
 -- Assertions
 
 data Assertion
-  = RationalEq (Equality RationalTensor)
-  | RationalIneq (Inequality RationalTensor)
-  | TensorEq (Equality RationalTensor)
+  = InequalityAssertion (Inequality RationalTensor)
+  | EqualityAssertion (Equality RationalTensor)
   deriving (Show, Eq, Generic)
 
 instance ToJSON Assertion
@@ -80,9 +76,8 @@ instance FromJSON Assertion
 
 checkTriviality :: Assertion -> MaybeTrivial Assertion
 checkTriviality ass = case ass of
-  RationalEq eq -> maybe (NonTrivial ass) Trivial (checkEqualityTriviality eq)
-  RationalIneq ineq -> maybe (NonTrivial ass) Trivial (checkInequalityTriviality ineq)
-  TensorEq eq -> maybe (NonTrivial ass) Trivial (checkEqualityTriviality eq)
+  InequalityAssertion ineq -> maybe (NonTrivial ass) Trivial (checkInequalityTriviality ineq)
+  EqualityAssertion eq -> maybe (NonTrivial ass) Trivial (checkEqualityTriviality eq)
 
 data Relation
   = Equal
@@ -92,59 +87,16 @@ data Relation
 
 assertionRel :: Assertion -> Relation
 assertionRel = \case
-  RationalEq {} -> Equal
-  TensorEq {} -> Equal
-  RationalIneq ineq
+  EqualityAssertion {} -> Equal
+  InequalityAssertion ineq
     | strictness ineq == Strict -> LessThan
     | otherwise -> LessThanOrEqual
 
 eqToAssertion :: LinearExpr RationalTensor -> LinearExpr RationalTensor -> Assertion
-eqToAssertion e1 e2 = do
-  let e = addExprs 1 (-1) e1 e2
-  RationalEq $ Equality e
+eqToAssertion e1 e2 = EqualityAssertion $ Equality $ addExprs 1 (-1) e1 e2
 
-tensorEqToAssertion :: LinearExpr RationalTensor -> LinearExpr RationalTensor -> Assertion
-tensorEqToAssertion e1 e2 = do
-  let e = addExprs 1 (-1) e1 e2
-  TensorEq $ Equality e
-
-mapAssertionExprs ::
-  (LinearExpr RationalTensor -> LinearExpr RationalTensor) ->
-  (LinearExpr RationalTensor -> LinearExpr RationalTensor) ->
-  Assertion ->
-  MaybeTrivial Assertion
-mapAssertionExprs ft fr ass = checkTriviality $ case ass of
-  TensorEq Equality {..} -> TensorEq $ Equality $ ft equalityExpr
-  RationalEq Equality {..} -> RationalEq $ Equality $ fr equalityExpr
-  RationalIneq Inequality {..} -> RationalIneq $ Inequality strictness (fr inequalityExpr)
-
-substituteTensorEq ::
-  (TensorVariable, LinearExpr RationalTensor) ->
-  Map ElementVariable (LinearExpr RationalTensor) ->
-  Assertion ->
-  MaybeTrivial Assertion
-substituteTensorEq (var, solution) ratSolutions =
-  mapAssertionExprs
-    (eliminateVar var solution)
-    eliminateRatVars
-  where
-    -- Usually the expression being substituted into is much smaller than the number of tensor
-    -- variables so we traverse the expression instead of folding over the subsitutions
-    eliminateRatVars :: LinearExpr RationalTensor -> LinearExpr RationalTensor
-    eliminateRatVars expr = do
-      let varExprs = lookupVar <$> Map.toList (coefficients expr)
-      let constantExp = Sparse (mempty @(Map ElementVariable Coefficient)) (constantValue expr)
-      foldr (addExprs 1 1) constantExp varExprs
-
-    lookupVar :: (ElementVariable, Coefficient) -> LinearExpr RationalTensor
-    lookupVar (v, c) = do
-      let vc = Sparse (Map.singleton v c) (zeroTensor [])
-      case Map.lookup v ratSolutions of
-        Nothing -> vc
-        Just sol -> eliminateVar v sol vc
-
-substituteRationalEq :: UserElementVariable -> LinearExpr RationalTensor -> Assertion -> MaybeTrivial Assertion
-substituteRationalEq var solution = mapAssertionExprs id (eliminateVar var solution)
+ordToAssertion :: OrderOp -> LinearExpr RationalTensor -> LinearExpr RationalTensor -> Assertion
+ordToAssertion op e1 e2 = InequalityAssertion $ mkInequality op e1 e2
 
 --------------------------------------------------------------------------------
 -- Bounds

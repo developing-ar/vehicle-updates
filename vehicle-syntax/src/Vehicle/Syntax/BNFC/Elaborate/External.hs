@@ -43,6 +43,7 @@ import Vehicle.Syntax.External.Abs qualified as B
 import Vehicle.Syntax.Parse.Error (ParseError (..))
 import Vehicle.Syntax.Parse.Token
 import Vehicle.Syntax.Prelude (developerError, readNat, readRat)
+import Vehicle.Syntax.Tensor (pattern ZeroDimTensor)
 
 --------------------------------------------------------------------------------
 -- Public interface
@@ -176,10 +177,7 @@ elabTypeDef anns n binders e = do
   let typeTyp
         | null binders = tokType 0
         | otherwise = B.ForallT tokForallT binders tokDot (tokType 0)
-  let typeBody
-        | null binders = e
-        | otherwise = B.Lam tokLambda binders tokArrow e
-  elabDefFun anns n n typeTyp binders typeBody
+  elabDefFun anns n n typeTyp binders e
 
 elabDefFun :: (MonadElab m) => [Annotation] -> B.Name -> B.Name -> B.Expr -> [B.NameBinder] -> B.Expr -> m (V.GenericDecl UnparsedExpr)
 elabDefFun anns n1 n2 t binders e
@@ -259,7 +257,7 @@ elabParameterOptions opts =
     (_, expr) : _ -> do
       expr' <- elabExpr expr
       case expr' of
-        V.Builtin _ (V.BuiltinConstructor (V.LBool infer))
+        V.Builtin _ (V.BuiltinConstructor (V.BoolTensorLiteral (ZeroDimTensor infer)))
           | infer -> return V.Inferable
           | otherwise -> return V.NonInferable
         _ -> do
@@ -337,7 +335,7 @@ elaborateExpr ::
 elaborateExpr file (UnparsedExpr expr) = runReaderT (elabExpr expr) file
 
 elabExpr :: (MonadElab m) => B.Expr -> m V.Expr
-elabExpr = \case
+elabExpr expr = case expr of
   B.Type t -> V.Universe <$> mkProvenance t
   B.Var n -> V.Var <$> mkProvenance n <*> pure (tkSymbol n)
   B.Hole n -> V.mkHole <$> mkProvenance n <*> pure (tkSymbol n)
@@ -353,36 +351,36 @@ elabExpr = \case
   B.ForallIn tk1 ns e1 _tk2 e2 -> elabQuantifierIn tk1 V.Forall ns e1 e2
   B.ExistsIn tk1 ns e1 _tk2 e2 -> elabQuantifierIn tk1 V.Exists ns e1 e2
   B.Foreach tk1 ns _tk2 e -> elabForeach tk1 ns e
-  B.Unit tk -> builtinType V.Unit tk []
-  B.Bool tk -> builtinType V.Bool tk []
-  B.Index tk -> builtinType V.Index tk []
-  B.Nat tk -> builtinType V.Nat tk []
-  B.Rat tk -> builtinType V.Rat tk []
-  B.List tk -> builtinType V.List tk []
-  B.Vector tk -> builtinType V.Vector tk []
+  B.Unit tk -> builtinType V.UnitType tk []
+  B.Index tk -> builtinType V.IndexType tk []
+  B.Bool tk -> castToTensorType V.BoolType tk
+  B.Rat tk -> castToTensorType V.RatType tk
+  B.Nat tk -> builtinType V.NatType tk []
+  B.List tk -> builtinType V.ListType tk []
+  B.Tensor tk -> builtinFunction V.FlattenTensorType tk []
   B.Nil tk -> constructor V.Nil tk []
   B.Cons e1 tk e2 -> constructor V.Cons tk [e1, e2]
-  B.Indices tk -> builtinFunction V.Indices tk []
   B.Not tk e -> builtinFunction V.Not tk [e]
   B.Impl e1 tk e2 -> builtinFunction V.Implies tk [e1, e2]
   B.And e1 tk e2 -> builtinFunction V.And tk [e1, e2]
   B.Or e1 tk e2 -> builtinFunction V.Or tk [e1, e2]
   B.If tk1 e1 _ e2 _ e3 -> builtinFunction V.If tk1 [e1, e2, e3]
-  B.Eq e1 tk e2 -> builtin (V.TypeClassOp $ V.EqualsTC V.Eq) tk [e1, e2]
-  B.Neq e1 tk e2 -> builtin (V.TypeClassOp $ V.EqualsTC V.Neq) tk [e1, e2]
+  B.Eq e1 tk e2 -> builtinTypeClassOp (V.EqualsTC V.Eq) tk [e1, e2]
+  B.Neq e1 tk e2 -> builtinTypeClassOp (V.EqualsTC V.Neq) tk [e1, e2]
   B.Le e1 tk e2 -> elabOrder V.Le tk e1 e2
   B.Lt e1 tk e2 -> elabOrder V.Lt tk e1 e2
   B.Ge e1 tk e2 -> elabOrder V.Ge tk e1 e2
   B.Gt e1 tk e2 -> elabOrder V.Gt tk e1 e2
-  B.Add e1 tk e2 -> builtin (V.TypeClassOp V.AddTC) tk [e1, e2]
-  B.Sub e1 tk e2 -> builtin (V.TypeClassOp V.SubTC) tk [e1, e2]
-  B.Mul e1 tk e2 -> builtin (V.TypeClassOp V.MulTC) tk [e1, e2]
-  B.Div e1 tk e2 -> builtin (V.TypeClassOp V.DivTC) tk [e1, e2]
-  B.Neg tk e -> builtin (V.TypeClassOp V.NegTC) tk [e]
+  B.Add e1 tk e2 -> builtinTypeClassOp V.AddTC tk [e1, e2]
+  B.Sub e1 tk e2 -> builtinTypeClassOp V.SubTC tk [e1, e2]
+  B.Mul e1 tk e2 -> builtinTypeClassOp V.MulTC tk [e1, e2]
+  B.Div e1 tk e2 -> builtinTypeClassOp V.DivTC tk [e1, e2]
+  B.Neg tk e -> builtinTypeClassOp V.NegTC tk [e]
   B.At e1 tk e2 -> builtinFunction V.At tk [e1, e2]
-  B.Map tk -> builtin (V.TypeClassOp V.MapTC) tk []
-  B.Fold tk -> builtin (V.TypeClassOp V.FoldTC) tk []
-  B.ZipWith tk -> builtinFunction V.ZipWithVector tk []
+  B.Map tk -> builtinTypeClassOp V.MapTC tk []
+  B.Fold tk -> builtinTypeClassOp V.FoldTC tk []
+  B.ReduceOr tk -> builtinFunction V.ReduceOrTensor tk []
+  B.ReduceAnd tk -> builtinFunction V.ReduceAndTensor tk []
   B.HasEq tk -> builtinTypeClass (V.HasEq V.Eq) tk []
   B.HasNotEq tk -> builtinTypeClass (V.HasEq V.Neq) tk []
   B.HasLeq tk -> builtinTypeClass (V.HasOrd V.Le) tk []
@@ -461,21 +459,22 @@ elabLetDecl (B.LDecl b e) = bitraverse (elabNameBinder False) elabExpr (b, e)
 
 elabLiteral :: (MonadElab m) => B.Lit -> m V.Expr
 elabLiteral = \case
-  B.UnitLiteral -> return $ V.Builtin mempty $ V.BuiltinConstructor V.LUnit
+  B.UnitLiteral ->
+    return $ V.Builtin mempty $ V.BuiltinConstructor V.UnitLiteral
   B.BoolLiteral t -> do
     p <- mkProvenance t
     let b = elabBoolLiteral t
-    return $ V.Builtin p $ V.BuiltinConstructor $ V.LBool b
+    return $ V.Builtin p $ V.BuiltinConstructor $ V.BoolTensorLiteral $ ZeroDimTensor b
   B.NatLiteral t -> do
     p <- mkProvenance t
     let n = readNat (tkSymbol t)
     let fromNat = V.Builtin p (V.TypeClassOp V.FromNatTC)
-    return $ app fromNat [V.Builtin p $ V.BuiltinConstructor $ V.LNat n]
+    return $ app fromNat [V.Builtin p $ V.BuiltinConstructor $ V.NatLiteral n]
   B.RatLiteral t -> do
     p <- mkProvenance t
     let r = readRat (tkSymbol t)
     let fromRat = V.Builtin p (V.TypeClassOp V.FromRatTC)
-    return $ app fromRat [V.Builtin p $ V.BuiltinConstructor $ V.LRat r]
+    return $ app fromRat [V.Builtin p $ V.BuiltinConstructor $ V.RatTensorLiteral $ ZeroDimTensor r]
 
 elabBoolLiteral :: B.Boolean -> Bool
 elabBoolLiteral t = read (unpack $ tkSymbol t)
@@ -508,8 +507,19 @@ builtinType b = builtin (V.BuiltinType b)
 builtinTypeClass :: (MonadElab m, IsToken token) => V.TypeClass -> token -> [B.Expr] -> m V.Expr
 builtinTypeClass b = builtin (V.TypeClass b)
 
+builtinTypeClassOp :: (MonadElab m, IsToken token) => V.TypeClassOp -> token -> [B.Expr] -> m V.Expr
+builtinTypeClassOp b = builtin (V.TypeClassOp b)
+
 builtinFunction :: (MonadElab m, IsToken token) => V.BuiltinFunction -> token -> [B.Expr] -> m V.Expr
 builtinFunction b = builtin (V.BuiltinFunction b)
+
+castToTensorType :: (MonadElab m, IsToken token) => V.BuiltinType -> token -> m V.Expr
+castToTensorType tElem tk = do
+  p <- mkProvenance tk
+  tElem' <- builtinType tElem tk []
+  dims <- constructor V.Nil tk []
+  let tTensor = V.Builtin p (V.BuiltinType V.TensorType)
+  return $ app tTensor [tElem', dims]
 
 app :: V.Expr -> [V.Expr] -> V.Expr
 app fun argExprs = V.normAppList fun args
@@ -518,11 +528,11 @@ app fun argExprs = V.normAppList fun args
 
 elabVecLiteral :: (MonadElab m, IsToken token) => token -> [B.Expr] -> m V.Expr
 elabVecLiteral tk xs = do
-  let n = length xs
   p <- mkProvenance tk
-  xs' <- traverse elabExpr xs
-  let lit = app (V.Builtin p $ V.BuiltinConstructor $ V.LVec n) xs'
-  return $ app (V.Builtin p (V.TypeClassOp V.FromVecTC)) [lit]
+  let t = V.Arg p (V.Implicit True) V.Relevant (V.mkHole p "container")
+  let n = V.Arg p (V.Implicit True) V.Relevant (V.Builtin p (V.BuiltinConstructor $ V.NatLiteral (length xs)))
+  xs' <- fmap (mkArg V.Explicit) <$> traverse elabExpr xs
+  return $ V.normAppList (V.Builtin p (V.TypeClassOp V.VecLiteralTC)) (t : n : xs')
 
 elabApp :: (MonadElab m) => B.Expr -> B.Arg -> m V.Expr
 elabApp fun arg = do
@@ -618,23 +628,22 @@ elabQuantifierIn tk q binder container body = do
 elabForeach ::
   (MonadElab m, IsToken token) =>
   token ->
-  B.NameBinder ->
+  [B.NameBinder] ->
   B.Expr ->
   m V.Expr
-elabForeach tk binder body = do
+elabForeach tk binders body = do
   p <- mkProvenance tk
-  let foreachBuiltin = V.Var p "foreachIndex"
 
-  binder' <- elabNameBinder False binder
+  binders' <- elabNamedBinders tk binders
   body' <- elabExpr body
 
-  let p' = V.provenanceOf binder'
-  return $
-    V.normAppList
-      foreachBuiltin
-      [ mkArg V.Explicit (V.mkHole p "n"),
-        mkArg V.Explicit (V.Lam p' binder' body')
-      ]
+  let mkForeach binder newBody =
+        V.normAppList
+          (V.Builtin p $ V.BuiltinFunction V.Foreach)
+          [ mkArg V.Explicit (V.Lam (V.provenanceOf binder) binder newBody)
+          ]
+
+  return $ foldr mkForeach body' binders'
 
 elabLet :: (MonadElab m) => B.TokLet -> [B.LetDecl] -> B.Expr -> m V.Expr
 elabLet tk decls body = do

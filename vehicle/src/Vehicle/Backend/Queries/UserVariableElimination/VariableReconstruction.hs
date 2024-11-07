@@ -1,19 +1,16 @@
 module Vehicle.Backend.Queries.UserVariableElimination.VariableReconstruction where
 
-import Control.Arrow (ArrowChoice (..))
-import Control.Monad (foldM)
 import Data.Foldable (foldlM)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Set qualified as Set
-import Data.Vector qualified as Vector
 import Vehicle.Backend.Queries.UserVariableElimination.Core
 import Vehicle.Compile.FourierMotzkinElimination
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Code.LinearExpr (evaluateExpr)
 import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RationalTensor, Tensor (..), TensorShape)
+import Vehicle.Data.Tensor (RationalTensor, Tensor (..), pattern ZeroDimTensor)
 import Vehicle.Verify.QueryFormat.Core
 import Vehicle.Verify.Verifier.Core
 
@@ -54,16 +51,16 @@ instance Pretty MixedVariableAssignment where
 -- | Lookups the values in the variable assignment and removes them from the
 -- assignment. Returns either the first missing variable or the list of values
 -- and the resulting assignment.
-lookupRationalVariables ::
+lookupElementVariables ::
   MixedVariableAssignment ->
-  [ElementVariable] ->
-  Either ElementVariable [Rational]
-lookupRationalVariables VariableAssignment {..} vars = right reverse $ foldM op [] vars
+  Tensor Variable ->
+  Either Variable (Tensor Rational)
+lookupElementVariables VariableAssignment {..} = traverse op
   where
-    op values var = case Map.lookup var variableValues of
+    op var = case Map.lookup var variableValues of
       Nothing -> Left var
-      Just (Tensor [] [value]) -> Right (value : values)
-      Just _ -> developerError "Rational variables should have an empty tensor shape"
+      Just (ZeroDimTensor value) -> Right value
+      Just _ -> developerError "Element variables should have an empty tensor shape"
 
 createInitialAssignment ::
   GenericBoundCtx (Maybe QueryVariable) ->
@@ -72,7 +69,7 @@ createInitialAssignment ::
 createInitialAssignment queryVariables (QueryVariableAssignment valuesByQueryVar) = do
   let queryVariableMap = Map.fromList $ mapMaybe (\(a, v) -> fmap (,v) a) $ zip queryVariables [0 ..]
   let mapQueryVariable var = fromMaybe (developerError ("Missing query variable" <+> pretty var)) (Map.lookup var queryVariableMap)
-  let valuesByNetworkVar = (\v -> Tensor [] [v]) <$> Map.mapKeys mapQueryVariable valuesByQueryVar
+  let valuesByNetworkVar = ZeroDimTensor <$> Map.mapKeys mapQueryVariable valuesByQueryVar
   VariableAssignment
     { variableValues = valuesByNetworkVar,
       userVariables = mempty
@@ -86,11 +83,11 @@ applyReconstructionStep ::
 applyReconstructionStep assignment@VariableAssignment {..} step = do
   logDebug MidDetail $ "Variable assignment:" <> line <> indent 2 (pretty assignment)
   case step of
-    ReconstructTensor varType shape var individualVars ->
-      logCompilerSection MidDetail ("Collapsing variables" <+> pretty individualVars <+> "to single variable" <+> pretty var) $
-        unreduceVariable varType shape var individualVars assignment
-    SolveRationalEquality var eq -> do
-      logCompilerSection MidDetail ("Reintroducing rational Gaussian-eliminated variable" <+> quotePretty var) $ do
+    ReconstructTensor varType var tensorVars ->
+      logCompilerSection MidDetail ("Collapsing variables" <+> pretty tensorVars <+> "to single variable" <+> pretty var) $
+        unreduceVariable varType var tensorVars assignment
+    SolveEquality isTensorVar var eq -> do
+      logCompilerSection MidDetail ("Reintroducing Gaussian-eliminated variable" <+> quotePretty var) $ do
         logDebug MidDetail $ "Using" <+> pretty step
         let errorOrValue = evaluateExpr eq variableValues
         case errorOrValue of
@@ -100,22 +97,9 @@ applyReconstructionStep assignment@VariableAssignment {..} step = do
             return $
               VariableAssignment
                 { variableValues = Map.insert var value variableValues,
-                  userVariables = userVariables
+                  userVariables = if isTensorVar then var : userVariables else userVariables
                 }
-    SolveTensorEquality var eq -> do
-      logCompilerSection MidDetail ("Reintroducing tensor Gaussian-eliminated variable" <+> quotePretty var) $ do
-        logDebug MidDetail $ "Using" <+> pretty step
-        let errorOrValue = evaluateExpr eq variableValues
-        case errorOrValue of
-          Left missingVar -> developerError $ "Missing variable" <+> quotePretty missingVar <+> "required in Gaussian elimination of" <+> quotePretty var
-          Right value -> do
-            logDebug MidDetail $ "Result:" <+> pretty var <+> "=" <+> pretty value
-            return $
-              VariableAssignment
-                { variableValues = Map.insert var value variableValues,
-                  userVariables = var : userVariables
-                }
-    SolveRationalInequalities var solution -> do
+    SolveInequalities var solution -> do
       logCompilerSection MidDetail ("Reintroducing Fourier-Motzkin-eliminated variable" <+> quotePretty var) $ do
         let errorOrValue = reconstructFourierMotzkinVariableValue variableValues solution
         case errorOrValue of
@@ -133,13 +117,12 @@ applyReconstructionStep assignment@VariableAssignment {..} step = do
 unreduceVariable ::
   (MonadLogger m) =>
   VariableType ->
-  TensorShape ->
   TensorVariable ->
-  [ElementVariable] ->
+  Tensor Variable ->
   MixedVariableAssignment ->
   m MixedVariableAssignment
-unreduceVariable varType shape variable reducedVariables assignment@VariableAssignment {..} = do
-  let variableResults = lookupRationalVariables assignment reducedVariables
+unreduceVariable varType variable elementVariables assignment@VariableAssignment {..} = do
+  let variableResults = lookupElementVariables assignment elementVariables
   case variableResults of
     Left missingVar ->
       developerError $
@@ -148,11 +131,10 @@ unreduceVariable varType shape variable reducedVariables assignment@VariableAssi
           <+> "in counter-example,"
           <+> "unable to find variable"
           <+> pretty missingVar
-    Right values -> do
-      let unreducedValue = Tensor shape (Vector.fromList values)
+    Right variableValue ->
       return $
         assignment
-          { variableValues = Map.insert variable unreducedValue variableValues,
+          { variableValues = Map.insert variable variableValue variableValues,
             userVariables = if varType == UserVariable then variable : userVariables else userVariables
           }
 

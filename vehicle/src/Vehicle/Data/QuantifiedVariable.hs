@@ -4,8 +4,8 @@ module Vehicle.Data.QuantifiedVariable
     reduceTensorVariable,
     TensorVariableInfo (..),
     TensorVariable,
-    UserElementVariable,
-    ElementVariable,
+    UserVariable,
+    NetworkVariable,
     NetworkElementVariable,
     prettyRationalAsFloat,
     UserVariableAssignment (..),
@@ -17,7 +17,10 @@ import Data.Text qualified as Text
 import GHC.Generics (Generic)
 import Numeric (showFFloat)
 import Vehicle.Data.Builtin.Core
-import Vehicle.Data.Code.Interface
+import Vehicle.Data.Builtin.Standard ()
+import Vehicle.Data.Code.Interface (mkDims)
+import Vehicle.Data.Code.LinearExpr (Variable)
+import Vehicle.Data.Code.TypedView (RatTensorValue (..), fromRatTensorValue, pattern INatType)
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DeBruijn
 import Vehicle.Data.Tensor
@@ -26,10 +29,6 @@ import Vehicle.Prelude
 --------------------------------------------------------------------------------
 -- Variables
 
--- | A variable. Empty indices means that is a tensor variable, otherwise
--- its a variable representing an element of a tensor.
-type Variable = Lv
-
 makeTensorVariable :: Lv -> Variable
 makeTensorVariable = id
 
@@ -37,18 +36,18 @@ reduceTensorVariable ::
   Lv ->
   Name ->
   TensorShape ->
-  ([(ElementVariable, Name)], Value Builtin)
+  ([Name], Tensor Variable, Value Builtin)
 reduceTensorVariable lv varName shape = runSupply (go shape []) [lv ..]
   where
-    createRatVar :: TensorIndices -> Lv -> ([(ElementVariable, Name)], Value Builtin)
+    createRatVar :: TensorIndices -> Lv -> ([Name], Tensor Variable, Value Builtin)
     createRatVar indices currentLv = do
       let name = varName <> Text.pack (showTensorIndices indices)
-      ([(currentLv, name)], VBoundVar currentLv [])
+      ([name], ZeroDimTensor currentLv, VBoundVar currentLv [])
 
     go ::
       TensorShape ->
       TensorIndices ->
-      Supply Lv ([(ElementVariable, Name)], Value Builtin)
+      Supply Lv ([Name], Tensor Variable, Value Builtin)
     go dims indices = case dims of
       [] -> createRatVar (reverse indices) <$> demand
       d : ds -> do
@@ -56,26 +55,27 @@ reduceTensorVariable lv varName shape = runSupply (go shape []) [lv ..]
         let allIndices = [0 .. d - 1]
 
         -- Generate the corresponding names from the indices
-        (elementUserVars, subexprs) <- unzip <$> traverse (\i -> go ds (i : indices)) allIndices
-        let userVars = concat elementUserVars
-        return (userVars, mkVecExpr subexprs)
+        (elementVarNames, elementVars, elementExprs) <- unzip3 <$> traverse (\i -> go ds (i : indices)) allIndices
+        let varsNames = concat elementVarNames
+        let vars = stack ds elementVars
+        let dimsExpr = mkDims INatType ds
+        let varsExpr = fromRatTensorValue $ VRatStackTensor (implicit INatType) (implicit dimsExpr) (fmap explicit elementExprs)
+        return (varsNames, vars, varsExpr)
 
 type TensorVariable = Variable
 
-type ElementVariable = Variable
-
 -- | Variables entered by the user
-type UserElementVariable = ElementVariable
+type UserVariable = Variable
 
-type NetworkElementVariable = ElementVariable
+type NetworkVariable = Variable
+
+type NetworkElementVariable = Variable
 
 data TensorVariableInfo = TensorVariableInfo
   { -- | Variables for each of it's elements
-    elementVariables :: [NetworkElementVariable],
+    elementVariables :: Tensor Variable,
     -- | The tensor literal expression containing the element variables above.
     reducedVarExpr :: Value Builtin,
-    -- The shape of the tensor
-    tensorVariableShape :: TensorShape,
     -- | `Nothing` = user variable, `Input` = network input variable, `Output` = network output variable
     tensorVariableType :: Maybe InputOrOutput
   }

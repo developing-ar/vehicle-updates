@@ -4,13 +4,13 @@ module Vehicle.Compile.Type.Builtin.Polarity
   )
 where
 
-import Data.Text qualified as Text
 import Vehicle.Data.Builtin.Core hiding (Builtin (..))
 import Vehicle.Data.Builtin.Polarity
+import Vehicle.Data.Code.DSL (iterate)
 import Vehicle.Data.Code.Expr
 import Vehicle.Data.DSL
 import Vehicle.Prelude
-import Prelude hiding (pi)
+import Prelude hiding (iterate, pi)
 
 isPolarityBuiltinConstructor :: PolarityBuiltin -> Bool
 isPolarityBuiltinConstructor = \case
@@ -30,46 +30,57 @@ typePolarityBuiltin p b = fromDSL p $ case b of
 typeOfBuiltinFunction :: BuiltinFunction -> PolarityDSLExpr
 typeOfBuiltinFunction = \case
   -- Boolean operations
-  Not -> typeOfOp1 negPolarity
+  Not {} -> typeOfOp1 negPolarity
   Implies -> typeOfOp2 impliesPolarity
-  And -> typeOfOp2 maxPolarity
-  Or -> typeOfOp2 maxPolarity
-  Quantifier q -> typeOfQuantifier q
+  And {} -> typeOfOp2 maxPolarity
+  Or {} -> typeOfOp2 maxPolarity
+  ReduceAndTensor -> forAllPolarities $ \p -> p ~> p
+  ReduceOrTensor -> forAllPolarities $ \p -> p ~> p
+  QuantifyRatTensor q -> typeOfQuantifier q
   If -> typeOfIf
   -- Comparisons
   Equals {} -> typeOfOp2 maxPolarity
   Order {} -> typeOfOp2 maxPolarity
   -- Arithmetic operations
-  Neg {} -> unquantified ~> unquantified
-  Add {} -> unquantified ~> unquantified ~> unquantified
-  Sub {} -> unquantified ~> unquantified ~> unquantified
-  Mul {} -> unquantified ~> unquantified ~> unquantified
-  Div {} -> unquantified ~> unquantified ~> unquantified
-  PowRat {} -> unquantified ~> unquantified ~> unquantified
-  MinRat {} -> unquantified ~> unquantified ~> unquantified
-  MaxRat {} -> unquantified ~> unquantified ~> unquantified
+  Add {} -> typeOfUnquantifiedOp2
+  Mul {} -> typeOfUnquantifiedOp2
+  Neg {} -> typeOfUnquantifiedOp1
+  Sub {} -> typeOfUnquantifiedOp2
+  Div {} -> typeOfUnquantifiedOp2
+  Min {} -> typeOfUnquantifiedOp2
+  Max {} -> typeOfUnquantifiedOp2
+  PowRat {} -> typeOfUnquantifiedOp2
+  ReduceAddRatTensor -> typeOfUnquantifiedOp1
+  ReduceMulRatTensor -> typeOfUnquantifiedOp1
+  ReduceMinRatTensor -> typeOfUnquantifiedOp1
+  ReduceMaxRatTensor -> typeOfUnquantifiedOp1
   -- Conversion functions
-  FromNat {} -> unquantified ~> unquantified
-  FromRat {} -> unquantified ~> unquantified
+  FromNat {} -> typeOfUnquantifiedOp1
+  FromRat {} -> typeOfUnquantifiedOp1
+  FromVectorToList -> typeOfVectorToList
   -- Container functions
   FoldList -> typeOfFold
-  FoldVector -> typeOfFold
   MapList -> typeOfMap
-  MapVector -> typeOfMap
-  ZipWithVector -> typeOfZipWith
   At -> forAllPolarities $ \p -> p ~> unquantified ~> p
-  Indices -> unquantified ~> unquantified
+  StackTensor -> typeOfStack
+  ConstTensor -> forAllPolarities $ \p -> p ~> unquantified ~> p
+  Foreach -> forAllPolarities $ \p -> p ~> p
+  Iterate -> typeOfIterate
+  FlattenTensorType -> type0 ~> type0
 
 typeOfConstructor :: BuiltinConstructor -> PolarityDSLExpr
 typeOfConstructor = \case
+  -- Interesting
   Nil -> typeOfNil
   Cons -> typeOfCons
-  LUnit {} -> unquantified
-  LBool {} -> unquantified
-  LIndex {} -> unquantified
-  LNat {} -> unquantified
-  LRat {} -> unquantified
-  LVec n -> typeOfVecLiteral n
+  -- Uninteresting
+  UnitLiteral {} -> unquantified
+  IndexLiteral {} -> unquantified
+  NatLiteral {} -> unquantified
+  NatTensorLiteral {} -> unquantified
+  BoolTensorLiteral {} -> unquantified
+  IndexTensorLiteral {} -> unquantified
+  RatTensorLiteral {} -> unquantified
 
 typeOfPolarityRelation :: PolarityRelation -> PolarityDSLExpr
 typeOfPolarityRelation = \case
@@ -95,6 +106,12 @@ typeOfOp2 ::
 typeOfOp2 constraint =
   forAllPolarityTriples $ \l1 l2 l3 ->
     constraint l1 l2 l3 .~~~> l1 ~> l2 ~> l3
+
+typeOfUnquantifiedOp1 :: PolarityDSLExpr
+typeOfUnquantifiedOp1 = unquantified ~> unquantified
+
+typeOfUnquantifiedOp2 :: PolarityDSLExpr
+typeOfUnquantifiedOp2 = unquantified ~> unquantified ~> unquantified
 
 typeOfIf :: PolarityDSLExpr
 typeOfIf =
@@ -123,11 +140,6 @@ typeOfMap =
     forAllPolarities $ \p2 ->
       (p1 ~> p2) ~> p1 ~> p2
 
-typeOfZipWith :: PolarityDSLExpr
-typeOfZipWith =
-  forAllPolarityTriples $ \p1 p2 p3 ->
-    maxPolarity p1 p2 p3 .~~~> (p1 ~> p2 ~> p3) ~> p1 ~> p2 ~> p3
-
 typeOfQuantifier :: Quantifier -> PolarityDSLExpr
 typeOfQuantifier q =
   forAll "f" type0 $ \tLam ->
@@ -136,15 +148,24 @@ typeOfQuantifier q =
         .~~~> tLam
         ~> tRes
 
-typeOfVecLiteral :: Int -> PolarityDSLExpr
-typeOfVecLiteral n = go n unquantified
-  where
-    go :: Int -> PolarityDSLExpr -> PolarityDSLExpr
-    go 0 maxSoFar = maxSoFar
-    go i maxSoFar =
-      let varName = "l" <> Text.pack (show i)
-       in forAll varName tPol $ \li ->
-            forAll (varName <> "_max") tPol $ \newMax ->
-              maxPolarity maxSoFar li newMax
-                .~~~> li
-                ~> go (i - 1) newMax
+typeOfIterate :: PolarityDSLExpr
+typeOfIterate = ((type0 ~> type0) ~> type0 ~> type0) ~> unquantified ~> type0
+
+typeOfVectorLiteral :: PolarityDSLExpr
+typeOfVectorLiteral =
+  forAll "n" unquantified $ \n ->
+    iterate
+      type0
+      ( \fn maxSoFar ->
+          forAll "p" tPol $ \p ->
+            forAll "p_max" tPol $ \newMax ->
+              maxPolarity maxSoFar p newMax .~~~> p ~> fn @@ [newMax]
+      )
+      n
+      unquantified
+
+typeOfStack :: PolarityDSLExpr
+typeOfStack = typeOfVectorLiteral
+
+typeOfVectorToList :: PolarityDSLExpr
+typeOfVectorToList = typeOfVectorLiteral

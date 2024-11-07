@@ -1,6 +1,7 @@
 module Vehicle.Data.Builtin.Interface where
 
 import Vehicle.Data.Builtin.Core
+import Vehicle.Data.Tensor (Tensor)
 
 --------------------------------------------------------------------------------
 -- Interface to standard builtins
@@ -23,8 +24,8 @@ import Vehicle.Data.Builtin.Core
 -- HasBool
 
 class BuiltinHasBoolLiterals builtin where
-  mkBoolBuiltinLit :: Bool -> builtin
-  getBoolBuiltinLit :: builtin -> Maybe Bool
+  mkBoolBuiltinTensorLit :: Tensor Bool -> builtin
+  getBoolBuiltinTensorLit :: builtin -> Maybe (Tensor Bool)
 
 --------------------------------------------------------------------------------
 -- HasIndex
@@ -33,6 +34,10 @@ class BuiltinHasIndexLiterals builtin where
   mkIndexBuiltinLit :: Int -> builtin
   getIndexBuiltinLit :: builtin -> Maybe Int
 
+class BuiltinHasIndexTensorLiterals builtin where
+  mkIndexBuiltinTensorLit :: Tensor Int -> builtin
+  getIndexBuiltinTensorLit :: builtin -> Maybe (Tensor Int)
+
 --------------------------------------------------------------------------------
 -- HasNat
 
@@ -40,16 +45,16 @@ class BuiltinHasNatLiterals builtin where
   mkNatBuiltinLit :: Int -> builtin
   getNatBuiltinLit :: builtin -> Maybe Int
 
+class BuiltinHasNatTensorLiterals builtin where
+  mkNatBuiltinTensorLit :: Tensor Int -> builtin
+  getNatBuiltinTensorLit :: builtin -> Maybe (Tensor Int)
+
 --------------------------------------------------------------------------------
 -- HasRat
 
 class BuiltinHasRatLiterals builtin where
-  mkRatBuiltinLit :: Rational -> builtin
-  getRatBuiltinLit :: builtin -> Maybe Rational
-
-class (BuiltinHasRatLiterals builtin) => BuiltinHasRatType builtin where
-  mkRatBuiltinType :: builtin
-  isRatBuiltinType :: builtin -> Bool
+  mkRatBuiltinTensorLit :: Tensor Rational -> builtin
+  getRatBuiltinTensorLit :: builtin -> Maybe (Tensor Rational)
 
 --------------------------------------------------------------------------------
 -- HasList
@@ -62,15 +67,11 @@ class BuiltinHasListLiterals builtin where
   isBuiltinCons :: builtin -> Bool
 
 --------------------------------------------------------------------------------
--- HasVector
+-- HasRat
 
-class BuiltinHasVecLiterals builtin where
-  mkVecBuiltinLit :: Int -> builtin
-  getVecBuiltinLit :: builtin -> Maybe Int
-
-class (BuiltinHasVecLiterals builtin) => BuiltinHasVecType builtin where
-  mkVecBuiltinType :: builtin
-  isVecBuiltinType :: builtin -> Bool
+class BuiltinHasConstTensor builtin where
+  mkConstTensorBuiltin :: builtin
+  isConstTensorBuiltin :: builtin -> Bool
 
 --------------------------------------------------------------------------------
 -- BuiltinHasStandardData
@@ -112,6 +113,7 @@ type HasStandardBuiltins builtin =
     BuiltinHasStandardData builtin
   )
 
+{-
 --------------------------------------------------------------------------------
 -- HasTensorBuiltins
 
@@ -133,3 +135,61 @@ class BuiltinHasDimensionTypes builtin where
 class BuiltinHasDimensionData builtin where
   mkDimensionDataBuiltin :: DimensionDataBuiltin -> builtin
   getDimensionDataBuiltin :: builtin -> Maybe DimensionDataBuiltin
+
+--------------------------------------------------------------------------------
+-- Dimensions
+
+data DimensionTypeBuiltin
+  = DimensionType
+  | DimensionsType
+  | DimensionIndexType
+  | TensorType
+  deriving (Show, Eq, Generic)
+
+data DimensionDataBuiltin
+  = Dimension Int
+  | DimensionNil
+  | DimensionCons
+  | DimensionIndex Int
+  | DimensionLookup
+  | DimensionIndexTensor (Tensor Int)
+  | StackTensor Int
+  | ConstTensor
+  deriving (Show, Eq, Generic)
+
+--------------------------------------------------------------------------------
+-- Rational tensor builtins
+
+data RatTensorBuiltin
+  = RatTensor (Tensor Rational)
+  | RatType
+  | RatLiteral Rational
+  | NegRatTensor
+  | AddRatTensor
+  | SubRatTensor
+  | MulRatTensor
+  | DivRatTensor
+  | MinRatTensor
+  | MaxRatTensor
+  | ReduceAddRatTensor
+  | ReduceMulRatTensor
+  | ReduceMinRatTensor
+  | ReduceMaxRatTensor
+  | SearchRatTensor
+  deriving (Show, Eq, Generic)
+
+--------------------------------------------------------------------------------
+-- Boolean tensor builtins
+
+data BoolTensorBuiltin
+  = BoolType
+  | AndBoolTensor
+  | OrBoolTensor
+  | NotBoolTensor
+  | EqualsRatTensor EqualityOp
+  | OrderRatTensor OrderOp
+  | ReduceAndTensor
+  | ReduceOrTensor
+  | QuantifyRatTensor Quantifier
+  deriving (Show, Eq, Generic)
+-}

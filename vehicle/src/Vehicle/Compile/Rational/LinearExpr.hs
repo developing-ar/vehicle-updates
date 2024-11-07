@@ -1,6 +1,5 @@
 module Vehicle.Compile.Rational.LinearExpr
   ( LinearityError (..),
-    compileRatLinearRelation,
     compileTensorLinearRelation,
   )
 where
@@ -8,15 +7,12 @@ where
 -- Needed as Applicative is exported by Prelude in GHC 9.6 and above.
 import Control.Applicative (Applicative (..))
 import Control.Monad.Except (ExceptT, MonadError (..), runExceptT)
-import Data.Vector (Vector)
-import Data.Vector qualified as Vector
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Standard
-import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.LinearExpr (LinearExpr, addExprs, constantExpr, isConstant, scaleExpr, singletonVarExpr)
+import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
-import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RationalTensor, Tensor (..), TensorShape, zeroTensor)
+import Vehicle.Data.Tensor (RationalTensor, TensorShape, zeroTensor, pattern ZeroDimTensor)
 import Prelude hiding (Applicative (..))
 
 type MonadCompileLinearExpr m =
@@ -26,62 +22,8 @@ type MonadCompileLinearExpr m =
 
 data LinearityError
   = NonLinearity
-  | UnhandlableExpr (Value Builtin)
-
---------------------------------------------------------------------------------
--- Rational expression
-
-compileRatLinearRelation ::
-  (MonadLogger m) =>
-  (Lv -> ExceptT LinearityError m ElementVariable) ->
-  (LinearExpr RationalTensor -> LinearExpr RationalTensor -> relation) ->
-  Value Builtin ->
-  Value Builtin ->
-  m (Either LinearityError relation)
-compileRatLinearRelation handleVar mkRelation x y = do
-  runExceptT $ do
-    x' <- compileRatLinearExpr handleVar x
-    y' <- compileRatLinearExpr handleVar y
-    return $ mkRelation x' y'
-
-compileRatLinearExpr ::
-  forall m.
-  (MonadCompileLinearExpr m) =>
-  (Lv -> m ElementVariable) ->
-  Value Builtin ->
-  m (LinearExpr RationalTensor)
-compileRatLinearExpr handleVar = go
-  where
-    go :: Value Builtin -> m (LinearExpr RationalTensor)
-    go e = case e of
-      ----------------
-      -- Base cases --
-      ----------------
-      IRatLiteral _ l -> return $ constantExpr (Tensor [] [l])
-      VBoundVar lv [] -> singletonVarExpr (zeroTensor []) <$> handleVar lv
-      ---------------------
-      -- Inductive cases --
-      ---------------------
-      INeg NegRat v -> scaleExpr (-1) <$> go v
-      IAdd AddRat e1 e2 -> addExprs 1 1 <$> go e1 <*> go e2
-      ISub SubRat e1 e2 -> addExprs 1 (-1) <$> go e1 <*> go e2
-      IMul MulRat e1 e2 -> do
-        e1' <- go e1
-        e2' <- go e2
-        case (isConstant e1', isConstant e2') of
-          (Just (Tensor [] [c1]), _) -> return $ scaleExpr c1 e2'
-          (_, Just (Tensor [] [c2])) -> return $ scaleExpr c2 e1'
-          _ -> throwError NonLinearity
-      IDiv DivRat e1 e2 -> do
-        e1' <- go e1
-        e2' <- go e2
-        case isConstant e2' of
-          (Just (Tensor [] [c2])) -> return $ scaleExpr (1 / c2) e1'
-          _ -> throwError NonLinearity
-      -----------------
-      -- Error cases --
-      -----------------
-      _ -> throwError $ UnhandlableExpr e
+  | UnexpectedExpr (Value Builtin)
+  | UnreducedExpr (Value Builtin)
 
 --------------------------------------------------------------------------------
 -- Tensor expression
@@ -91,48 +33,66 @@ compileTensorLinearRelation ::
   (Lv -> ExceptT LinearityError m TensorShape) ->
   Value Builtin ->
   Value Builtin ->
-  m (Either LinearityError (Maybe (LinearExpr RationalTensor, LinearExpr RationalTensor)))
+  m (Either LinearityError (LinearExpr RationalTensor, LinearExpr RationalTensor))
 compileTensorLinearRelation lookupVar x y = do
   runExceptT $ do
-    x' <- compileTensorLinearExpr lookupVar x
-    y' <- compileTensorLinearExpr lookupVar y
-    return $ liftA2 (,) x' y'
+    x' <- compile lookupVar x
+    y' <- compile lookupVar y
+    return (x', y')
 
-compileTensorLinearExpr ::
+compile ::
   forall m.
   (MonadCompileLinearExpr m) =>
   (Lv -> m TensorShape) ->
   Value Builtin ->
-  m (Maybe (LinearExpr RationalTensor))
-compileTensorLinearExpr lookupVar = go
+  m (LinearExpr RationalTensor)
+compile lookupVar expr = case toRatTensorValue expr of
+  ----------------
+  -- Base cases --
+  ----------------
+  VRatTensorLiteral t -> do
+    return $ constantExpr t
+  VRatTensorVar lv -> do
+    shape <- lookupVar lv
+    return $ singletonVarExpr (zeroTensor shape) lv
+  ---------------------
+  -- Inductive cases --
+  ---------------------
+  VNegRatTensor _ e -> scaleExpr (-1) <$> compile lookupVar e
+  VAddRatTensor _ e1 e2 -> addExprs 1 1 <$> compile lookupVar e1 <*> compile lookupVar e2
+  VSubRatTensor _ e1 e2 -> addExprs 1 (-1) <$> compile lookupVar e1 <*> compile lookupVar e2
+  VMulRatTensor _ e1 e2 -> do
+    e1' <- compile lookupVar e1
+    e2' <- compile lookupVar e2
+    case (isConstant e1', isConstant e2') of
+      (Just (ZeroDimTensor c1), _) -> return $ scaleExpr c1 e2'
+      (_, Just (ZeroDimTensor c2)) -> return $ scaleExpr c2 e1'
+      _ -> throwError NonLinearity
+  VDivRatTensor _ e1 e2 -> do
+    e1' <- compile lookupVar e1
+    e2' <- compile lookupVar e2
+    case isConstant e2' of
+      (Just (ZeroDimTensor c2)) -> return $ scaleExpr (1 / c2) e1'
+      _ -> throwError NonLinearity
+  ---------------------
+  -- Unreduced cases --
+  ---------------------
+  -- The expression is being blocked
+  VRatConstTensor {} -> unreduced
+  VRatStackTensor {} -> unreduced
+  VRatAt {} -> unreduced
+  VNetworkApp {} -> unreduced
+  VRatForeach {} -> unreduced
+  VIfRatTensor {} -> unreduced
+  -----------------------
+  -- Unsupported cases --
+  -----------------------
+  VMinRatTensor {} -> unexpected
+  VMaxRatTensor {} -> unexpected
+  VReduceAddRatTensor {} -> unexpected
+  VReduceMulRatTensor {} -> unexpected
+  VReduceMinRatTensor {} -> unexpected
+  VReduceMaxRatTensor {} -> unexpected
   where
-    go :: Value Builtin -> m (Maybe (LinearExpr RationalTensor))
-    go e = case e of
-      ---------------------
-      -- Inductive cases --
-      ---------------------
-      IVectorAdd _ _ _ _ _ e1 e2 -> liftA2 (addExprs 1 1) <$> go e1 <*> go e2
-      IVectorSub _ _ _ _ _ e1 e2 -> liftA2 (addExprs 1 (-1)) <$> go e1 <*> go e2
-      ----------------
-      -- Base cases --
-      ----------------
-      IVecLiteral {} -> do
-        return (constantExpr <$> getRationalTensor e)
-      VBoundVar lv [] -> do
-        shape <- lookupVar lv
-        return $ Just $ singletonVarExpr (zeroTensor shape) lv
-      _ -> return Nothing
-
-getRationalTensor :: Value Builtin -> Maybe RationalTensor
-getRationalTensor expr = uncurry Tensor <$> go expr
-  where
-    go :: Value Builtin -> Maybe (TensorShape, Vector Rational)
-    go = \case
-      IRatLiteral _ r -> Just ([], Vector.singleton (fromRational r))
-      IVecLiteral _ xs -> do
-        r <- traverse (go . argExpr) xs
-        let (dims, rs) = unzip r
-        case dims of
-          [] -> Nothing
-          (ds : _) -> Just (length xs : ds, mconcat rs)
-      _ -> Nothing
+    unexpected = throwError $ UnexpectedExpr expr
+    unreduced = throwError $ UnreducedExpr expr

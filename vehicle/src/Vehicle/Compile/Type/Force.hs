@@ -5,10 +5,10 @@ module Vehicle.Compile.Type.Force where
 
 import Data.Data (Proxy (..))
 import Data.Maybe (fromMaybe)
-import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin (..))
+import Vehicle.Compile.Normalise.Builtin (BlockingArgs (..), NormalisableBuiltin (..))
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (prettyFriendly)
+import Vehicle.Compile.Print (prettyExternal)
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Meta.Map qualified as MetaMap (lookup)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet (singleton, unions)
@@ -39,9 +39,9 @@ forceHead ctx expr = do
     Just forcedExpr -> do
       logDebug MaxDetail $
         "forced"
-          <+> prettyFriendly (WithContext expr ctx)
+          <+> prettyExternal (WithContext expr ctx)
           <+> "to"
-          <+> prettyFriendly (WithContext forcedExpr ctx)
+          <+> prettyExternal (WithContext forcedExpr ctx)
       return forcedExpr
   return (forcedExpr, blockingMetas)
 
@@ -86,7 +86,10 @@ forceBuiltin ::
   Spine builtin ->
   m (Maybe (Value builtin), MetaSet)
 forceBuiltin b spine = do
-  (maybeUnblockedSpine, blockingMetas) <- forceBuiltinSpine spine 0 (blockingArgs b)
+  let argsToForce = case blockingArgs b of
+        Known xs -> xs
+        Unknown -> [0 .. length spine - 1]
+  (maybeUnblockedSpine, blockingMetas) <- forceBuiltinSpine spine 0 argsToForce
   finalValue <- traverse (normaliseBuiltin b) maybeUnblockedSpine
   return (finalValue, blockingMetas)
 

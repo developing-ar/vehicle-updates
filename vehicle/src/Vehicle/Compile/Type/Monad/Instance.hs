@@ -78,8 +78,6 @@ mapTypeCheckerT f m = TypeCheckerT (mapFreeContextT (mapReaderT (mapStateT f)) (
 instance (PrintableBuiltin builtin, MonadCompile m) => MonadFreeContext builtin (TypeCheckerT builtin m) where
   addDeclEntryToContext entry = TypeCheckerT . addDeclEntryToContext entry . unTypeCheckerT
   getFreeCtx = TypeCheckerT . getFreeCtx
-  hideStdLibDecls p f = TypeCheckerT . hideStdLibDecls p f . unTypeCheckerT
-  getHiddenStdLibDecl p = TypeCheckerT . getHiddenStdLibDecl p
 
 instance (Eq builtin, Hashable builtin, PrintableBuiltin builtin, NormalisableBuiltin builtin, TypableBuiltin builtin, MonadCompile m) => MonadTypeChecker builtin (TypeCheckerT builtin m) where
   getMetaState = TypeCheckerT get

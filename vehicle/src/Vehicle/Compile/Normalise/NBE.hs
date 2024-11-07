@@ -20,15 +20,17 @@ import Data.List.NonEmpty as NonEmpty (toList)
 import Vehicle.Compile.Context.Bound.Class (MonadBoundContext (..))
 import Vehicle.Compile.Context.Free.Class (MonadFreeContext (..), getFreeEnv)
 import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, getBinderContext)
-import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin (..), filterOutIrrelevantArgs, findInstanceArg)
+import Vehicle.Compile.Normalise.Builtin
+    ( NormalisableBuiltin(..),
+      filterOutIrrelevantArgs,
+      findInstanceArg,
+      NormalisableBuiltin(..),
+      filterOutIrrelevantArgs )
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
 import Vehicle.Compile.Print.Builtin (PrintableBuiltin (..))
 import Vehicle.Data.Code.Value
-
--- import Control.Monad (when)
 
 -- NOTE: there is no evaluatation to NF in this file. To do it
 -- efficiently you should just evaluate to WHNF and then recursively
@@ -126,7 +128,7 @@ eval freeEnv boundEnv expr = do
     Meta _ m -> return $ VMeta m []
     Universe _ u -> return $ VUniverse u
     BoundVar _ v -> return $ lookupIxValueInEnv boundEnv v
-    FreeVar _ v -> lookupIdentValueInEnv freeEnv v
+    FreeVar _ v -> return $ lookupIdentValueInEnv freeEnv v
     Builtin _ b -> return $ VBuiltin b []
     Lam _ binder body -> do
       binder' <- traverse (eval freeEnv boundEnv) binder
@@ -188,24 +190,9 @@ evalBuiltin freeEnv b args = do
       let relArgs = filterOutIrrelevantArgs args
       -- when (length relArgs /= length (spine <> args)) $ do
       --   compilerDeveloperError $ "Bang" <> line <> prettyVerbose relArgs <> line <> prettyVerbose fun <> line <> prettyVerbose args <> line <> "Boom"
-      evalBuiltinApp (evalApp freeEnv) (VBuiltin b args) b relArgs
+      evalBuiltinApp (evalApp freeEnv) freeEnv (VBuiltin b args) b relArgs
 
-lookupIdentValueInEnv ::
-  forall builtin m.
-  (MonadNorm builtin m) =>
-  FreeEnv builtin ->
-  Identifier ->
-  m (Value builtin)
-lookupIdentValueInEnv freeEnv ident = do
-  decl <- lookupInFreeCtx currentPass ident freeEnv
-  return $ case bodyOf decl of
-    Just value -> value
-    _ -> VFreeVar ident []
-
-lookupIxValueInEnv ::
-  BoundEnv builtin ->
-  Ix ->
-  Value builtin
+lookupIxValueInEnv :: BoundEnv builtin -> Ix -> Value builtin
 lookupIxValueInEnv boundEnv ix = do
   snd $ lookupIxInBoundCtx ix boundEnv
 

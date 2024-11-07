@@ -6,11 +6,12 @@ import Data.List.NonEmpty
 import Data.Serialize (Serialize)
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Core hiding (Builtin (BuiltinConstructor, BuiltinFunction))
 import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Code.Expr
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
+import Vehicle.Prelude
 
 --------------------------------------------------------------------------------
 -- LinearityProvenance
@@ -155,28 +156,34 @@ instance BuiltinHasStandardData LinearityBuiltin where
     _ -> Nothing
 
 instance BuiltinHasBoolLiterals LinearityBuiltin where
-  mkBoolBuiltinLit b = LinearityConstructor (LBool b)
-  getBoolBuiltinLit = \case
-    LinearityConstructor (LBool b) -> Just b
+  getBoolBuiltinTensorLit = \case
+    LinearityConstructor (BoolTensorLiteral b) -> Just b
     _ -> Nothing
+  mkBoolBuiltinTensorLit b = LinearityConstructor (BoolTensorLiteral b)
 
 instance BuiltinHasIndexLiterals LinearityBuiltin where
   getIndexBuiltinLit e = case e of
-    LinearityConstructor (LIndex n) -> Just n
+    LinearityConstructor (IndexLiteral n) -> Just n
     _ -> Nothing
-  mkIndexBuiltinLit x = LinearityConstructor (LIndex x)
+  mkIndexBuiltinLit x = LinearityConstructor (IndexLiteral x)
 
 instance BuiltinHasNatLiterals LinearityBuiltin where
   getNatBuiltinLit e = case e of
-    LinearityConstructor (LNat b) -> Just b
+    LinearityConstructor (NatLiteral b) -> Just b
     _ -> Nothing
-  mkNatBuiltinLit x = LinearityConstructor (LNat x)
+  mkNatBuiltinLit x = LinearityConstructor (NatLiteral x)
 
 instance BuiltinHasRatLiterals LinearityBuiltin where
-  getRatBuiltinLit e = case e of
-    LinearityConstructor (LRat b) -> Just b
+  getRatBuiltinTensorLit = \case
+    LinearityConstructor (RatTensorLiteral b) -> Just b
     _ -> Nothing
-  mkRatBuiltinLit x = LinearityConstructor (LRat x)
+  mkRatBuiltinTensorLit b = LinearityConstructor (RatTensorLiteral b)
+
+instance BuiltinHasConstTensor LinearityBuiltin where
+  isConstTensorBuiltin e = case e of
+    LinearityFunction ConstTensor -> True
+    _ -> False
+  mkConstTensorBuiltin = LinearityFunction ConstTensor
 
 -----------------------------------------------------------------------------
 -- Patterns

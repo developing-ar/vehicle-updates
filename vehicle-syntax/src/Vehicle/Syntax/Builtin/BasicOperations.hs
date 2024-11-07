@@ -1,21 +1,5 @@
 -- | This module exports the datatype representations of the core builtin symbols.
-module Vehicle.Syntax.Builtin.BasicOperations
-  ( Quantifier (..),
-    EqualityOp (..),
-    equalityOp,
-    equalityOpName,
-    OrderOp (..),
-    orderOp,
-    orderOpName,
-    Strictness (..),
-    isStrict,
-    isForward,
-    flipStrictness,
-    flipOrder,
-    chainable,
-    FunctionPosition (..),
-  )
-where
+module Vehicle.Syntax.Builtin.BasicOperations where
 
 import Control.DeepSeq (NFData (..))
 import Data.Aeson (FromJSON, ToJSON)
@@ -167,3 +151,201 @@ instance Pretty Quantifier where
   pretty = \case
     Forall -> "forall"
     Exists -> "exists"
+
+--------------------------------------------------------------------------------
+-- Domains
+
+data OrderDomain
+  = OrderIndex
+  | OrderNat
+  | OrderRatTensor
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData OrderDomain
+
+instance Hashable OrderDomain
+
+instance Serialize OrderDomain
+
+instance Pretty OrderDomain where
+  pretty = \case
+    OrderNat -> "Nat"
+    OrderIndex -> "Index"
+    OrderRatTensor -> "RatTensor"
+
+data EqualityDomain
+  = EqIndex
+  | EqNat
+  | EqRatTensor
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData EqualityDomain
+
+instance Hashable EqualityDomain
+
+instance Serialize EqualityDomain
+
+instance Pretty EqualityDomain where
+  pretty = \case
+    EqIndex -> "Index"
+    EqNat -> "Nat"
+    EqRatTensor -> "RatTensor"
+
+data NegDomain
+  = NegRatTensor
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData NegDomain
+
+instance Hashable NegDomain
+
+instance Serialize NegDomain
+
+instance Pretty NegDomain where
+  pretty = \case
+    NegRatTensor -> "RatTensor"
+
+data AddDomain
+  = AddNat
+  | AddRatTensor
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData AddDomain
+
+instance Hashable AddDomain
+
+instance Serialize AddDomain
+
+instance Pretty AddDomain where
+  pretty = \case
+    AddNat -> "Nat"
+    AddRatTensor -> "RatTensor"
+
+data SubDomain
+  = SubRatTensor
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData SubDomain
+
+instance Hashable SubDomain
+
+instance Serialize SubDomain
+
+instance Pretty SubDomain where
+  pretty = \case
+    SubRatTensor -> "RatTensor"
+
+data MulDomain
+  = MulNat
+  | MulRatTensor
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData MulDomain
+
+instance Hashable MulDomain
+
+instance Serialize MulDomain
+
+instance Pretty MulDomain where
+  pretty = \case
+    MulNat -> "Nat"
+    MulRatTensor -> "RatTensor"
+
+data DivDomain
+  = DivRatTensor
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData DivDomain
+
+instance Hashable DivDomain
+
+instance Serialize DivDomain
+
+instance Pretty DivDomain where
+  pretty = \case
+    DivRatTensor -> "RatTensor"
+
+data MinDomain
+  = MinRatTensor
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData MinDomain
+
+instance Hashable MinDomain
+
+instance Serialize MinDomain
+
+instance Pretty MinDomain where
+  pretty = \case
+    MinRatTensor -> "RatTensor"
+
+data MaxDomain
+  = MaxRatTensor
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData MaxDomain
+
+instance Hashable MaxDomain
+
+instance Serialize MaxDomain
+
+instance Pretty MaxDomain where
+  pretty = \case
+    MaxRatTensor -> "RatTensor"
+
+data FromRatDomain
+  = FromRatToRat
+  deriving (Eq, Ord, Show, Generic)
+
+instance Pretty FromRatDomain where
+  pretty = \case
+    FromRatToRat -> "Rat"
+
+instance NFData FromRatDomain
+
+instance Hashable FromRatDomain
+
+instance Serialize FromRatDomain
+
+data FromNatDomain
+  = FromNatToIndex
+  | FromNatToNat
+  | FromNatToRat
+  deriving (Eq, Ord, Show, Generic)
+
+instance Pretty FromNatDomain where
+  pretty = \case
+    FromNatToIndex -> "Index"
+    FromNatToNat -> "Nat"
+    FromNatToRat -> "Rat"
+
+instance Serialize FromNatDomain
+
+instance NFData FromNatDomain
+
+instance Hashable FromNatDomain
+
+{-
+--------------------------------------------------------------------------------
+-- Tensor element types
+
+data TensorElementType
+  = BoolElementType
+  | IndexElementType
+  | NatElementType
+  | RatElementType
+  deriving (Eq, Ord, Generic, Show)
+
+instance NFData TensorElementType
+
+instance Hashable TensorElementType
+
+instance Serialize TensorElementType
+
+instance Pretty TensorElementType where
+  pretty = \case
+    BoolElementType -> "Bool"
+    NatElementType -> "Bool"
+    IndexElementType -> "Bool"
+    RatElementType -> "Rat"
+-}

@@ -10,11 +10,15 @@ import Vehicle.Compile.Context.Free (MonadFreeContext)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Standard
-import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.Value
 
 --------------------------------------------------------------------------------
 -- If lifting
+
+pattern IIf :: VArg Builtin -> VArg Builtin -> Value Builtin -> Value Builtin -> Value Builtin
+pattern IIf t c x y <- VBuiltin (BuiltinFunction If) [t, c, argExpr -> x, argExpr -> y]
+  where
+    IIf t c x y = VBuiltin (BuiltinFunction If) [t, c, explicit x, explicit y]
 
 liftIf ::
   (Monad m) =>

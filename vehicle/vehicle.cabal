@@ -120,7 +120,6 @@ library
     Vehicle.Backend.LossFunction.JSON
     Vehicle.Backend.LossFunction.LogicCompilation
     Vehicle.Backend.LossFunction.LossCompilation
-    Vehicle.Backend.LossFunction.TensorCompilation
     Vehicle.Backend.Prelude
     Vehicle.Backend.Queries.Error
     Vehicle.CommandLine
@@ -219,7 +218,6 @@ library
     Vehicle.Compile.Type.Builtin.Linearity
     Vehicle.Compile.Type.Builtin.Polarity
     Vehicle.Compile.Type.Builtin.Standard
-    Vehicle.Compile.Type.Builtin.Tensor
     Vehicle.Compile.Type.Constraint.ApplicationSolver
     Vehicle.Compile.Type.Constraint.Core
     Vehicle.Compile.Type.Constraint.IndexSolver
@@ -249,7 +247,7 @@ library
     Vehicle.Data.Builtin.Core
     Vehicle.Data.Builtin.Linearity
     Vehicle.Data.Builtin.Polarity
-    Vehicle.Data.Builtin.Tensor
+    Vehicle.Data.Code.TypedView
     Vehicle.Data.QuantifiedVariable
     Vehicle.Data.Universe
     Vehicle.Debug

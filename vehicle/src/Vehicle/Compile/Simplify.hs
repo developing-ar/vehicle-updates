@@ -3,10 +3,9 @@ module Vehicle.Compile.Simplify
   )
 where
 
-import Data.List.NonEmpty (NonEmpty (..))
+import Data.List.NonEmpty (NonEmpty (..), toList)
 import Data.List.NonEmpty qualified as NonEmpty (filter)
 import Data.Text qualified as Text
-import Vehicle.Compile.Print.Builtin
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Standard ()
 import Vehicle.Syntax.AST.Arg
@@ -36,28 +35,28 @@ instance Simplify Expr where
     let fun' = uninsert fun
     let args' = simplifyArgs args
     -- Remove automatically inserted cast functions
-    if isLiteralCast fun' && not (null args')
-      then argExpr $ last args'
-      else normAppList fun' args'
+    removeInsertedCasts fun' args'
 
   shortenVec = mapApp $ \fun args ->
-    case fun of
-      Builtin p (BuiltinConstructor LVec {}) -> case getHeadMidTail args of
-        Just (firstArg, numberOfMiddleAgs, lastArg)
-          | numberOfMiddleAgs > 3 ->
-              normAppList
-                fun
-                [ firstArg,
-                  Arg p Explicit Relevant (Var p ("<" <> n2 <> " more>")),
-                  lastArg
-                ]
-          where
-            n2 = Text.pack $ show $ length args - 2
-        _ -> App fun args
+    case (fun, args) of
+      (Builtin p (BuiltinFunction StackTensor), (argExpr -> (Builtin _ (BuiltinConstructor (NatLiteral n)))) :| _) ->
+        case getHeadMidTail (drop (length args - n) $ toList args) of
+          Just (firstArg, numberOfMiddleArgs, lastArg)
+            | numberOfMiddleArgs > 3 ->
+                normAppList
+                  fun
+                  [ firstArg,
+                    Arg p Explicit Relevant (Var p ("<" <> n2 <> " more>")),
+                    lastArg
+                  ]
+            where
+              n2 = Text.pack $ show numberOfMiddleArgs
+          _ -> App fun args
       _ -> App fun args
     where
-      getHeadMidTail :: forall a. NonEmpty a -> Maybe (a, Int, a)
-      getHeadMidTail (x :| xs) = go 0 xs
+      getHeadMidTail :: forall a. [a] -> Maybe (a, Int, a)
+      getHeadMidTail [] = Nothing
+      getHeadMidTail (x : xs) = go 0 xs
         where
           go :: Int -> [a] -> Maybe (a, Int, a)
           go _ [] = Nothing
@@ -92,7 +91,27 @@ wasInserted arg = case visibilityOf arg of
   Instance True -> True
   _ -> False
 
-isLiteralCast :: Expr -> Bool
-isLiteralCast = \case
-  Builtin _ b -> isCoercion b
-  _ -> False
+removeInsertedCasts :: Expr -> [Arg] -> Expr
+removeInsertedCasts fun args
+  | null args = fun
+  | otherwise = case fun of
+      Builtin p b -> case b of
+        BuiltinFunction FromNat {} -> argExpr $ last args
+        BuiltinFunction FromRat {} -> argExpr $ last args
+        BuiltinFunction FlattenTensorType -> normAppList (Builtin p (BuiltinType TensorType)) args
+        BuiltinType TensorType -> delabTensorType args
+        TypeClassOp FromNatTC {} -> argExpr $ last args
+        TypeClassOp FromRatTC {} -> argExpr $ last args
+        _ -> normAppList fun args
+      _ -> normAppList fun args
+
+delabTensorType :: [Arg] -> Expr
+delabTensorType = \case
+  [Arg _ _ _ tElem, Arg _ _ _ dim] | isNil dim -> tElem
+  args -> normAppList (Builtin mempty (BuiltinType TensorType)) args
+  where
+    isNil :: Expr -> Bool
+    isNil = \case
+      Builtin _ (BuiltinConstructor Nil) -> True
+      App (Builtin _ (BuiltinConstructor Nil)) _ -> True
+      _ -> False

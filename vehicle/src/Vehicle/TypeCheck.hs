@@ -174,4 +174,4 @@ createFreeCtx imports = do
       m (FreeCtx Builtin)
     calculateCtx = \case
       [] -> getFreeCtx (Proxy @Builtin)
-      d : ds -> addDeclToContext (Proxy @Builtin) d $ calculateCtx ds
+      d : ds -> addDeclToContext d $ calculateCtx ds

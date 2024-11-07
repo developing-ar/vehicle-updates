@@ -560,9 +560,8 @@ instance
   PrettyUsing rest (Assertion `In` ctx)
   where
   prettyUsing (e, ctx) = case e of
-    RationalEq eq -> prettyUsing @rest (eq, ctx)
-    RationalIneq ineq -> prettyUsing @rest (ineq, ctx)
-    TensorEq eq -> prettyUsing @rest (eq, ctx)
+    InequalityAssertion ineq -> prettyUsing @rest (ineq, ctx)
+    EqualityAssertion eq -> prettyUsing @rest (eq, ctx)
 
 --------------------------------------------------------------------------------
 -- Instances for functors types

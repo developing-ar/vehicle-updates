@@ -36,7 +36,7 @@ mapObject :: (a -> b) -> Contextualised a ctx -> Contextualised b ctx
 mapObject f WithContext {..} = WithContext {objectIn = f objectIn, ..}
 
 -------------------------------------------------------------------------------
--- Utilities for traversing auxiliary arguments.
+-- Imports
 
 type Imports = [Prog Builtin]
 

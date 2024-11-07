@@ -336,6 +336,17 @@ abstractOverCtx ctx body = do
   let lam binder = Lam p (Binder p (lamBinderForm (nameOf binder)) Explicit (relevanceOf binder) (TypeUniverse p 0))
   foldr lam body (reverse ctx)
 
+abstractMetaSolution ::
+  (MonadTypeChecker builtin m) =>
+  MetaID ->
+  Expr builtin ->
+  m (GluedExpr builtin)
+abstractMetaSolution m solution = do
+  MetaInfo _ _ metaCtx <- getMetaInfo m
+  let env = boundContextToEnv metaCtx
+  let abstractedSolution = abstractOverCtx metaCtx solution
+  glueNBE env abstractedSolution
+
 solveMeta ::
   forall builtin m.
   (MonadTypeChecker builtin m) =>
@@ -344,16 +355,13 @@ solveMeta ::
   BoundCtx (Type builtin) ->
   m ()
 solveMeta m solution solutionCtx = do
-  MetaInfo p _ metaCtx <- getMetaInfo m
-  let abstractedSolution = abstractOverCtx metaCtx solution
-  let env = boundContextToEnv metaCtx
-  gluedSolution <- glueNBE env abstractedSolution
+  abstractedSolution <- abstractMetaSolution m solution
 
   logDebug MaxDetail $
     "solved"
       <+> pretty m
       <+> "as"
-      <+> prettyExternal (WithContext abstractedSolution (toNamedBoundCtx solutionCtx))
+      <+> prettyExternal (WithContext solution (toNamedBoundCtx solutionCtx))
 
   metaSubst <- getMetaSubstitution (Proxy @builtin)
   case MetaMap.lookup m metaSubst of
@@ -369,14 +377,12 @@ solveMeta m solution solutionCtx = do
             <+> line
           <> indent 2 (squotes (prettyVerbose solution))
           <> line
-          <> "at"
-            <+> pretty p
     -- Could use `insertWith` instead of `insert` here for one lookup instead of
     -- two, but not possible to throw a monadic error unfortunately.
     Nothing -> do
       modifyMetaCtx $ \TypeCheckerState {..} ->
         TypeCheckerState
-          { currentSubstitution = MetaMap.insert m gluedSolution currentSubstitution,
+          { currentSubstitution = MetaMap.insert m abstractedSolution currentSubstitution,
             solvedMetaState = registerSolvedMeta m solvedMetaState,
             ..
           }

@@ -14,7 +14,6 @@ import Vehicle.Compile.Type.Monad (MonadTypeChecker, addUnificationConstraints)
 import Vehicle.Compile.Type.Monad.Class (addAuxiliaryInstanceConstraints, solveMeta, substMetas)
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Linearity
-import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.Value
 
 solveLinearityConstraint ::
@@ -151,7 +150,8 @@ handleConstraintProgress ::
 handleConstraintProgress originalConstraint@(WithContext (Resolve _ m _ _) ctx) = \case
   Stuck metas -> addAuxiliaryInstanceConstraints [blockConstraintOn originalConstraint metas]
   Progress newUnificationConstraints newAuxiliaryConstraints -> do
-    solveMeta m (IUnitLiteral (provenanceOf ctx)) (boundContext ctx)
+    let solution = Builtin mempty (LinearityConstructor UnitLiteral)
+    solveMeta m solution (boundContext ctx)
     addUnificationConstraints newUnificationConstraints
     addAuxiliaryInstanceConstraints newAuxiliaryConstraints
 

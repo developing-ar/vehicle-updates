@@ -13,7 +13,7 @@ import Prettyprinter (brackets)
 import System.FilePath ((<.>), (</>))
 import Vehicle.Compile.Resource
 import Vehicle.Data.Builtin.Core
-import Vehicle.Data.QuantifiedVariable (NetworkElementVariable)
+import Vehicle.Data.Code.LinearExpr (Variable)
 import Vehicle.Data.Tensor (TensorIndices, showTensorIndices)
 import Vehicle.Prelude
 
@@ -56,7 +56,7 @@ type MetaNetwork = [MetaNetworkEntry]
 
 -- | A (satisfying) assignment to a set of reduced network-level variables.
 newtype NetworkVariableAssignment
-  = NetworkVariableAssignment (Map NetworkElementVariable Rational)
+  = NetworkVariableAssignment (Map Variable Rational)
 
 --------------------------------------------------------------------------------
 -- Queries misc

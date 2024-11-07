@@ -1,5 +1,11 @@
 # Changelog for Vehicle
 
+## Version 0.17.0
+
+* Fixed bug where `type` declarations with parameters were handled incorrectly.
+
+* Better error messages for typing errors
+
 ## Version 0.16.1
 
 * Fixed detection of Marabou timeouts.

@@ -18,7 +18,8 @@ import Vehicle.Compile.Type.Meta.Variable
 import Vehicle.Compile.Type.Monad.Class
 
 type MonadInstanceDefault builtin m =
-  ( MonadTypeChecker builtin m
+  ( MonadTypeChecker builtin m,
+    Hashable builtin
   )
 
 newtype DefaultCandidate builtin

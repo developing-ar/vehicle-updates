@@ -18,17 +18,20 @@ import Vehicle.Compile.Print.Error (MeaningfulError (..))
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Constraint.UnificationSolver (runUnificationSolver)
 import Vehicle.Compile.Type.Core
+import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
 import Vehicle.Compile.Type.Monad
-import Vehicle.Compile.Type.Monad.Class (addInstanceConstraints)
+import Vehicle.Compile.Type.Monad.Class
+  ( abstractMetaSolution,
+    addInstanceConstraints,
+    getMetaSubstitution,
+  )
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DeBruijn (dbLevelToIndex)
 
 --------------------------------------------------------------------------------
 -- Public interface
 
--- | Attempts to solve as many type-class constraints as possible. Takes in
--- the set of meta-variables solved since the solver was last run and outputs
--- the set of meta-variables solved during this run.
+-- | Attempts to solve as many instance constraints as possible.
 runInstanceSolver ::
   (MonadInstance builtin m) =>
   Proxy builtin ->
@@ -46,9 +49,9 @@ runInstanceSolver proxy depth = do
 -- Algorithm
 
 type MonadInstance builtin m =
-  MonadTypeChecker
-    builtin
-    m
+  ( MonadTypeChecker builtin m,
+    Hashable builtin
+  )
 
 -- The algorithm for this is taken from
 -- https://agda.readthedocs.io/en/v2.6.2.2/language/instance-arguments.html#instance-resolution
@@ -66,17 +69,17 @@ solveInstanceConstraint depth constraint = do
   let goal = parseInstanceGoal normConstraint
   database <- getInstanceCandidates
   let candidates = lookupInstances database goal
-  solveInstanceGoal depth normConstraint candidates goal
+  solveInstanceGoal normConstraint candidates depth goal
 
 solveInstanceGoal ::
   forall builtin m.
   (MonadInstance builtin m) =>
-  InstanceSearchDepth ->
   WithContext (InstanceConstraint builtin) ->
   [InstanceCandidate builtin] ->
+  InstanceSearchDepth ->
   InstanceGoal builtin ->
   m ()
-solveInstanceGoal depth constraint rawBuiltinCandidates goal = do
+solveInstanceGoal constraint rawBuiltinCandidates depth goal = do
   let boundCtx = boundContext $ contextOf constraint
   candidatesInBoundCtx <- findCandidatesInBoundCtx goal boundCtx
   -- The previously declared candidates have access to the entire bound context
@@ -97,7 +100,7 @@ solveInstanceGoal depth constraint rawBuiltinCandidates goal = do
 
   -- Try all candidates
   (unsuccessfulCandidates, successfulCandidates) <-
-    partitionEithers <$> traverse (checkCandidate depth constraint goal) allCandidates
+    partitionEithers <$> traverse (checkCandidate constraint goal depth) allCandidates
 
   case successfulCandidates of
     -- If there is a single valid candidate then we adopt the resulting state
@@ -150,12 +153,12 @@ findCandidatesInBoundCtx goal ctx = go ctx
 checkCandidate ::
   forall builtin m.
   (MonadInstance builtin m) =>
-  InstanceSearchDepth ->
   WithContext (InstanceConstraint builtin) ->
   InstanceGoal builtin ->
+  InstanceSearchDepth ->
   WithContext (InstanceCandidate builtin) ->
   m (Either (WithContext (InstanceCandidate builtin), UnAnnDoc) (WithContext (InstanceCandidate builtin), TypeCheckerState builtin))
-checkCandidate depth constraint goal candidate = do
+checkCandidate constraint goal depth candidate = do
   let candidateDoc = squotes (prettyCandidate candidate)
   logCompilerPass MaxDetail ("trying candidate instance" <+> candidateDoc) $ do
     result <- runTypeCheckerTHypothetically $ do
@@ -168,7 +171,6 @@ checkCandidate depth constraint goal candidate = do
       if depth == 0
         then return mempty
         else runInstanceSolver proxy (depth - 1)
-
     case result of
       Left err -> do
         logDebug MaxDetail $ line <> "Rejecting" <+> candidateDoc <+> "as a possibility"
@@ -207,7 +209,29 @@ acceptCandidate (WithContext Resolve {..} constraintCtx) goal candidate = do
 
   -- Add the solution of the type-class as well (if we had first class records
   -- then we wouldn't need to do this manually).
-  solveMeta instanceSolutionMeta finalCandidateSolution extendedGoalCtx
+  instantiateTypeClassSolution extendedGoalInfo instanceSolutionMeta finalCandidateSolution extendedGoalCtx
+
+  addInstanceConstraints recInstanceConstraints
+
+instantiateTypeClassSolution ::
+  forall builtin m.
+  (MonadInstance builtin m) =>
+  (ConstraintContext builtin, InstanceConstraintOrigin builtin) ->
+  MetaID ->
+  Expr builtin ->
+  [Binder builtin] ->
+  m ()
+instantiateTypeClassSolution goalInfo meta solution goalCtx = do
+  metaSubst <- getMetaSubstitution (Proxy @builtin)
+  case MetaMap.lookup meta metaSubst of
+    Nothing -> solveMeta meta solution goalCtx
+    Just existingSolution -> do
+      -- The meta may have already been solved here because we support non-unique instance solutions for overloading
+      -- the tensor element types (e.g. `Bool` -> both `BoolElement` and `Tensor BoolElement []`).
+      -- If we've already solved the meta, then just unify the solutions.
+      abstractedSolution <- abstractMetaSolution meta solution
+      unificationConstraint <- createInstanceUnification goalInfo (normalised abstractedSolution) (normalised existingSolution)
+      addUnificationConstraints [unificationConstraint]
 
 -- | Generate meta variables for each binder in the telescope of the candidate
 -- and then substitute them into the candidate expression.

@@ -3,7 +3,6 @@
 module Vehicle.Compile.Monomorphisation
   ( monomorphise,
     hoistInferableParameters,
-    removeLiteralCoercions,
   )
 where
 
@@ -27,18 +26,14 @@ import Data.HashMap.Strict qualified as Map
 import Data.Hashable (Hashable)
 import Data.LinkedHashSet (LinkedHashSet)
 import Data.LinkedHashSet qualified as HashSet (singleton, toList, union)
-import Data.Maybe (catMaybes, mapMaybe)
+import Data.Maybe (mapMaybe)
 import Data.Set qualified as Set (member, unions)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (PrintableBuiltin, prettyFriendly, prettyFriendlyEmptyCtx, prettyVerbose)
-import Vehicle.Data.Builtin.Interface
-import Vehicle.Data.Builtin.Standard
-import Vehicle.Data.Code.Interface
 import Vehicle.Data.Hashing ()
-import Vehicle.Libraries.StandardLibrary.Definitions
 
 --------------------------------------------------------------------------------
 -- Public interface
@@ -53,7 +48,7 @@ import Vehicle.Libraries.StandardLibrary.Definitions
 -- (e.g. naturals, rationals and tensors)
 monomorphise ::
   forall m builtin.
-  (MonadCompile m, Hashable builtin, PrintableBuiltin builtin, BuiltinHasStandardData builtin) =>
+  (MonadCompile m, Hashable builtin, PrintableBuiltin builtin) =>
   (Decl builtin -> Bool) ->
   Text ->
   Prog builtin ->
@@ -251,7 +246,7 @@ getTypeJoiner nameJoiner = nameJoiner <> nameJoiner
 
 --------------------------------------------------------------------------------
 -- Step 4. Coercions
-
+{-
 removeLiteralCoercions ::
   forall m.
   (MonadCompile m) =>
@@ -282,15 +277,15 @@ removeLiteralCoercions nameJoiner (Main ds) =
 
     updateBuiltin :: Decl Builtin -> BuiltinUpdate m Builtin Builtin
     updateBuiltin decl p2 b args = case b of
-      (getBuiltinFunction -> Just (FromNat dom)) -> case (dom, filter isExplicit args) of
-        (FromNatToIndex, [RelevantExplicitArg _ (INatLiteral p n)]) -> return $ IIndexLiteral p n
-        (FromNatToNat, [e]) -> return $ argExpr e
-        (FromNatToRat, [RelevantExplicitArg _ (INatLiteral p n)]) -> return $ IRatLiteral p (fromIntegral n)
-        _ -> do
-          partialApplication decl (pretty (FromNat dom)) args
-      (getBuiltinFunction -> Just (FromRat dom)) -> case (dom, args) of
-        (FromRatToRat, [e]) -> return $ argExpr e
-        _ -> partialApplication decl (pretty (FromRat dom)) args
+      -- (getBuiltinFunction -> Just (FromNat dom)) -> case (dom, filter isExplicit args) of
+      --   (FromNatToIndex, [RelevantExplicitArg _ (INatLiteral p n)]) -> return $ IIndexLiteral p n
+      --   (FromNatToNat, [e]) -> return $ argExpr e
+      --   (FromNatToRat, [RelevantExplicitArg _ (INatLiteral p n)]) -> return $ Builtin p (BuiltinConstructor $ RatTensorLiteral $ ZeroDimTensor $ fromIntegral n)
+      --   _ -> do
+      --     partialApplication decl (pretty (FromNat dom)) args
+      (getBuiltinFunction -> Just (FromRat FromRatToRat)) -> case args of
+        [e] -> return $ argExpr e
+        _ -> partialApplication decl (pretty FromRatToRat) args
       _ -> return $ normAppList (Builtin p2 b) args
 
     updateFreeVar :: Decl Builtin -> FreeVarUpdate m Builtin
@@ -301,9 +296,9 @@ removeLiteralCoercions nameJoiner (Main ds) =
         Just StdVectorToVector -> case reverse args' of
           vec : _ -> return $ argExpr vec
           _ -> partialApplication decl (pretty ident) args'
-        Just StdVectorToList -> case reverse args' of
-          RelevantExplicitArg _ (IVecLiteral l xs) : _ -> return $ mkListExpr (argExpr l) (fmap argExpr xs)
-          _ -> partialApplication decl (pretty ident) args'
+        -- Just StdVectorToList -> case reverse args' of
+        --   RelevantExplicitArg _ (IVecLiteral l xs) : _ -> return $ mkListExpr (argExpr l) (fmap argExpr xs)
+        --   _ -> partialApplication decl (pretty ident) args'
         _ -> return $ normAppList (FreeVar p ident) args'
 
     partialApplication :: Decl Builtin -> Doc () -> [Arg Builtin] -> m b
@@ -325,7 +320,7 @@ removeLiteralCoercions nameJoiner (Main ds) =
                 <> line
                 <> pretty (show $ bodyOf decl)
             )
-
+-}
 --------------------------------------------------------------------------------
 -- Step 5. Hoisting. Massive hack. Should be done with erasure.
 

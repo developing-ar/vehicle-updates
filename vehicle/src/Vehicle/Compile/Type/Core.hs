@@ -190,11 +190,12 @@ type InstanceSearchDepth = Int
 -- totally ordered (e.g. PolarityBuiltin and LinearityBuiltin)
 data InstanceDatabase builtin = InstanceDatabase
   { instances :: HashMap builtin [InstanceCandidate builtin],
-    defaultInstances :: HashMap builtin (InstanceCandidate builtin)
+    defaultInstances :: HashMap builtin (InstanceCandidate builtin),
+    instanceSearchDepth :: HashMap builtin InstanceSearchDepth
   }
 
 emptyInstanceDatabase :: (Hashable builtin) => InstanceDatabase builtin
-emptyInstanceDatabase = InstanceDatabase mempty mempty
+emptyInstanceDatabase = InstanceDatabase mempty mempty mempty
 
 lookupInstances :: (Hashable builtin) => InstanceDatabase builtin -> InstanceGoal builtin -> [InstanceCandidate builtin]
 lookupInstances database goal = Map.findWithDefault [] (goalHead goal) (instances database)
@@ -202,26 +203,21 @@ lookupInstances database goal = Map.findWithDefault [] (goalHead goal) (instance
 lookupDefaultInstance :: (Hashable builtin) => InstanceDatabase builtin -> InstanceGoal builtin -> Maybe (InstanceCandidate builtin)
 lookupDefaultInstance database goal = Map.lookup (goalHead goal) (defaultInstances database)
 
+lookupSearchDepth :: (Hashable builtin) => InstanceDatabase builtin -> InstanceGoal builtin -> InstanceSearchDepth
+lookupSearchDepth database goal = Map.findWithDefault 0 (goalHead goal) (instanceSearchDepth database)
+
 --------------------------------------------------------------------------------
 -- Unification constraints
 
 data CheckingExprType builtin = CheckingExpr
-  { checkedExpr :: Expr builtin,
+  { checkedExpr :: Either (Maybe Name) (Expr builtin),
     checkedExprExpectedType :: Type builtin,
     checkedExprActualType :: Expr builtin
   }
   deriving (Show)
 
-data CheckingBinderType builtin = CheckingBinder
-  { checkedBinderName :: Maybe Name,
-    checkedBinderExpectedType :: Type builtin,
-    checkedBinderActualType :: Type builtin
-  }
-  deriving (Show)
-
 data UnificationConstraintOrigin builtin
   = CheckingExprType (CheckingExprType builtin)
-  | CheckingBinderType (CheckingBinderType builtin)
   | CheckingInstanceType (InstanceConstraintOrigin builtin)
   deriving (Show)
 

@@ -9,7 +9,6 @@ import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..))
 import Data.Maybe (isNothing, maybeToList)
-import Data.Proxy (Proxy (..))
 import System.Directory (createDirectoryIfMissing)
 import Vehicle.Backend.Queries.Error
 import Vehicle.Backend.Queries.UserVariableElimination (eliminateUserVariables)
@@ -23,7 +22,7 @@ import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print.Warning ()
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
-import Vehicle.Data.Code.Interface
+import Vehicle.Data.Code.TypedView (BooleanTensorValue (..), toBoolValue)
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Tensor (TensorIndices)
 import Vehicle.Prelude.Warning (CompileWarning (..))
@@ -91,12 +90,11 @@ compileDecls prog queryFormat networkCtx propertyID (d : ds) outputLocation = do
   property <- case d of
     DefFunction p ident anns _ body
       | isProperty anns -> do
-          hideStdLibDecls (Proxy @Builtin) vectorOperations $ do
-            let propertyData = (queryFormat, networkCtx, (ident, p), propertyID, outputLocation)
-            Just <$> compilePropertyDecl prog propertyData body
+          let propertyData = (queryFormat, networkCtx, (ident, p), propertyID, outputLocation)
+          Just <$> compilePropertyDecl prog propertyData body
     _ -> return Nothing
 
-  addDeclToContext (Proxy @Builtin) d $ do
+  addDeclToContext d $ do
     let newPropertyID = if isNothing property then propertyID else propertyID + 1
     properties <- compileDecls prog queryFormat networkCtx newPropertyID ds outputLocation
     return $ maybeToList property ++ properties
@@ -151,8 +149,8 @@ compileMultiProperty ::
 compileMultiProperty multiPropertyMetaData = go []
   where
     go :: TensorIndices -> Value Builtin -> m (MultiProperty ())
-    go indices expr = case expr of
-      IVecLiteral _ es -> do
+    go indices expr = case toBoolValue expr of
+      VBoolStackTensor _ _ es -> do
         let es' = zip [0 :: Int ..] es
         MultiProperty <$> traverse (\(i, e) -> go (i : indices) (argExpr e)) es'
       _ -> do

@@ -6,11 +6,12 @@ module Vehicle.Compile.Type.Builtin.Linearity
   )
 where
 
-import Data.Text qualified as Text
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Core hiding (Builtin (..))
 import Vehicle.Data.Builtin.Linearity
+import Vehicle.Data.Code.DSL (iterate)
 import Vehicle.Data.DSL
+import Prelude hiding (iterate)
 
 isLinearityBuiltinConstructor :: LinearityBuiltin -> Bool
 isLinearityBuiltinConstructor = \case
@@ -30,46 +31,58 @@ typeLinearityBuiltin p b = fromDSL p $ case b of
 typeOfBuiltinFunction :: BuiltinFunction -> LinearityDSLExpr
 typeOfBuiltinFunction = \case
   -- Boolean operations
-  Not -> typeOfOp1
+  Not {} -> typeOfOp1
   Implies -> typeOfOp2 maxLinearity
-  And -> typeOfOp2 maxLinearity
-  Or -> typeOfOp2 maxLinearity
-  Quantifier q -> typeOfQuantifier q
+  And {} -> typeOfOp2 maxLinearity
+  Or {} -> typeOfOp2 maxLinearity
+  QuantifyRatTensor q -> typeOfQuantifier q
   If -> typeOfIf
+  ReduceAndTensor -> typeOfOp1
+  ReduceOrTensor -> typeOfOp1
   -- Arithmetic operations
-  Neg {} -> typeOfOp1
   Add {} -> typeOfOp2 maxLinearity
-  Sub {} -> typeOfOp2 maxLinearity
   Mul {} -> typeOfOp2 mulLinearity
+  Neg {} -> typeOfOp1
+  Sub {} -> typeOfOp2 maxLinearity
   Div {} -> typeOfOp2 divLinearity
+  Min {} -> typeOfOp2 maxLinearity
+  Max {} -> typeOfOp2 maxLinearity
   PowRat {} -> typeOfOp2 powLinearity
-  MinRat {} -> typeOfOp2 maxLinearity
-  MaxRat {} -> typeOfOp2 maxLinearity
+  ReduceAddRatTensor -> typeOfOp1
+  ReduceMulRatTensor ->
+    forAllLinearities $ \l1 ->
+      forAllLinearities $ \l2 ->
+        mulLinearity l1 l1 l2 .~~~> l1 ~> l2
+  ReduceMinRatTensor -> typeOfOp1
+  ReduceMaxRatTensor -> typeOfOp1
   -- Comparisons
   Equals {} -> typeOfOp2 maxLinearity
   Order {} -> typeOfOp2 maxLinearity
   -- Conversion functions
   FromNat {} -> constant ~> constant
   FromRat {} -> constant ~> constant
+  FromVectorToList -> typeOfVectorToList
   -- Container functions
   FoldList -> typeOfFold
-  FoldVector -> typeOfFold
   MapList -> typeOfMap
-  MapVector -> typeOfMap
-  ZipWithVector -> typeOfZipWith
   At -> typeOfAt
-  Indices -> constant ~> constant
+  StackTensor -> typeOfStack
+  ConstTensor -> forAllLinearities $ \l -> l ~> constant ~> l
+  Foreach -> forAllLinearities $ \l -> l ~> l
+  Iterate -> typeOfIterate
+  FlattenTensorType -> type0 ~> type0
 
 typeOfConstructor :: BuiltinConstructor -> LinearityDSLExpr
 typeOfConstructor = \case
   Nil -> typeOfNil
   Cons -> typeOfCons
-  LUnit {} -> constant
-  LBool {} -> constant
-  LIndex {} -> constant
-  LNat {} -> constant
-  LRat {} -> constant
-  LVec n -> typeOfVecLiteral n
+  UnitLiteral {} -> constant
+  IndexLiteral {} -> constant
+  NatLiteral {} -> constant
+  NatTensorLiteral {} -> constant
+  BoolTensorLiteral {} -> constant
+  IndexTensorLiteral {} -> constant
+  RatTensorLiteral {} -> constant
 
 typeOfLinearityRelation :: LinearityRelation -> LinearityDSLExpr
 typeOfLinearityRelation = \case
@@ -122,26 +135,30 @@ typeOfMap =
     forAllLinearities $ \l2 ->
       (l1 ~> l2) ~> l1 ~> l2
 
-typeOfZipWith :: LinearityDSLExpr
-typeOfZipWith =
-  forAllLinearityTriples $ \l1 l2 l3 ->
-    maxLinearity l1 l2 l3 .~~~> (l1 ~> l2 ~> l3) ~> l1 ~> l2 ~> l3
-
 typeOfQuantifier :: Quantifier -> LinearityDSLExpr
 typeOfQuantifier q =
   forAll "f" type0 $ \tLam ->
     forAll "A" type0 $ \tRes ->
       quantLinearity q tLam tRes .~~~> tLam ~> tRes
 
-typeOfVecLiteral :: Int -> LinearityDSLExpr
-typeOfVecLiteral n = go n constant
-  where
-    go :: Int -> LinearityDSLExpr -> LinearityDSLExpr
-    go 0 maxSoFar = maxSoFar
-    go i maxSoFar =
-      let varName = "l" <> Text.pack (show i)
-       in forAll varName tLin $ \li ->
-            forAll (varName <> "_max") tLin $ \newMax ->
-              maxLinearity maxSoFar li newMax
-                .~~~> li
-                ~> go (i - 1) newMax
+typeOfIterate :: LinearityDSLExpr
+typeOfIterate = ((type0 ~> type0) ~> type0 ~> type0) ~> constant ~> type0
+
+typeOfVectorLiteral :: LinearityDSLExpr
+typeOfVectorLiteral =
+  forAll "n" constant $ \n ->
+    iterate
+      type0
+      ( \fn maxSoFar ->
+          forAll "l" tLin $ \li ->
+            forAll "l_max" tLin $ \newMax ->
+              maxLinearity maxSoFar li newMax .~~~> li ~> fn @@ [newMax]
+      )
+      n
+      constant
+
+typeOfStack :: LinearityDSLExpr
+typeOfStack = typeOfVectorLiteral
+
+typeOfVectorToList :: LinearityDSLExpr
+typeOfVectorToList = typeOfVectorLiteral

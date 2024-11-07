@@ -5,7 +5,7 @@ import Vehicle.Compile.Context.Free (MonadFreeContext, getFreeEnv)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (prettyVerbose)
+import Vehicle.Compile.Print (PrintableBuiltin, prettyVerbose)
 import Vehicle.Compile.Type.Builtin (TypableBuiltin)
 import Vehicle.Compile.Type.Constraint.IndexSolver (solveDefaultIndexConstraints, solveIndexConstraint)
 import Vehicle.Compile.Type.Constraint.InstanceDefaultSolver (getDefaultableConstraints)
@@ -105,6 +105,16 @@ addNewStandardAuxiliaryConstraintUsingDefaults maybeDecl = do
   defaultableConstraints <- getDefaultableConstraints maybeDecl auxiliaryConstraints
   solveDefaultIndexConstraints defaultableConstraints
 
+extractElementType :: (PrintableBuiltin builtin) => Doc () -> [Arg builtin] -> Expr builtin
+extractElementType name args = case args of
+  [tElem] -> argExpr tElem
+  _ -> monomorphisationError name args
+
+monomorphisationError :: (PrintableBuiltin builtin) => Doc () -> [Arg builtin] -> a
+monomorphisationError name args =
+  developerError $
+    "Monomorphisation should have got rid of" <+> squotes name <+> "s but found" <+> prettyVerbose args
+
 -------------------------------------------------------------------------------
 -- Linearity
 
@@ -127,25 +137,17 @@ convertToLinearityTypes p b args = case b of
   BuiltinFunction f -> return $ normAppList (Builtin p (LinearityFunction f)) args
   BuiltinConstructor c -> return $ normAppList (Builtin p (LinearityConstructor c)) args
   BuiltinType s -> case s of
-    Unit -> return $ Builtin p $ Linearity Constant
-    Bool -> freshLinearityMeta p
-    Index -> freshLinearityMeta p
-    Nat -> freshLinearityMeta p
-    Rat -> freshLinearityMeta p
-    List -> case args of
-      [tElem] -> return $ argExpr tElem
-      _ -> monomorphisationError "List"
-    Vector -> case args of
-      [tElem] -> return $ argExpr tElem
-      _ -> monomorphisationError "Vector"
-  TypeClass {} -> monomorphisationError "TypeClass"
-  TypeClassOp {} -> monomorphisationError "TypeClassOp"
-  NatInDomainConstraint -> monomorphisationError "IndexConstraints"
-  where
-    monomorphisationError :: Doc () -> m a
-    monomorphisationError name =
-      compilerDeveloperError $
-        "Monomorphisation should have got rid of" <+> squotes name <+> "s but found" <+> prettyVerbose args
+    UnitType -> return $ Builtin p $ Linearity Constant
+    BoolType {} -> freshLinearityMeta p
+    RatType {} -> freshLinearityMeta p
+    IndexType -> freshLinearityMeta p
+    NatType -> freshLinearityMeta p
+    ListType -> return $ extractElementType "List" args
+    VectorType -> return $ extractElementType "Vector" args
+    TensorType -> return $ extractElementType "Tensor" args
+  TypeClass {} -> monomorphisationError "TypeClass" args
+  TypeClassOp {} -> monomorphisationError "TypeClassOp" args
+  NatInDomainConstraint -> monomorphisationError "IndexConstraints" args
 
 restrictLinearityDeclType ::
   forall m.
@@ -221,25 +223,17 @@ convertToPolarityTypes p b args = case b of
   BuiltinConstructor c -> return $ normAppList (Builtin p (PolarityConstructor c)) args
   BuiltinFunction f -> return $ normAppList (Builtin p (PolarityFunction f)) args
   BuiltinType s -> case s of
-    Unit -> return $ PolarityExpr p Unquantified
-    Bool -> freshPolarityMeta p
-    Index -> return $ PolarityExpr p Unquantified
-    Nat -> return $ PolarityExpr p Unquantified
-    Rat -> freshPolarityMeta p
-    List -> case args of
-      [tElem] -> return $ argExpr tElem
-      _ -> monomorphisationError "List"
-    Vector -> case args of
-      [tElem] -> return $ argExpr tElem
-      _ -> monomorphisationError "Vector"
-  TypeClass {} -> monomorphisationError "TypeClass"
-  TypeClassOp {} -> monomorphisationError "TypeClassOp"
-  NatInDomainConstraint -> monomorphisationError "IndexConstraints"
-  where
-    monomorphisationError :: Doc () -> m a
-    monomorphisationError name =
-      compilerDeveloperError $
-        "Monomorphisation should have got rid of partially applied" <+> name <+> "types but found" <+> prettyVerbose args
+    UnitType -> return $ PolarityExpr p Unquantified
+    RatType {} -> freshPolarityMeta p
+    BoolType {} -> freshPolarityMeta p
+    IndexType -> return $ PolarityExpr p Unquantified
+    NatType -> return $ PolarityExpr p Unquantified
+    ListType -> return $ extractElementType "List" args
+    VectorType -> return $ extractElementType "Vector" args
+    TensorType -> return $ extractElementType "Tensor" args
+  TypeClass {} -> monomorphisationError "TypeClass" args
+  TypeClassOp {} -> monomorphisationError "TypeClassOp" args
+  NatInDomainConstraint -> monomorphisationError "IndexConstraints" args
 
 restrictDeclPolarityType ::
   forall m.

@@ -169,14 +169,14 @@ instance MetaSubstitutable m builtin (InstanceConstraintOrigin builtin) where
 instance MetaSubstitutable m builtin (UnificationConstraintOrigin builtin) where
   subst s = \case
     CheckingExprType c -> CheckingExprType <$> subst s c
-    CheckingBinderType c -> CheckingBinderType <$> subst s c
     CheckingInstanceType c -> CheckingInstanceType <$> subst s c
 
 instance MetaSubstitutable m builtin (CheckingExprType builtin) where
-  subst s (CheckingExpr e t1 t2) = CheckingExpr <$> subst s e <*> subst s t1 <*> subst s t2
-
-instance MetaSubstitutable m builtin (CheckingBinderType builtin) where
-  subst s (CheckingBinder n t1 t2) = CheckingBinder n <$> subst s t1 <*> subst s t2
+  subst s (CheckingExpr e t1 t2) = CheckingExpr <$> e' <*> subst s t1 <*> subst s t2
+    where
+      e' = case e of
+        Left l -> return $ Left l
+        Right r -> Right <$> subst s r
 
 instance (MetaSubstitutable m builtin a) => MetaSubstitutable m builtin (MetaMap a) where
   subst s (MetaMap t) = MetaMap <$> traverse (subst s) t

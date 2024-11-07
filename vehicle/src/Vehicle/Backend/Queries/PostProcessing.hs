@@ -26,7 +26,7 @@ import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RationalTensor)
+import Vehicle.Data.Tensor (RationalTensor, tensorShape, tensorToList)
 import Vehicle.Prelude.Warning (CompileWarning (..))
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core
@@ -97,7 +97,7 @@ reconstructNetworkTensorVars GlobalCtx {..} solutions = do
   let networkVariables = Set.fromList $ concatMap (\r -> [inputVariable r, outputVariable r]) networkApplicationInfos
   let allTensorVars = filter (\(var, _) -> var `Set.member` networkVariables) $ Map.toList tensorVariableInfo
   let networkTensorVars = sortOn fst allTensorVars
-  let mkStep (var, TensorVariableInfo {..}) = ReconstructTensor OtherVariable tensorVariableShape var elementVariables
+  let mkStep (var, TensorVariableInfo {..}) = ReconstructTensor OtherVariable var elementVariables
   return $ foldr (\v -> (mkStep v :)) solutions networkTensorVars
 
 --------------------------------------------------------------------------------
@@ -120,13 +120,14 @@ convertToNetworkRatVarAssertions globalCtx = go
 
     convert :: Assertion -> m (BooleanExpr (QueryAssertion NetworkElementVariable))
     convert = \case
-      TensorEq (Equality tensorEquality) -> do
-        let rationalEqualities = reduceTensorExpr globalCtx tensorEquality
-        let assertions = fmap (Query . RationalEq . Equality) rationalEqualities
-        go $ Conjunct $ ConjunctAll (NonEmpty.fromList assertions)
-      RationalEq (Equality expr) ->
-        Query <$> makeQueryAssertion Equal expr
-      RationalIneq (Inequality strict expr) -> do
+      EqualityAssertion (Equality expr)
+        | null (tensorShape (constantValue expr)) -> do
+            let rationalEqualities = reduceTensorExpr globalCtx expr
+            let assertions = fmap (Query . EqualityAssertion . Equality) rationalEqualities
+            go $ Conjunct $ ConjunctAll (NonEmpty.fromList assertions)
+        | otherwise -> do
+            Query <$> makeQueryAssertion Equal expr
+      InequalityAssertion (Inequality strict expr) -> do
         let rel = if strict == Strict then LessThan else LessThanOrEqual
         Query <$> makeQueryAssertion rel expr
 
@@ -177,7 +178,7 @@ isApplicationUsed ::
   NetworkApplicationReplacement ->
   Bool
 isApplicationUsed globalCtx referencedVars NetworkApplicationReplacement {..} = do
-  let lookupVar = getReducedVariablesFor globalCtx
+  let lookupVar = tensorToList . getReducedVariablesFor globalCtx
   let appVars = Set.fromList (lookupVar inputVariable <> lookupVar outputVariable)
   not $ Set.disjoint referencedVars appVars
 
@@ -198,7 +199,7 @@ checkIfNetworkInputsBounded ::
   ConjunctAll (QueryAssertion NetworkElementVariable) ->
   m ()
 checkIfNetworkInputsBounded globalCtx queryFormatID queryAddress metaNetworkApps constraints = do
-  let inputVariables = concatMap (\app -> getReducedVariablesFor globalCtx (inputVariable app)) metaNetworkApps
+  let inputVariables = concatMap (\app -> tensorToList $ getReducedVariablesFor globalCtx (inputVariable app)) metaNetworkApps
 
   finalStatuses <- variableConstraintStatus inputVariables constraints
 
@@ -313,18 +314,19 @@ compileTensorVariable ::
 compileTensorVariable compileQueryVar boundCtx usedNetworkTensorVariables IndexingState {..} (tensorVar, TensorVariableInfo {..}) = do
   let lookupVar v = lookupLvInBoundCtx v boundCtx
   let tensorEntry = (tensorVar, lookupVar tensorVar, Nothing)
+  let elementVariableList = tensorToList elementVariables
 
   (newInputs, newOutputs, elementEntries) <- case tensorVariableType of
     Just inputOrOutput | tensorVar `Set.member` usedNetworkTensorVariables -> do
-      let tensorSize = product tensorVariableShape
+      let tensorSize = product (tensorShape elementVariables)
       let startingIndex = length $ if inputOrOutput == Input then networkInputVariables else networkOutputVariables
       let queryVariables = fmap (compileQueryVar inputOrOutput) ([startingIndex .. startingIndex + tensorSize] :: [Int])
-      let elementEntries = zipWith (\v q -> (v, lookupVar v, Just q)) elementVariables queryVariables
+      let elementEntries = zipWith (\v q -> (v, lookupVar v, Just q)) elementVariableList queryVariables
       case inputOrOutput of
-        Input -> return (elementVariables, mempty, elementEntries)
-        Output -> return (mempty, elementVariables, elementEntries)
+        Input -> return (elementVariableList, mempty, elementEntries)
+        Output -> return (mempty, elementVariableList, elementEntries)
     _ -> do
-      let elementEntries = fmap (\v -> (v, lookupVar v, Nothing)) elementVariables
+      let elementEntries = fmap (\v -> (v, lookupVar v, Nothing)) elementVariableList
       return (mempty, mempty, elementEntries)
 
   return $

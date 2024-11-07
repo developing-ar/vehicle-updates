@@ -41,7 +41,6 @@ runConstraintSolver _ getConstraints setConstraints attemptToSolveConstraint = l
     loop :: Int -> m ()
     loop loopNumber = do
       unsolvedConstraints <- getConstraints
-
       if null unsolvedConstraints
         then return mempty
         else do

@@ -17,6 +17,7 @@ import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Code.Interface
+import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
 
 --------------------------------------------------------------------------------
@@ -35,7 +36,7 @@ solveIndexConstraint constraint = do
       progress <- solveInDomain normConstraint (mapMaybe getExplicitArg args)
       case progress of
         Nothing -> do
-          let solution = IUnitLiteral (provenanceOf ctx)
+          let solution = Builtin mempty (BuiltinConstructor UnitLiteral)
           solveMeta meta solution (boundContext ctx)
         Just metas -> do
           let blockedConstraint = blockConstraintOn normConstraint metas
@@ -51,13 +52,13 @@ solveInDomain ::
   WithContext (InstanceConstraint Builtin) ->
   [VType Builtin] ->
   m (Maybe MetaSet)
-solveInDomain c [value, typ] = case typ of
-  (getNMeta -> Just {}) -> return $ blockOnMetas [typ]
-  INatType {} -> return Nothing
-  IRatType {} -> return Nothing
-  IIndexType _ size -> case value of
+solveInDomain _ [_, typ@VMeta {}] = return $ blockOnMetas [typ]
+solveInDomain c [value, typ] = case toTypeValue typ of
+  VNatType {} -> return Nothing
+  VRatTensorType INil {} -> return Nothing
+  VIndexType size -> case value of
     VMeta {} -> return $ blockOnMetas [value]
-    INatLiteral _ n -> do
+    INatLiteral n -> do
       (sizeBlockingMetas, sizeLowerBound) <- findLowerBound ctx value size
       if n < sizeLowerBound
         then return Nothing
@@ -91,11 +92,11 @@ findLowerBound ctx value indexSize = go indexSize
     go = \case
       VMeta m _ ->
         return (MetaSet.singleton m, 0)
-      INatLiteral _ n ->
+      INatLiteral n ->
         return (mempty, n)
       VFreeVar {} ->
         return (mempty, 0)
-      IAdd AddNat e1 e2 -> do
+      VBuiltin (BuiltinFunction (Add AddNat)) [argExpr -> e1, argExpr -> e2] -> do
         (m1, b1) <- go e1
         (m2, b2) <- go e2
         return (m1 <> m2, b1 + b2)
@@ -118,10 +119,10 @@ solveDefaultIndexConstraint ::
   m Bool
 solveDefaultIndexConstraint (WithContext constraint ctx) = do
   case instanceGoal constraint of
-    (VBuiltin NatInDomainConstraint [n, argExpr -> IIndexType _ size]) -> do
-      let succN = case argExpr n of
-            INatLiteral p x -> INatLiteral p (x + 1)
-            n' -> IAdd AddNat n' (INatLiteral mempty 1)
+    (VBuiltin NatInDomainConstraint [n, argExpr -> IIndexType size]) -> do
+      let succN = fromNatValue $ case argExpr n of
+            INatLiteral x -> VNatLiteral (x + 1)
+            n' -> VNatAdd n' (INatLiteral 1)
 
       let constraintInfo = (ctx, instanceOrigin constraint)
       newSizeConstraint <- createInstanceUnification constraintInfo size succN

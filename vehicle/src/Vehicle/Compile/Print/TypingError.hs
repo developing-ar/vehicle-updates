@@ -72,15 +72,12 @@ typingErrorDetails = \case
         UnificationConstraint (Unify origin _ _) -> case origin of
           CheckingExprType CheckingExpr {..} ->
             "expected"
-              <+> squotes (prettyUnificationConstraintOriginExpr ctx checkedExpr)
+              <+> ( case checkedExpr of
+                      Left binder -> "variable" <+> quotePretty binder
+                      Right expr -> squotes (prettyUnificationConstraintOriginExpr ctx expr)
+                  )
               <+> "to be of type"
               <+> squotes (prettyFriendly $ WithContext checkedExprExpectedType nameCtx)
-              <+> "but was unable to prove it."
-          CheckingBinderType CheckingBinder {..} ->
-            "expected the variable"
-              <+> squotes (pretty checkedBinderName)
-              <+> "to be of type"
-              <+> squotes (prettyFriendly $ WithContext checkedBinderActualType nameCtx)
               <+> "but was unable to prove it."
           CheckingInstanceType instanceOrigin ->
             instanceOriginConstraintMessage instanceOrigin
@@ -177,29 +174,26 @@ relevantUseOfIrrelevantVariableError (RelevantUseOfIrrelevantVariableError _ p n
 
 failedUnificationConstraintsError ::
   forall builtin.
-  (PrintableBuiltin builtin) =>
+  (PrintableBuiltin builtin, NormalisableBuiltin builtin) =>
   FailedUnificationConstraintsError builtin ->
   UserError
-failedUnificationConstraintsError (FailedUnificationConstraintsError (err :| _)) = failedConstraintMessage err
+failedUnificationConstraintsError (FailedUnificationConstraintsError freeEnv (err :| _)) = failedConstraintMessage err
   where
     failedConstraintMessage :: WithContext (UnificationConstraint builtin) -> UserError
     failedConstraintMessage (WithContext (Unify origin e1 e2) ctx) = do
       let boundCtx = namedBoundCtxOf ctx
       let originMessage = case origin of
-            CheckingExprType CheckingExpr {..} ->
+            CheckingExprType CheckingExpr {..} -> do
+              let normActualType = runNorm $ eval freeEnv (boundContextToEnv $ boundContextOf ctx) checkedExprActualType
               "expected"
-                <+> squotes (prettyUnificationConstraintOriginExpr ctx checkedExpr)
+                <+> ( case checkedExpr of
+                        Left binder -> "variable" <+> quotePretty binder
+                        Right expr -> squotes (prettyUnificationConstraintOriginExpr ctx expr)
+                    )
                 <+> "to be of type"
                 <+> squotes (prettyFriendly (WithContext checkedExprExpectedType boundCtx))
                 <+> "but was found to be of type"
-                <+> squotes (prettyFriendly (WithContext checkedExprActualType boundCtx))
-            CheckingBinderType CheckingBinder {..} ->
-              "expected the variable"
-                <+> quotePretty checkedBinderName
-                <+> "to be of type"
-                <+> squotes (prettyFriendly $ WithContext checkedBinderExpectedType boundCtx)
-                <+> "but was found to be of type"
-                <+> squotes (prettyFriendly $ WithContext checkedBinderActualType boundCtx)
+                <+> squotes (prettyFriendly (WithContext normActualType boundCtx))
             CheckingInstanceType (InstanceArgOrigin ArgOrigin {..}) ->
               "unable to find a consistent type for the overloaded expression"
                 <+> squotes (prettyTypeClassConstraintOriginExpr ctx checkedInstanceOp checkedInstanceOpArgs)
@@ -257,8 +251,8 @@ typeRestrictionError (TypeRestrictionOrigin freeEnv (ident, p) sort typ) _candid
   where
     supportedTypes = case sort of
       RestrictedProperty -> ["Bool", "Vector Bool n", "Tensor Bool ns"]
-      RestrictedParameter Inferable -> [pretty Nat]
-      RestrictedParameter NonInferable -> map pretty [Bool, Index, Nat, Rat]
+      RestrictedParameter Inferable -> [pretty NatType]
+      RestrictedParameter NonInferable -> map pretty [BoolType, IndexType, NatType, RatType]
       RestrictedDataset -> ["List A    " <+> datasetElementTypes, "Vector A n" <+> datasetElementTypes]
       RestrictedNetwork -> ["Tensor Rat [a_1, ..., a_n] -> Tensor Rat [b_1, ..., b_n]  (where 'a_i' and 'b_i' are all constants at compile time)"]
 
@@ -316,11 +310,12 @@ calculateInstanceCandidateTypeArgs (WithContext candidate typingCtx) =
   where
     calculateCandidateType :: BoundCtx (Expr builtin) -> Expr builtin -> ([Arg builtin], BoundCtx (Expr builtin))
     calculateCandidateType dbCtx = \case
+      Builtin _ _tc -> ([], dbCtx)
       App (Builtin _ _tc) args ->
         (NonEmpty.toList args, dbCtx)
       Pi _ binder result ->
         calculateCandidateType (binder : dbCtx) result
-      _ -> developerError "UNSUPPORTED PRINTING"
+      t -> developerError $ "UNSUPPORTED PRINTING" <+> prettyVerbose t
 
 calculateInstanceDisplayType ::
   forall builtin a.
@@ -390,7 +385,9 @@ prettyTypeClassConstraintOriginExpr ctx fun args = do
   let expr = case fun of
         -- We don't want to print out the actual coercion functions as the user is
         -- oblivious to them. Instead we want to print out what they are applied to.
-        Builtin _ b | isCoercion b -> argExpr $ last args
+        Builtin _ b -> case coercionArgs b of
+          Just f -> f args
+          Nothing -> fun
         _ -> fun
   prettyFriendly $ WithContext expr (namedBoundCtxOf ctx)
 

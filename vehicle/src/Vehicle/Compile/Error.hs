@@ -5,23 +5,19 @@ module Vehicle.Compile.Error where
 import Control.Exception (IOException)
 import Control.Monad.Except (MonadError, throwError)
 import Data.List.NonEmpty (NonEmpty)
-import Data.Map qualified as Map
 import Data.Text (Text)
 import Data.Typeable (Proxy)
 import Data.Void (Void)
-import Prettyprinter (list)
 import Vehicle.Backend.LossFunction.Core (BooleanDifferentiableLogicField, TensorDifferentiableLogicField)
 import Vehicle.Backend.Prelude
 import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrettyFriendly)
-import Vehicle.Compile.Print.Builtin
+import Vehicle.Compile.Print (PrintableBuiltin)
 import Vehicle.Compile.Type.Core
 import Vehicle.Data.Assertion (UnderConstrainedVariableStatus)
 import Vehicle.Data.Builtin.Linearity
 import Vehicle.Data.Builtin.Polarity
 import Vehicle.Data.Builtin.Standard
-import Vehicle.Data.Builtin.Tensor
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Tensor (TensorShape)
 import Vehicle.Syntax.Parse (ParseError, ParseLocation)
@@ -60,8 +56,9 @@ data FunctionTypeMismatchError builtin = FunctionTypeMismatchError
   }
   deriving (Show)
 
-newtype FailedUnificationConstraintsError builtin = FailedUnificationConstraintsError
-  { failedConstraints :: NonEmpty (WithContext (UnificationConstraint builtin))
+data FailedUnificationConstraintsError builtin = FailedUnificationConstraintsError
+  { _freeEnv :: FreeEnv builtin,
+    failedConstraints :: NonEmpty (WithContext (UnificationConstraint builtin))
   }
   deriving (Show)
 
@@ -111,7 +108,7 @@ data CompileError
   | NetworkTypeHasImplicitSizeTensor DeclProvenance (GluedType Builtin) Identifier InputOrOutput
   | -- Unsupported datasets
     DatasetVariableSizeTensor DeclProvenance (GluedType Builtin) (VType Builtin)
-  | DatasetDimensionSizeMismatch DeclProvenance FilePath Int Int TensorShape TensorShape
+  | DatasetDimensionSizeMismatch DeclProvenance FilePath Int Int Int
   | DatasetDimensionsMismatch DeclProvenance FilePath (GluedExpr Builtin) TensorShape
   | DatasetTypeMismatch DeclProvenance FilePath (GluedType Builtin) (VType Builtin) (Doc Void)
   | DatasetInvalidIndex DeclProvenance FilePath Int Int
@@ -126,17 +123,14 @@ data CompileError
   | InferableParameterUninferrable DeclProvenance
   | -- Unsupported properties
     NoPropertiesFound
-  | -- Verification backend errors
-    forall builtin.
-    (PrintableBuiltin builtin, Eq builtin, PrettyFriendly (Contextualised (VType builtin) NamedBoundCtx)) =>
-    UnsupportedVariableType DeclProvenance Provenance Name (VType builtin) (VType builtin) [builtin]
-  | HigherOrderVectors DeclProvenance NamedBoundCtx (VType TensorBuiltin) (VType TensorBuiltin)
+  | HigherOrderVectors DeclProvenance NamedBoundCtx (VType Builtin) (VType Builtin)
   | UnsupportedAlternatingQuantifiers QueryFormatID DeclProvenance (Either CompileError (Quantifier, Provenance, PolarityProvenance))
   | DuplicateQuantifierNames DeclProvenance Name
   | UnsupportedNonLinearConstraint QueryFormatID DeclProvenance (Either CompileError NonLinearitySource)
+  | VariableSizeTensorQuantification DeclProvenance NamedBoundCtx (VBinder Builtin) (VType Builtin)
   | -- Loss backend errors
     UnsupportedLossOperation DeclProvenance Provenance (Doc Void)
-  | UnsupportedHigherOrderTensorCode DeclProvenance NamedBoundCtx (Value Builtin) NamedBoundCtx (Value TensorBuiltin)
+  | UnsupportedHigherOrderTensorCode DeclProvenance NamedBoundCtx (Value Builtin) NamedBoundCtx (Value Builtin)
   | UnableToLiftLogicFieldToTensors DifferentiableLogicID TensorDifferentiableLogicField (BooleanDifferentiableLogicField, Value Builtin) NamedBoundCtx (Value Builtin)
   | NoQuantifierDomainFound DeclProvenance (GenericBinder ()) (Maybe [(Name, UnderConstrainedVariableStatus)])
   | -- ITP backend errors
@@ -150,80 +144,10 @@ deriving instance Show CompileError
 --------------------------------------------------------------------------------
 -- Some useful developer errors
 
-unexpectedExpr :: Doc a -> Doc a -> Doc a
-unexpectedExpr pass name =
-  "encountered unexpected expression:"
-    <> line
-    <> indent 2 name
-    <> line
-    <> "during"
-      <+> pass
-    <> "."
-
 -- | Should be used in preference to `developerError` whenever in the error
 -- monad, as unlike the latter this method does not prevent logging.
 compilerDeveloperError :: (MonadError CompileError m) => Doc () -> m b
 compilerDeveloperError message = throwError $ DevError message
-
-unexpectedExprError :: Doc () -> Doc () -> a
-unexpectedExprError pass name = developerError $ unexpectedExpr pass name
-
-normalisationError :: (MonadError CompileError m) => Doc () -> Doc () -> m b
-normalisationError pass name =
-  compilerDeveloperError $
-    unexpectedExpr pass name <+> "We should have normalised this out."
-
-unexpectedTypeInExprError :: (MonadError CompileError m) => Doc () -> Doc () -> m b
-unexpectedTypeInExprError pass name =
-  compilerDeveloperError $
-    unexpectedExpr pass name <+> "We should not be processing types."
-
-illTypedError :: (MonadError CompileError m) => Doc () -> Doc () -> m b
-illTypedError pass name =
-  compilerDeveloperError $
-    unexpectedExpr pass name <+> "This is ill-typed."
-
-visibilityError :: Doc () -> Doc () -> Doc () -> m b
-visibilityError pass fun args =
-  developerError $
-    unexpectedExpr pass args <+> "Does not match function's visibility:" <+> fun
-
--- | Throw this when you encounter a case that should have been resolved during
--- type-checking, e.g. holes or metas.
-resolutionError :: Doc () -> Doc () -> m b
-resolutionError pass name =
-  developerError $
-    unexpectedExpr pass name <+> "We should have resolved this during type-checking."
-
-caseError :: (MonadError CompileError m) => Doc () -> Doc () -> [Doc ()] -> m a
-caseError pass name cases =
-  compilerDeveloperError $
-    unexpectedExpr pass name
-      <+> "This should already have been caught by the"
-      <+> "following cases:"
-      <+> list cases
-
-internalScopingError :: Doc () -> Identifier -> a
-internalScopingError pass ident =
-  developerError $
-    "Internal scoping error during"
-      <+> pass
-      <> ":"
-        <+> "declaration"
-        <+> quotePretty ident
-        <+> "not found in scope..."
-
--- | Looks up the declaration associated the provided `Identifier`, throwing
--- an error if that identifier is out of scope.
-lookupInFreeCtx ::
-  (MonadLogger m) =>
-  Doc () ->
-  Identifier ->
-  GenericFreeCtx a ->
-  m a
-lookupInFreeCtx pass ident ctx = case Map.lookup ident ctx of
-  Nothing -> internalScopingError pass ident
-  Just x -> return x
 
 --------------------------------------------------------------------------------
 -- The final error type

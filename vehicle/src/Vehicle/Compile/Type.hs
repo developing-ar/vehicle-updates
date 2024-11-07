@@ -69,7 +69,7 @@ typeCheckDecls = \case
   [] -> return []
   d : ds -> do
     typedDecl <- typeCheckDecl d
-    checkedDecls <- addDeclToContext (Proxy @builtin) typedDecl $ typeCheckDecls ds
+    checkedDecls <- addDeclToContext typedDecl $ typeCheckDecls ds
     return $ typedDecl : checkedDecls
 
 typeCheckDecl :: forall builtin m. (TCM builtin m) => Decl Builtin -> m (Decl builtin)
@@ -250,9 +250,7 @@ solveConstraints d = logCompilerPass MidDetail "constraint solving" $ do
               -- Then if that fails try to use default auxiliary instances
               generateDefaultAuxiliaryConstraint decl
 
--- | Attempts to solve as many type-class constraints as possible. Takes in
--- the set of meta-variables solved since the solver was last run and outputs
--- the set of meta-variables solved during this run.
+-- | Attempts to solve as many type-class constraints as possible.
 runAuxiliarySolver :: forall builtin m. (TCM builtin m) => Proxy builtin -> m ()
 runAuxiliarySolver proxy = do
   logCompilerPass MaxDetail ("auxiliary solver run" <> line) $
@@ -284,7 +282,7 @@ checkAllConstraintsSolved _ = do
     [] -> return ()
     (c : cs) -> throwError $ TypingError $ UnsolvedConstraints (c :| cs)
 
-checkAllMetasSolved :: (MonadTypeChecker builtin m) => Proxy builtin -> m ()
+checkAllMetasSolved :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m ()
 checkAllMetasSolved proxy = do
   unsolvedMetas <- getUnsolvedMetas proxy
   case MetaSet.toList unsolvedMetas of

@@ -14,9 +14,6 @@ import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
-import Data.Set (Set)
-import Data.Set qualified as Set
-import Data.Vector qualified as Vector
 import GHC.Generics
 import Vehicle.Compile.Context.Free.Class (MonadFreeContext)
 import Vehicle.Compile.Error
@@ -27,13 +24,11 @@ import Vehicle.Compile.Resource (NetworkType (..), dimensions)
 import Vehicle.Data.Assertion
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Code.BooleanExpr
-import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Hashing ()
 import Vehicle.Data.QuantifiedVariable
 import Vehicle.Data.Tensor
-import Vehicle.Libraries.StandardLibrary.Definitions
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core (QueryVariable)
 import Vehicle.Verify.QueryFormat.Interface
@@ -83,8 +78,8 @@ emptyGlobalCtx =
       networkApplications = LinkedHashMap.empty
     }
 
-addVectorVarToBoundVarCtx :: Name -> [(ElementVariable, Name)] -> GenericBoundCtx Name -> GenericBoundCtx Name
-addVectorVarToBoundVarCtx tensorVar elemVars ctx = reverse (fmap snd elemVars) <> [tensorVar] <> ctx
+addVectorVarToBoundVarCtx :: Name -> [Name] -> GenericBoundCtx Name -> GenericBoundCtx Name
+addVectorVarToBoundVarCtx tensorVar elementVars ctx = reverse elementVars <> [tensorVar] <> ctx
 
 addUserVarToGlobalContext ::
   Name ->
@@ -94,18 +89,17 @@ addUserVarToGlobalContext ::
 addUserVarToGlobalContext userVarName shape GlobalCtx {..} = do
   -- Create the unreduced and reduced versions of the user variables.
   let currentLevel = Lv $ length globalBoundVarCtx
-  let (reducedUseVars, reducedUserVarExpr) = reduceTensorVariable (currentLevel + 1) userVarName shape
+  let (reducedVariableNames, reducedVariables, reducedVariablesExpr) = reduceTensorVariable (currentLevel + 1) userVarName shape
   let userVar = currentLevel
   let variableInfo =
         TensorVariableInfo
-          { elementVariables = fmap fst reducedUseVars,
-            reducedVarExpr = reducedUserVarExpr,
-            tensorVariableShape = shape,
+          { elementVariables = reducedVariables,
+            reducedVarExpr = reducedVariablesExpr,
             tensorVariableType = Nothing
           }
   let newGlobalCtx =
         GlobalCtx
-          { globalBoundVarCtx = addVectorVarToBoundVarCtx userVarName reducedUseVars globalBoundVarCtx,
+          { globalBoundVarCtx = addVectorVarToBoundVarCtx userVarName reducedVariableNames globalBoundVarCtx,
             tensorVariableInfo = Map.insert userVar variableInfo tensorVariableInfo,
             ..
           }
@@ -128,35 +122,33 @@ addNetworkApplicationToGlobalCtx app@(networkName, _) networkInfo GlobalCtx {..}
   let inputShape = dimensions (inputTensor (networkType networkInfo))
   let inputVarName = layoutAsText $ createNetworkVarName networkName applicationNumber Input
   let inputVar = makeTensorVariable inputLv
-  let (reducedInputVars, reducedInputVarsExpr) = reduceTensorVariable (inputLv + 1) inputVarName inputShape
+  let (reducedInputVarNames, reducedInputVars, reducedInputVarsExpr) = reduceTensorVariable (inputLv + 1) inputVarName inputShape
   let inputVarExpr = VBoundVar inputLv []
   let inputVarInfo =
         TensorVariableInfo
-          { elementVariables = fmap fst reducedInputVars,
+          { elementVariables = reducedInputVars,
             reducedVarExpr = reducedInputVarsExpr,
-            tensorVariableShape = inputShape,
             tensorVariableType = Just Input
           }
 
   -- Create a tensor of variables for the output of the network.
-  let outputLv = inputLv + 1 + Lv (length reducedInputVars)
+  let outputLv = inputLv + 1 + Lv (length reducedInputVarNames)
   let outputShape = dimensions (outputTensor (networkType networkInfo))
   let outputVarName = layoutAsText $ createNetworkVarName networkName applicationNumber Output
   let outputVar = makeTensorVariable outputLv
-  let (reducedOutputVars, reducedOutputVarsExpr) = reduceTensorVariable (outputLv + 1) outputVarName outputShape
+  let (reducedOutputVarNames, reducedOutputVars, reducedOutputVarsExpr) = reduceTensorVariable (outputLv + 1) outputVarName outputShape
   let outputVarExpr = VBoundVar outputLv []
   let outputVarInfo =
         TensorVariableInfo
-          { elementVariables = fmap fst reducedOutputVars,
+          { elementVariables = reducedOutputVars,
             reducedVarExpr = reducedOutputVarsExpr,
-            tensorVariableShape = outputShape,
             tensorVariableType = Just Output
           }
 
   -- Create the context extension of the bound context.
   let newGlobalBoundVarCtx =
-        addVectorVarToBoundVarCtx outputVarName reducedOutputVars $
-          addVectorVarToBoundVarCtx inputVarName reducedInputVars globalBoundVarCtx
+        addVectorVarToBoundVarCtx outputVarName reducedOutputVarNames $
+          addVectorVarToBoundVarCtx inputVarName reducedInputVarNames globalBoundVarCtx
 
   -- Create the object to store information about the application
   let appInfo =
@@ -197,10 +189,9 @@ instance FromJSON VariableType
 -- | One step in the process for transforming unreduced user variables into
 -- reduced network input and output variables.
 data UserVariableReconstructionStep
-  = SolveTensorEquality TensorVariable (LinearExpr RationalTensor)
-  | SolveRationalEquality UserElementVariable (LinearExpr RationalTensor)
-  | SolveRationalInequalities UserElementVariable (Bounds RationalTensor)
-  | ReconstructTensor VariableType TensorShape TensorVariable [ElementVariable]
+  = SolveEquality Bool Variable (LinearExpr RationalTensor)
+  | SolveInequalities Variable (Bounds RationalTensor)
+  | ReconstructTensor VariableType TensorVariable (Tensor Variable)
   deriving (Eq, Ord, Show, Generic)
 
 instance NFData UserVariableReconstructionStep
@@ -211,10 +202,9 @@ instance FromJSON UserVariableReconstructionStep
 
 instance Pretty UserVariableReconstructionStep where
   pretty = \case
-    SolveTensorEquality v s -> "Equation:" <+> pretty v <+> "=" <+> prettyVerbose s
-    SolveRationalEquality v s -> "Equation:" <+> pretty v <+> "=" <+> prettyVerbose s
-    SolveRationalInequalities v s -> "Inequalities:" <+> pretty v <+> "bounded" <+> prettyVerbose s
-    ReconstructTensor _ _ v vs -> "Reconstruct:" <+> pretty v <+> "from" <+> prettyList vs
+    SolveEquality _ v s -> "Equation:" <+> pretty v <+> "=" <+> prettyVerbose s
+    SolveInequalities v s -> "Inequalities:" <+> pretty v <+> "bounded" <+> prettyVerbose s
+    ReconstructTensor _ v vs -> "Reconstruct:" <+> pretty v <+> "from" <+> pretty vs
 
 -- Storing the Variable is unnessary and is just for readability. We can get
 -- rid of it if we switch to a non-human readable format for the .vcl-plan files.
@@ -301,9 +291,9 @@ getTensorVariableShape :: (MonadState GlobalCtx m) => TensorVariable -> m Tensor
 getTensorVariableShape var = do
   globalCtx <- get
   let info = getTensorVariableInfo globalCtx var
-  return (tensorVariableShape info)
+  return (tensorShape $ elementVariables info)
 
-getRationalVariable :: (MonadState GlobalCtx m) => Lv -> m ElementVariable
+getRationalVariable :: (MonadState GlobalCtx m) => Lv -> m Variable
 getRationalVariable var = do
   ctx <- get
   case Map.lookup var (tensorVariableInfo ctx) of
@@ -311,7 +301,7 @@ getRationalVariable var = do
     Just info -> do
       let rvs = elementVariables info
       case rvs of
-        [rv] -> return rv
+        ZeroDimTensor rv -> return rv
         _ -> developerError "Mismatched tensor dimensions!"
 
 getTensorVariableInfo :: GlobalCtx -> TensorVariable -> TensorVariableInfo
@@ -322,7 +312,7 @@ getTensorVariableInfo GlobalCtx {..} var = do
       developerError $
         "Network variable" <+> pretty var <+> "has no associated meta-information"
 
-getReducedVariablesFor :: GlobalCtx -> TensorVariable -> [ElementVariable]
+getReducedVariablesFor :: GlobalCtx -> TensorVariable -> Tensor Variable
 getReducedVariablesFor globalCtx var = elementVariables $ getTensorVariableInfo globalCtx var
 
 getReducedVariableExprFor :: (MonadState GlobalCtx m, MonadLogger m) => Lv -> m (Maybe (Value Builtin))
@@ -335,19 +325,19 @@ reduceTensorExpr ::
   LinearExpr RationalTensor ->
   [LinearExpr RationalTensor]
 reduceTensorExpr globalCtx (Sparse coeff constant) = do
-  let constValues = Vector.toList $ tensorValue constant
+  let constValues = tensorToList constant
   let numRatEqs = product (tensorShape constant)
-  let coeffList = fmap (first (getReducedVariablesFor globalCtx)) (Map.toList coeff)
+  let coeffList = fmap (first (tensorToList . getReducedVariablesFor globalCtx)) (Map.toList coeff)
   let asserts = fmap (mkRatEquality coeffList constValues) [0 .. numRatEqs - 1]
   asserts
   where
     mkRatEquality ::
-      [([ElementVariable], Coefficient)] ->
+      [([Variable], Coefficient)] ->
       [Rational] ->
       Int ->
       LinearExpr RationalTensor
     mkRatEquality coeffs consts i =
-      Sparse (Map.fromList (fmap (first (!! i)) coeffs)) (Tensor mempty [consts !! i])
+      Sparse (Map.fromList (fmap (first (!! i)) coeffs)) (ZeroDimTensor (consts !! i))
 
 --------------------------------------------------------------------------------
 -- Context operations
@@ -356,42 +346,3 @@ variableCtxToBoundCtx :: (Pretty variable) => [variable] -> BoundCtx (Type built
 variableCtxToBoundCtx ctx = zipWith variableCtxToBoundCtxEntry [0 .. Ix (length ctx - 1)] ctx
   where
     variableCtxToBoundCtxEntry ix var = mkExplicitBinder (BoundVar mempty ix) (Just (layoutAsText $ pretty var))
-
---------------------------------------------------------------------------------
--- Vector operation patterns
-
-mkVVectorEquality ::
-  TensorShape ->
-  Value Builtin ->
-  Value Builtin ->
-  Value Builtin
-mkVVectorEquality dimensions e1 e2 = do
-  mkVectorEquality (fmap (INatLiteral mempty) dimensions) (Arg mempty Explicit Relevant <$> [e1, e2])
-  where
-    -- Would definitely be nicer to somehow reuse the type-class resolution machinery here,
-    -- but it seems incredibly complicated to setup...
-    mkVectorEquality :: [Value Builtin] -> Spine Builtin -> Value Builtin
-    mkVectorEquality dims spine =
-      let p = mempty
-       in case dims of
-            [] -> VBuiltinFunction (Equals EqRat Eq) spine
-            d : ds -> VFreeVar (identifierOf StdEqualsVector) (nonExplicitArgs <> spine)
-              where
-                tensorType = foldr (\dim t -> IVectorType mempty t dim) (IRatType mempty) ds
-                nonExplicitArgs =
-                  [ Arg p (Implicit True) Relevant tensorType,
-                    Arg p (Implicit True) Relevant tensorType,
-                    Arg p (Implicit True) Irrelevant d,
-                    Arg p (Instance True) Relevant (mkVectorEquality ds [])
-                  ]
-
--- | The set of vector operations that we sometimes want to avoid normalising
--- out in the property for efficiency reasons.
-vectorOperations :: Set StdLibFunction
-vectorOperations =
-  Set.fromList
-    [ StdAddVector,
-      StdSubVector,
-      StdEqualsVector,
-      StdNotEqualsVector
-    ]

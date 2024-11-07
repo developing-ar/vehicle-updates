@@ -13,7 +13,10 @@ import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.DSL
 import Vehicle.Data.DSL
-import Prelude hiding (pi)
+import Vehicle.Data.Tensor (tensorToList)
+import Prelude hiding (iterate, pi)
+
+-- See https://github.com/joelberkeley/spidr/blob/master/spidr/src/Tensor.idr for a dependent tensor type-system
 
 -- | Return the type of the provided builtin.
 isStandardConstructor :: Builtin -> Bool
@@ -53,16 +56,20 @@ typeOfTypeClass tc = case tc of
   HasQuantifierIn {} -> type0 ~> type0 ~> type0
   HasNatLits {} -> type0 ~> type0
   HasRatLits -> type0 ~> type0
-  HasVecLits {} -> tNat ~> type0 ~> type0
+  HasVecLits {} -> tNat ~> (type0 ~> type0) ~> type0
   ValidPropertyType -> type0 ~> type0
   ValidParameterType {} -> type0 ~> type0
   ValidNetworkType -> type0 ~> type0
   ValidNetworkTensorType -> type0 ~> type0
   ValidDatasetType -> type0 ~> type0
-  ValidDatasetElementType -> type0 ~> type0
+  ValidDatasetListElementType -> type0 ~> type0
+  ValidDatasetBaseElementType -> type0 ~> type0
 
 typeOfTypeClassOp :: (HasStandardBuiltins builtin, BuiltinHasStandardTypeClasses builtin) => TypeClassOp -> DSLExpr builtin
 typeOfTypeClassOp b = case b of
+  FromNatTC -> forAllTypes $ \t -> hasNatLits t ~~~> typeOfFromNat t
+  FromRatTC -> forAllTypes $ \t -> hasRatLits t ~~~> typeOfFromRat t
+  VecLiteralTC -> typeOfVectorLiteral
   NegTC -> typeOfTCOp1 hasNeg
   AddTC -> typeOfTCOp2 hasAdd
   SubTC -> typeOfTCOp2 hasSub
@@ -70,9 +77,6 @@ typeOfTypeClassOp b = case b of
   DivTC -> typeOfTCOp2 hasDiv
   EqualsTC op -> typeOfTCComparisonOp $ hasEq op
   OrderTC op -> typeOfTCComparisonOp $ hasOrd op
-  FromNatTC -> forAll "A" type0 $ \t -> hasNatLits t ~~~> typeOfFromNat t
-  FromRatTC -> forAll "A" type0 $ \t -> hasRatLits t ~~~> typeOfFromRat t
-  FromVecTC -> forAllIrrelevantNat "n" $ \n -> forAll "f" (type0 ~> type0) $ \f -> hasVecLits n f ~~~> typeOfFromVec n f
   MapTC -> forAll "f" (type0 ~> type0) $ \f -> hasMap f ~~~> typeOfMap f
   FoldTC -> forAll "f" (type0 ~> type0) $ \f -> hasFold f ~~~> typeOfFold f
   QuantifierTC q ->
@@ -85,84 +89,119 @@ typeOfTypeClassOp b = case b of
 typeOfBuiltinFunction :: (HasStandardBuiltins builtin) => BuiltinFunction -> DSLExpr builtin
 typeOfBuiltinFunction = \case
   -- Boolean operations
-  Not -> tBool ~> tBool
-  Implies -> tBool ~> tBool ~> tBool
-  And -> tBool ~> tBool ~> tBool
-  Or -> tBool ~> tBool ~> tBool
-  Quantifier _ -> forAllExpl "A" type0 $ \a -> typeOfQuantifier a
+  Not -> typeOfTensorBoolOp1
+  And -> typeOfTensorBoolOp2
+  Or -> typeOfTensorBoolOp2
+  Implies -> typeOfTensorBoolOp2
+  QuantifyRatTensor _ -> forAllExpl "A" type0 $ \a -> typeOfQuantifier a
   If -> typeOfIf
+  ReduceAndTensor -> typeOfTensorBoolReduceOp
+  ReduceOrTensor -> typeOfTensorBoolReduceOp
   -- Arithmetic operations
   Neg dom -> case dom of
-    NegRat -> tRat ~> tRat
+    NegRatTensor -> typeOfTensorRatOp1
   Add dom -> case dom of
     AddNat -> tNat ~> tNat ~> tNat
-    AddRat -> tRat ~> tRat ~> tRat
+    AddRatTensor -> typeOfTensorRatOp2
   Sub dom -> case dom of
-    SubRat -> tRat ~> tRat ~> tRat
+    SubRatTensor -> typeOfTensorRatOp2
   Mul dom -> case dom of
     MulNat -> tNat ~> tNat ~> tNat
-    MulRat -> tRat ~> tRat ~> tRat
+    MulRatTensor -> typeOfTensorRatOp2
   Div dom -> case dom of
-    DivRat -> tRat ~> tRat ~> tRat
-  PowRat -> tRat ~> tNat ~> tRat
-  MinRat -> tRat ~> tRat ~> tRat
-  MaxRat -> tRat ~> tRat ~> tRat
+    DivRatTensor -> typeOfTensorRatOp2
+  Min dom -> case dom of
+    MinRatTensor -> typeOfTensorRatOp2
+  Max dom -> case dom of
+    MaxRatTensor -> typeOfTensorRatOp2
+  PowRat -> forAllDims $ \dims -> tRatTensor dims ~> tNat ~> tRatTensor dims
+  ReduceAddRatTensor -> typeOfTensorRatReduceOp
+  ReduceMulRatTensor -> typeOfTensorRatReduceOp
+  ReduceMinRatTensor -> typeOfTensorRatReduceOp
+  ReduceMaxRatTensor -> typeOfTensorRatReduceOp
   -- Comparisons
   Equals dom _op -> case dom of
     EqIndex {} ->
       forAllIrrelevantNat "n1" $ \n1 ->
         forAllIrrelevantNat "n2" $ \n2 ->
-          typeOfComparisonOp (tIndex n1) (tIndex n2)
-    EqNat {} -> typeOfComparisonOp tNat tNat
-    EqRat {} -> typeOfComparisonOp tRat tRat
+          tIndex n1 ~> tIndex n2 ~> tBoolTensor dimNil
+    EqNat {} -> tNat ~> tNat ~> tBoolTensor dimNil
+    EqRatTensor {} -> forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
   Order dom _op -> case dom of
     OrderIndex {} ->
       forAllIrrelevantNat "n1" $ \n1 ->
         forAllIrrelevantNat "n2" $ \n2 ->
-          tIndex n1 ~> tIndex n2 ~> tBool
-    OrderNat {} -> tNat ~> tNat ~> tBool
-    OrderRat {} -> tRat ~> tRat ~> tBool
+          tIndex n1 ~> tIndex n2 ~> tBoolTensor dimNil
+    OrderNat {} -> tNat ~> tNat ~> tBoolTensor dimNil
+    OrderRatTensor {} -> forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
   -- Conversion functions
   FromNat dom -> case dom of
     FromNatToIndex -> forAllIrrelevantNat "n" $ \s -> typeOfFromNat (tIndex s)
     FromNatToNat -> typeOfFromNat tNat
-    FromNatToRat -> typeOfFromNat tRat
+    FromNatToRat -> typeOfFromNat (tRatTensor dimNil)
   FromRat dom -> case dom of
-    FromRatToRat -> typeOfFromRat tRat
+    FromRatToRat -> typeOfFromRat (tRatTensor dimNil)
+  FromVectorToList -> typeOfFromVectorToList
   -- Container functions
   FoldList -> typeOfFold tListRaw
-  FoldVector -> forAllIrrelevantNat "n" $ \n -> typeOfFold (tVectorFunctor n)
   MapList -> typeOfMap tListRaw
-  MapVector -> forAllIrrelevantNat "n" $ \n -> typeOfMap (tVectorFunctor n)
   At -> typeOfAt
-  ZipWithVector -> typeOfZipWith
-  Indices -> typeOfIndices
+  StackTensor -> typeOfStackTensor
+  ConstTensor -> typeOfConstTensor
+  Foreach -> typeOfForeach
+  Iterate -> forAllTypes $ \t -> ((t ~> t) ~> t ~> t) ~> tNat ~> t
+  FlattenTensorType -> type0 ~> tList tNat ~> type0
 
 typeOfBuiltinType :: (HasStandardBuiltins builtin) => BuiltinType -> DSLExpr builtin
 typeOfBuiltinType = \case
-  Unit -> type0
-  Nat -> type0
-  Rat -> type0
-  Bool -> type0
-  List -> type0 ~> type0
-  Vector -> type0 ~> tNat .~> type0
-  Index -> tNat .~> type0
+  UnitType -> type0
+  BoolType -> type0
+  NatType -> type0
+  RatType -> type0
+  ListType -> type0 ~> type0
+  VectorType -> type0 ~> tNat .~> type0
+  TensorType -> type0 ~> tList tNat .~> type0
+  IndexType -> tNat .~> type0
+
+typeOfConstTensor :: (HasStandardBuiltins builtin) => DSLExpr builtin
+typeOfConstTensor =
+  forAll "A" type0 $ \tElem ->
+    tElem ~> tDims ~> tTensor tElem tDims
 
 typeOfBuiltinConstructor :: (HasStandardBuiltins builtin) => BuiltinConstructor -> DSLExpr builtin
 typeOfBuiltinConstructor = \case
   Nil -> typeOfNil
   Cons -> typeOfCons
-  LUnit -> tUnit
-  LBool _ -> tBool
-  LIndex x -> forAllIrrelevantNat "n" $ \n -> natInDomainConstraint (natLit x) n .~~~> tIndex n
-  LNat {} -> tNat
-  LRat {} -> tRat
-  LVec n -> typeOfVectorLiteral n
+  UnitLiteral -> tUnit
+  IndexLiteral x -> forAllIrrelevantNat "n" $ \n -> natInDomainConstraint (natLit x) n .~~~> tIndex n
+  NatLiteral {} -> tNat
+  NatTensorLiteral t -> tNatTensor (shapeOf t)
+  BoolTensorLiteral t -> tBoolTensor (shapeOf t)
+  IndexTensorLiteral t -> forAllIrrelevantNat "n" $ \n -> foldr (\x r -> natInDomainConstraint (natLit x) n .~~~> r) (tTensor (tIndex n) (shapeOf t)) (tensorToList t)
+  RatTensorLiteral t -> tRatTensor (shapeOf t)
 
-typeOfIf :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
+typeOfTensorRatOp1 :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
+typeOfTensorRatOp1 = forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims
+
+typeOfTensorRatOp2 :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
+typeOfTensorRatOp2 = forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tRatTensor dims
+
+typeOfTensorBoolOp1 :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
+typeOfTensorBoolOp1 = forAllDims $ \dims -> tBoolTensor dims ~> tBoolTensor dims
+
+typeOfTensorBoolOp2 :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
+typeOfTensorBoolOp2 = forAllDims $ \dims -> tBoolTensor dims ~> tBoolTensor dims ~> tBoolTensor dims
+
+typeOfTensorRatReduceOp :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) => DSLExpr builtin
+typeOfTensorRatReduceOp = forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dimNil
+
+typeOfTensorBoolReduceOp :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) => DSLExpr builtin
+typeOfTensorBoolReduceOp = forAllDims $ \dims -> tBoolTensor dims ~> tBoolTensor dimNil
+
+typeOfIf :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) => DSLExpr builtin
 typeOfIf =
   forAll "A" type0 $ \t ->
-    tBool ~> t ~> t ~> t
+    tBoolTensor dimNil ~> t ~> t ~> t
 
 typeOfTCOp1 :: (DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin) -> DSLExpr builtin
 typeOfTCOp1 constraint =
@@ -177,18 +216,17 @@ typeOfTCOp2 constraint =
       forAll "C" type0 $ \t3 ->
         constraint t1 t2 t3 ~~~> t1 ~> t2 ~> t3
 
-typeOfTCComparisonOp :: (BuiltinHasStandardTypes builtin) => (DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin) -> DSLExpr builtin
+typeOfTCComparisonOp ::
+  (BuiltinHasStandardTypes builtin) =>
+  (DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin) ->
+  DSLExpr builtin
 typeOfTCComparisonOp constraint =
-  forAll "A" type0 $ \t1 ->
-    forAll "B" type0 $ \t2 ->
-      constraint t1 t2 ~~~> typeOfComparisonOp t1 t2
+  forAllTypeTriples $ \t1 t2 t3 ->
+    constraint t1 t2 t3
+      ~~~> typeOfComparisonOp t1 t2 t3
 
-typeOfComparisonOp :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-typeOfComparisonOp t1 t2 = t1 ~> t2 ~> tBool
-
-typeOfIndices :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
-typeOfIndices =
-  pi (Just "n") Explicit Relevant tNat $ \n -> tVector (tIndex n) n
+typeOfComparisonOp :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
+typeOfComparisonOp t1 t2 t3 = t1 ~> t2 ~> t3
 
 typeOfNil :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfNil =
@@ -203,16 +241,9 @@ typeOfCons =
 typeOfAt :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfAt =
   forAll "A" type0 $ \tElem ->
-    forAllIrrelevantNat "n" $ \n ->
-      tVector tElem n ~> tIndex n ~> tElem
-
-typeOfZipWith :: (HasStandardBuiltins builtin) => DSLExpr builtin
-typeOfZipWith =
-  forAll "A" type0 $ \t1 ->
-    forAll "B" type0 $ \t2 ->
-      forAll "C" type0 $ \t3 ->
-        forAllIrrelevantNat "n" $ \n ->
-          (t1 ~> t2 ~> t3) ~> tVector t1 n ~> tVector t2 n ~> tVector t3 n
+    forAllDim Irrelevant $ \d ->
+      forAllDims $ \ds ->
+        tTensor tElem (dimCons d ds) ~> tIndex d ~> tTensor tElem ds
 
 typeOfMap :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin
 typeOfMap f =
@@ -227,23 +258,43 @@ typeOfFold f =
       (a ~> b ~> b) ~> b ~> f @@ [a] ~> b
 
 typeOfQuantifier :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin
-typeOfQuantifier t = (t ~> tBool) ~> tBool
+typeOfQuantifier t = (t ~> tBoolTensor dimNil) ~> tBoolTensor dimNil
 
 typeOfFromNat :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin
 typeOfFromNat t = forAllExpl "n" tNat $ \n -> natInDomainConstraint n t .~~~> t
 
 typeOfFromRat :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin
-typeOfFromRat t = tRat ~> t
+typeOfFromRat t = tRatTensor dimNil ~> t
 
-typeOfFromVec :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-typeOfFromVec n f =
-  forAll "A" type0 $ \t ->
-    tVector t n ~> f @@ [t]
+typeOfVecLiteralCast :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
+typeOfVecLiteralCast d f =
+  forAllTypes $ \tElem ->
+    iterate type0 (\fn t -> tElem ~> fn @@ [t]) d (f @@ [tElem])
 
-typeOfVectorLiteral :: (HasStandardBuiltins builtin) => Int -> DSLExpr builtin
-typeOfVectorLiteral n = do
-  forAll "A" type0 $ \tElem ->
-    naryFunc n tElem (tVector tElem (natLit n))
+typeOfVectorLiteral :: (BuiltinHasStandardTypeClasses builtin, HasStandardBuiltins builtin) => DSLExpr builtin
+typeOfVectorLiteral =
+  forAll "f" (type0 ~> type0) $ \f ->
+    forAllDim Relevant $ \d ->
+      hasVecLits f d
+        ~~~> typeOfVecLiteralCast d f
+
+typeOfStackTensor :: (HasStandardBuiltins builtin) => DSLExpr builtin
+typeOfStackTensor =
+  forAllDim Relevant $ \d ->
+    forAllDims $ \ds ->
+      typeOfVecLiteralCast d (explLam "A" type0 $ \t -> tTensor t (dimCons d ds))
+
+typeOfFromVectorToList :: (HasStandardBuiltins builtin) => DSLExpr builtin
+typeOfFromVectorToList =
+  forAllDim Relevant $ \d ->
+    typeOfVecLiteralCast d (explLam "A" type0 $ \t -> tList t)
 
 typeOfNatInDomainConstraint :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfNatInDomainConstraint = forAll "A" type0 $ \t -> tNat ~> t ~> type0
+
+typeOfForeach :: (HasStandardBuiltins builtin) => DSLExpr builtin
+typeOfForeach =
+  forAll "A" type0 $ \tElem ->
+    forAll "d" tDim $ \d ->
+      forAllDims $ \ds ->
+        (tIndex d ~> tTensor tElem ds) ~> tTensor tElem (dimCons d ds)

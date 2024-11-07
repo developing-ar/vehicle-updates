@@ -141,9 +141,10 @@ delabBoolLit b = mkToken B.Boolean (pack $ show b)
 delabNatLit :: Int -> B.Natural
 delabNatLit n = mkToken B.Natural (pack $ show n)
 
+{-
 delabRatLit :: Rational -> B.Rational
 delabRatLit r = mkToken B.Rational (pack $ show (fromRational r :: Double))
-
+-}
 delabSymbol :: Text -> B.Name
 delabSymbol = mkToken B.Name
 
@@ -167,44 +168,53 @@ delabBuiltin fun args = case fun of
 
 delabBuiltinFunction :: (MonadDelab m) => V.BuiltinFunction -> [V.Arg] -> m B.Expr
 delabBuiltinFunction fun args = case fun of
+  V.Not -> delabOp1 B.Not tokNot args
   V.And -> delabInfixOp2 B.And tokAnd args
   V.Or -> delabInfixOp2 B.Or tokOr args
   V.Implies -> delabInfixOp2 B.Impl tokImpl args
-  V.Not -> delabOp1 B.Not tokNot args
   V.If -> delabIf args
-  V.Neg {} -> delabTypeClassOp V.NegTC args
-  V.Add {} -> delabTypeClassOp V.AddTC args
-  V.Sub {} -> delabTypeClassOp V.SubTC args
-  V.Mul {} -> delabTypeClassOp V.MulTC args
-  V.Div {} -> delabTypeClassOp V.DivTC args
-  V.Quantifier q -> delabTypeClassOp (V.QuantifierTC q) args
+  V.Add _dom -> delabTypeClassOp V.AddTC args
+  V.Mul _dom -> delabTypeClassOp V.MulTC args
+  V.Neg _dom -> delabTypeClassOp V.NegTC args
+  V.Sub _dom -> delabTypeClassOp V.SubTC args
+  V.Div _dom -> delabTypeClassOp V.DivTC args
+  V.QuantifyRatTensor q -> delabTypeClassOp (V.QuantifierTC q) args
   V.Equals _ op -> delabTypeClassOp (V.EqualsTC op) args
   V.Order _ op -> delabTypeClassOp (V.OrderTC op) args
   V.FoldList -> delabTypeClassOp V.FoldTC args
-  V.FoldVector -> delabTypeClassOp V.FoldTC args
   V.MapList -> delabTypeClassOp V.MapTC args
-  V.MapVector -> delabTypeClassOp V.MapTC args
-  V.ZipWithVector -> delabApp (B.ZipWith tokZipWith) args
   V.At -> delabInfixOp2 B.At tokAt args
-  V.Indices -> delabApp (B.Indices tokIndices) args
+  V.Foreach -> delabForeach args
+  V.ReduceAndTensor -> delabApp (B.ReduceAnd tokReduceAnd) args
+  V.ReduceOrTensor -> delabApp (B.ReduceOr tokReduceOr) args
   -- Builtins not in the surface syntax.
+  V.FlattenTensorType -> rawDelab
   V.FromNat {} -> rawDelab
   V.FromRat {} -> rawDelab
-  V.MinRat {} -> rawDelab
-  V.MaxRat {} -> rawDelab
+  V.FromVectorToList {} -> rawDelab
   V.PowRat -> rawDelab
+  V.Min _dom -> rawDelab
+  V.Max _dom -> rawDelab
+  V.ReduceAddRatTensor -> rawDelab
+  V.ReduceMulRatTensor -> rawDelab
+  V.ReduceMaxRatTensor -> rawDelab
+  V.ReduceMinRatTensor -> rawDelab
+  V.StackTensor {} -> rawDelab
+  V.ConstTensor -> rawDelab
+  V.Iterate -> rawDelab
   where
     rawDelab = delabApp (cheatDelab $ layoutAsText $ pretty fun) args
 
 delabBuiltinType :: (MonadDelab m) => V.BuiltinType -> [V.Arg] -> m B.Expr
 delabBuiltinType fun args = case fun of
-  V.Unit -> delabApp (B.Unit tokUnit) args
-  V.Bool -> delabApp (B.Bool tokBool) args
-  V.Nat -> delabApp (B.Nat tokNat) args
-  V.Rat -> delabApp (B.Rat tokRat) args
-  V.List -> delabApp (B.List tokList) args
-  V.Vector -> delabApp (B.Vector tokVector) args
-  V.Index -> delabApp (B.Index tokIndex) args
+  V.UnitType -> delabApp (B.Unit tokUnit) args
+  V.BoolType -> delabApp (B.Bool tokBool) args
+  V.RatType -> delabApp (B.Rat tokRat) args
+  V.IndexType -> delabApp (B.Index tokIndex) args
+  V.NatType -> delabApp (B.Nat tokNat) args
+  V.ListType -> delabApp (B.List tokList) args
+  V.TensorType -> delabApp (B.Tensor tokTensor) args
+  V.VectorType -> delabApp (cheatDelab $ layoutAsText $ pretty fun) args
 
 delabTypeClass :: (MonadDelab m) => V.TypeClass -> [V.Arg] -> m B.Expr
 delabTypeClass tc args = case tc of
@@ -223,20 +233,19 @@ delabConstructor :: (MonadDelab m) => V.BuiltinConstructor -> [V.Arg] -> m B.Exp
 delabConstructor fun args = case fun of
   V.Cons -> delabInfixOp2 B.Cons tokCons args
   V.Nil -> delabApp (B.Nil tokNil) args
-  V.LUnit -> return $ B.Literal B.UnitLiteral
-  V.LBool b -> return $ B.Literal $ B.BoolLiteral $ delabBoolLit b
-  V.LIndex x -> return $ B.Literal $ B.NatLiteral $ delabNatLit x
-  V.LNat n -> return $ B.Literal $ B.NatLiteral $ delabNatLit n
-  V.LRat r -> return $ B.Literal $ B.RatLiteral $ delabRatLit r
-  V.LVec _ -> do
-    let explArgs = filter V.isExplicit args
-    B.VecLiteral tokSeqOpen <$> traverse (delabM . argExpr) explArgs <*> pure tokSeqClose
+  V.UnitLiteral -> return $ B.Literal B.UnitLiteral
+  V.NatLiteral x -> return $ B.Literal $ B.NatLiteral $ delabNatLit x
+  V.NatTensorLiteral t -> return $ cheatDelab $ layoutAsText $ pretty t
+  V.IndexLiteral x -> return $ B.Literal $ B.NatLiteral $ delabNatLit x
+  V.IndexTensorLiteral t -> return $ cheatDelab $ layoutAsText $ pretty t
+  V.RatTensorLiteral t -> return $ cheatDelab $ layoutAsText $ pretty t
+  V.BoolTensorLiteral t -> return $ cheatDelab $ layoutAsText $ pretty t
 
 delabTypeClassOp :: (MonadDelab m) => V.TypeClassOp -> [V.Arg] -> m B.Expr
 delabTypeClassOp op args = case op of
   V.FromNatTC {} -> delabApp (cheatDelab $ layoutAsText $ pretty op) args
   V.FromRatTC {} -> delabApp (cheatDelab $ layoutAsText $ pretty op) args
-  V.FromVecTC {} -> delabApp (cheatDelab $ layoutAsText $ pretty op) args
+  V.VecLiteralTC {} -> delabVecLiteral args
   V.NegTC -> delabOp1 B.Neg tokSub args
   V.AddTC -> delabInfixOp2 B.Add tokAdd args
   V.SubTC -> delabInfixOp2 B.Sub tokSub args
@@ -330,9 +339,23 @@ delabQuantifier q args = case reverse args of
     return $ mkTk binders' tokDot body'
   _ -> return $ cheatDelab (layoutAsText $ pretty q)
 
+delabForeach :: (MonadDelab m) => [V.Arg] -> m B.Expr
+delabForeach args = case reverse args of
+  V.RelevantExplicitArg _ (V.Lam _ binder body) : _ -> do
+    let (foldedBinders, foldedBody) = foldBinders ForeachBinder binder body
+    binders' <- traverse delabNameBinder (binder : foldedBinders)
+    body' <- delabM foldedBody
+    return $ B.Foreach tokForeach binders' tokDot body'
+  _ -> return $ cheatDelab (layoutAsText $ pretty V.Foreach)
+
 delabAnn :: B.TokAnnotation -> [B.DeclAnnOption] -> B.Decl
 delabAnn name [] = B.DefAnn name B.DeclAnnWithoutOpts
 delabAnn name ops = B.DefAnn name $ B.DeclAnnWithOpts ops
+
+delabVecLiteral :: (MonadDelab m) => [V.Arg] -> m B.Expr
+delabVecLiteral args = do
+  let explArgs = filter V.isExplicit args
+  B.VecLiteral tokSeqOpen <$> traverse (delabM . argExpr) explArgs <*> pure tokSeqClose
 
 mkBoolAnnOption :: Text -> Bool -> B.DeclAnnOption
 mkBoolAnnOption name value = B.InferAnnOption (mkToken B.TokAnnInferOpt name) (B.Literal (B.BoolLiteral (delabBoolLit value)))
