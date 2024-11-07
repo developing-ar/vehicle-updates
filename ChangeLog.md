@@ -2,6 +2,8 @@
 
 ## Version 0.16
 
+* Decreased type-checking time by ~50%
+
 * Decreased the size of generated verification plan files by 75%
 
 * Improved the ordering of constraints in generated query files.
