@@ -5,6 +5,7 @@ import Data.Hashable (Hashable (..))
 import Data.Serialize (Serialize)
 import GHC.Generics (Generic)
 import Prettyprinter (Pretty (..), (<+>))
+import Vehicle.Syntax.AST.Decl (ParameterSort)
 import Vehicle.Syntax.Builtin.BasicOperations
 
 --------------------------------------------------------------------------------
@@ -27,6 +28,13 @@ data TypeClass
     HasNatLits
   | HasRatLits
   | HasVecLits
+  | -- Declaration type restrictions
+    ValidPropertyType
+  | ValidParameterType ParameterSort
+  | ValidNetworkType
+  | ValidNetworkTensorType
+  | ValidDatasetType
+  | ValidDatasetElementType
   deriving (Eq, Ord, Generic, Show)
 
 instance NFData TypeClass
@@ -51,6 +59,12 @@ instance Pretty TypeClass where
     HasNatLits -> "HasNatLiterals"
     HasRatLits -> "HasRatLiterals"
     HasVecLits -> "HasVecLiterals"
+    ValidPropertyType -> "ValidPropertyType"
+    ValidParameterType {} -> "ValidParameterType"
+    ValidNetworkType -> "ValidNetworkType"
+    ValidNetworkTensorType -> "ValidNetworkTensorType"
+    ValidDatasetType -> "ValidDatasetType"
+    ValidDatasetElementType -> "ValidDatasetElementType"
 
 -- Builtin operations for type-classes
 data TypeClassOp
