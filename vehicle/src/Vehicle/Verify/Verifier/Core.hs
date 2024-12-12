@@ -4,7 +4,6 @@ module Vehicle.Verify.Verifier.Core where
 
 import Control.Monad.Error.Class (MonadError (..))
 import Data.Map (Map)
-import Data.Set (Set)
 import Vehicle.Compile.Prelude
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core
@@ -12,6 +11,7 @@ import Vehicle.Verify.QueryFormat.Core
 # ifdef mingw32_HOST_OS
 # else
 import System.Posix.Signals
+import Vehicle.Verify.Specification.Status
 # endif
 
 --------------------------------------------------------------------------------
@@ -64,13 +64,6 @@ data Verifier = Verifier
     supportsMultipleNetworkApplications :: Bool
   }
 
-data VerificationError
-  = UnsupportedMultipleNetworks MetaNetwork
-  | VerifierTerminatedByOS Int
-  | VerifierError String
-  | VerifierOutputMalformed (forall a. Doc a)
-  | VerifierIncompleteWitness (Set QueryVariable)
-
 --------------------------------------------------------------------------------
 -- Error messages
 
@@ -105,7 +98,7 @@ convertVerificationError Verifier {..} (propertyAddress, queryID) = \case
       { reproducerIsUseful = True,
         verificationErrorMessage = do
           "while verifying query"
-            <+> quotePretty queryID
+            <+> pretty queryID
             <+> "of property"
             <+> quotePretty propertyAddress
             <+> "the"
@@ -121,6 +114,11 @@ convertVerificationError Verifier {..} (propertyAddress, queryID) = \case
     VerificationErrorAction
       { reproducerIsUseful = True,
         verificationErrorMessage = "Unexpected output from the" <+> verifierDoc <> "." <+> message
+      }
+  VerifierTimedOut ->
+    VerificationErrorAction
+      { reproducerIsUseful = False,
+        verificationErrorMessage = "Verification timed out"
       }
   VerifierIncompleteWitness missingVariables ->
     VerificationErrorAction

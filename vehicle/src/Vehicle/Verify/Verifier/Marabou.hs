@@ -11,6 +11,7 @@ import Data.Text qualified as Text (pack, splitOn, strip)
 import Vehicle.Compile.Prelude
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core
+import Vehicle.Verify.Specification.Status
 import Vehicle.Verify.Verifier.Core
 
 --------------------------------------------------------------------------------
@@ -35,10 +36,11 @@ prepareMarabouArgs metaNetwork queryFile = case metaNetwork of
 parseMarabouOutput :: ParseVerifierOutput
 parseMarabouOutput output = do
   let outputLines = fmap Text.pack (lines output)
-  let resultIndex = findIndex (\v -> v == "sat" || v == "unsat") outputLines
+  let resultIndex = findIndex (\v -> v == "sat" || v == "unsat" || v == "timeout") outputLines
   case resultIndex of
     Nothing -> throwError $ VerifierOutputMalformed "Cannot find 'sat' or 'unsat'"
     Just i
+      | outputLines !! i == "timeout" -> throwError VerifierTimedOut
       | outputLines !! i == "unsat" -> return UnSAT
       | otherwise -> do
           let assignmentOutput = drop (i + 1) outputLines

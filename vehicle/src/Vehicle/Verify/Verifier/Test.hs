@@ -10,6 +10,7 @@ import Data.Text qualified as Text (pack, splitOn, strip)
 import Vehicle.Compile.Prelude
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core
+import Vehicle.Verify.Specification.Status
 import Vehicle.Verify.Verifier.Core
 
 -- This is a verifier only used for testing.
@@ -38,9 +39,8 @@ parseTestVerifierOutput output = do
     [] -> throwError $ VerifierOutputMalformed "No output lines"
     l : ls
       | l == "unsat" -> return UnSAT
-      | otherwise -> do
-          ioVarAssignment <- parseSATAssignment ls
-          return $ SAT $ Just ioVarAssignment
+      | l == "timeout" -> throwError VerifierTimedOut
+      | otherwise -> SAT . Just <$> parseSATAssignment ls
 
 parseSATAssignment ::
   (MonadError VerificationError m, MonadLogger m) =>

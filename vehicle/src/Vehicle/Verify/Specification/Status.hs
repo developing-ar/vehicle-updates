@@ -1,9 +1,8 @@
 module Vehicle.Verify.Specification.Status where
 
-import Data.Aeson
 import Data.List.Split (chunksOf)
-import Data.Text (Text, pack)
-import GHC.Generics (Generic)
+import Data.Set (Set)
+import Data.Text (Text)
 import System.Console.ANSI (Color (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Standard
@@ -12,7 +11,8 @@ import Vehicle.Data.Code.Interface
 import Vehicle.Data.QuantifiedVariable
 import Vehicle.Data.Tensor (RationalTensor, TensorShape)
 import Vehicle.Verify.Core
-import Vehicle.Verify.Specification
+import Vehicle.Verify.QueryFormat.Core (QueryVariable)
+import Vehicle.Verify.Specification (QueryMetaData)
 
 class IsVerified a where
   isVerified :: a -> Bool
@@ -28,55 +28,51 @@ evaluateQuery negated q = negated `xor` isVerified q
 --------------------------------------------------------------------------------
 -- Verification status of a single property
 
-newtype PropertyStatus
-  = PropertyStatus (MaybeTrivial (QuerySetNegationStatus, QueryResult UserVariableAssignment))
-  deriving (Generic)
+data VerificationError
+  = UnsupportedMultipleNetworks MetaNetwork
+  | VerifierTerminatedByOS Int
+  | VerifierError String
+  | VerifierOutputMalformed (Doc ())
+  | VerifierIncompleteWitness (Set QueryVariable)
+  | VerifierTimedOut
+  deriving (Show)
 
-instance FromJSON PropertyStatus
+isTimeoutError :: VerificationError -> Bool
+isTimeoutError = \case
+  VerifierTimedOut -> True
+  _ -> False
 
-instance ToJSON PropertyStatus
+type CompletedPropertyStatus =
+  MaybeTrivial (QuerySetNegationStatus, QueryResult UserVariableAssignment)
+
+data PropertyStatus
+  = PropertyCompleted CompletedPropertyStatus
+  | PropertyErrored (QueryMetaData, VerificationError)
 
 instance IsVerified PropertyStatus where
-  isVerified (PropertyStatus maybeResult) = case maybeResult of
-    Trivial b -> b
-    NonTrivial (negated, result) -> evaluateQuery negated result
+  isVerified = \case
+    PropertyCompleted maybeResult -> case maybeResult of
+      Trivial b -> b
+      NonTrivial (negated, result) -> evaluateQuery negated result
+    PropertyErrored {} -> False
 
 instance Pretty PropertyStatus where
-  pretty (PropertyStatus maybeResult) = do
-    let (verified, evidenceText) = case maybeResult of
-          Trivial status -> (status, "(trivial)")
-          NonTrivial (negated, status) -> do
-            let witnessText = if negated then "counterexample" else "witness"
-            case status of
-              UnSAT -> (negated, "proved no" <+> witnessText <+> "exists")
-              SAT Nothing -> (not negated, "no" <> witnessText <+> "found")
-              SAT Just {} -> (not negated, witnessText <+> "found")
+  pretty propertyStatus = do
+    let (verified, evidenceText) = case propertyStatus of
+          PropertyCompleted maybeResult -> do
+            case maybeResult of
+              Trivial status -> (status, "(trivial)")
+              NonTrivial (negated, status) -> do
+                let witnessText = if negated then "counterexample" else "witness"
+                case status of
+                  UnSAT -> (negated, "proved no" <+> witnessText <+> "exists")
+                  SAT Nothing -> (not negated, "no" <> witnessText <+> "found")
+                  SAT Just {} -> (not negated, witnessText <+> "found")
+          PropertyErrored (_, err) -> (False, if isTimeoutError err then "verifier timed out" else "verifier errored")
     pretty (statusSymbol verified) <+> "-" <+> evidenceText
 
 --------------------------------------------------------------------------------
 -- Verification status of a multi property
-
-type MultiPropertyStatus = MultiProperty PropertyStatus
-
-instance IsVerified MultiPropertyStatus where
-  isVerified = \case
-    MultiProperty ps -> all isVerified ps
-    SingleProperty _ status -> isVerified status
-
-nameSubProperties :: Name -> [MultiPropertyStatus] -> [(Name, MultiPropertyStatus)]
-nameSubProperties name = zipWith (\(i :: Int) p -> (name <> "!" <> pack (show i), p)) [0 ..]
-
-prettyMultiPropertyStatus :: Name -> MultiPropertyStatus -> Doc a
-prettyMultiPropertyStatus name = \case
-  MultiProperty ps -> do
-    let namedSubproperties = nameSubProperties name ps
-    let numVerified = pretty (length (filter isVerified ps))
-    let num = pretty $ length ps
-    let summary = "Property" <+> quotePretty name <> ":" <+> numVerified <> "/" <> num <+> "verified"
-    let results = indent 2 $ vsep (fmap (uncurry prettyMultiPropertyStatus) namedSubproperties)
-    summary <> line <> results
-  SingleProperty _address status ->
-    pretty name <+> pretty status
 
 statusSymbol :: Bool -> String
 statusSymbol verified = do
@@ -99,19 +95,3 @@ assignmentToExpr (dim : dims) xs = do
   let inputVarIndicesChunks = chunksOf (product dims) xs
   let elems = fmap (Arg mempty Explicit Relevant . assignmentToExpr dims) inputVarIndicesChunks
   normAppList vecConstructor elems
-
---------------------------------------------------------------------------------
--- Verification status of the specification
-
-type SpecificationStatus = Specification PropertyStatus
-
-instance IsVerified SpecificationStatus where
-  isVerified (Specification properties) =
-    all (isVerified . snd) properties
-
-instance Pretty SpecificationStatus where
-  pretty spec@(Specification properties) = do
-    let result = "Specification summary:" <+> (if isVerified spec then "true" else "false")
-    result
-      <> line
-      <> indent 2 (vsep (fmap (uncurry prettyMultiPropertyStatus) properties))

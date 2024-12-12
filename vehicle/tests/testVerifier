@@ -2,20 +2,26 @@
 
 # A simple test verifier that takes as arguments what it should output
 
-# Find the index of the variable
-i=1
-for var in "$@"
-do
-    ((i++))
-    if [[ "$var" == *.txt ]]
-    then
-        break;
+# First find the index of the variable representing the query file
+file_index=0
+for ((index=1; index <= $#; index++)); do
+    arg="${!index}"
+    if [[ "$arg" == *.txt ]]; then
+        file_index=$index
+        break
     fi
 done
 
+# Check if a .txt file was found
+if [[ $file_index -eq 0 ]]; then
+    echo "Error: No .txt file found in the arguments."
+    exit 1
+fi
+
 # Determine UNSAT or SAT
-answer="${!i}"
-if [[ "$answer" = "unsat" ]];
+answer_index=$((file_index + 1))
+answer="${!answer_index}"
+if [[ "$answer" = "unsat" || "$answer" = "timeout" ]];
 then
   echo $answer
   exit 0
@@ -23,20 +29,22 @@ fi
 
 if [[ "$answer" != "sat" ]];
 then
-  echo "Invalid arguments: the argument after the query must be 'sat' or 'unsat' but was '$answer'"
+  echo "Invalid arguments: the argument after the query must be 'sat', 'unsat' or 'timeout' but was '$answer'"
   exit 1;
 fi
 
-# Print SAT assignment
-echo $answer
-((i++))
-assignment="${!i}"
-if [ "$assignment" = "" ];
-then
+# Find assignment
+assignment_index=$((answer_index + 1))
+assignment="${!assignment_index}"
+
+if [[ -z "$assignment" ]]; then
   echo "Invalid arguments: must provide a SAT assignment separated by spaces after the 'sat' argument."
   exit 1;
 fi
 
+# Convert comma-separated assignments to newline-separated
 eol=$'\n'
 assignments="${assignment//,/$eol}"
+
+echo $answer
 echo "$assignments"

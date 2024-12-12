@@ -33,7 +33,7 @@ import Data.Text.Lazy qualified as LazyText
 import Data.Vector qualified as BoxedVector
 import Data.Vector.Unboxed qualified as Vector (fromList)
 import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist)
-import System.Exit (ExitCode (..), exitFailure)
+import System.Exit (ExitCode (..))
 import System.FilePath (takeExtension, takeFileName, (<.>), (</>))
 import System.IO (stdout)
 import System.Process (readProcessWithExitCode)
@@ -187,9 +187,9 @@ writeVerificationQuery ::
   FilePath ->
   (QueryMetaData, QueryText) ->
   m ()
-writeVerificationQuery queryFormat folder (queryMetaData, queryText) = do
+writeVerificationQuery queryFormat verificationCache (queryMetaData, queryText) = do
   let queryOutputForm = queryOutputFormat queryFormat
-  let queryFilePath = folder </> calculateQueryFileName (queryAddress queryMetaData)
+  let queryFilePath = calculateQueryFileName verificationCache (queryAddress queryMetaData)
   writeResultToFile (Just queryOutputForm) (Just queryFilePath) (pretty queryText)
 
 writePropertyResult ::
@@ -251,7 +251,14 @@ type MonadVerify m =
 type MonadVerifyProperty m =
   ( MonadVerify m,
     MonadReader (VerifierSettings, FilePath, PropertyProgressBar) m,
-    MonadWriter (Sum Int) m
+    MonadWriter (Sum Int) m,
+    MonadError (QueryMetaData, VerificationError) m
+  )
+
+type MonadVerifyQuery m =
+  ( MonadVerify m,
+    MonadReader (VerifierSettings, FilePath, PropertyProgressBar) m,
+    MonadError VerificationError m
   )
 
 -- | Uses the verifier to verify the specification. Failure of one property does
@@ -280,37 +287,42 @@ verifyProperty ::
   FilePath ->
   PropertyAddress ->
   m ()
-verifyProperty verifierSettings verificationCache address =
-  logCompilerSection MinDetail ("Verifying property" <+> quotePretty address) $ do
-    -- Read the verification plan for the property
-    let propertyPlanFile = propertyPlanFileName verificationCache address
-    PropertyVerificationPlan {..} <- readPropertyVerificationPlan propertyPlanFile
+verifyProperty verifierSettings verificationCache address = do
+  -- Read the verification plan for the property
+  let propertyPlanFile = propertyPlanFileName verificationCache address
+  PropertyVerificationPlan {..} <- readPropertyVerificationPlan propertyPlanFile
 
-    -- Perform the verification
-    let numberOfQueries = propertySize queryMetaData
-    progressBar <- createPropertyProgressBar address numberOfQueries
-    let readerState = (verifierSettings, verificationCache, progressBar)
-    (result, Sum numberOfQueriesExecuted) <- runWriterT (runReaderT (verifyPropertyBooleanStructure queryMetaData) readerState)
+  result <- case queryMetaData of
+    Trivial status -> return $ PropertyCompleted (Trivial status)
+    NonTrivial structure -> do
+      logCompilerSection MinDetail ("Verifying property" <+> quotePretty address) $ do
+        -- Perform the verification
+        let numberOfQueries = propertySize queryMetaData
+        progressBar <- createPropertyProgressBar address numberOfQueries
+        let readerState = (verifierSettings, verificationCache, progressBar)
+        (errorOrResult, Sum numberOfQueriesExecuted) <-
+          runWriterT (runExceptT (runReaderT (verifyPropertyBooleanStructure structure) readerState))
 
-    -- Tidy up and output results
-    when (numberOfQueriesExecuted < numberOfQueries) $ do
-      -- The progress bar is only closed when all queries are run so in this
-      -- case we have to close it manually.
-      closePropertyProgressBar progressBar
-    outputPropertyResult verificationCache address result
+        -- The progress bar is only closed when all queries are run.
+        -- Not all queries are run, (e.g. short-circuited counter-example found or error occured).
+        -- In this case we have to close it manually.
+        when (numberOfQueriesExecuted < numberOfQueries) $ do
+          closePropertyProgressBar progressBar
+
+        case errorOrResult of
+          Left err -> return $ PropertyErrored err
+          Right result -> return $ PropertyCompleted $ NonTrivial result
+
+  outputPropertyResult verifierSettings verificationCache address result
 
 -- | Lazily tries to verify the property, avoiding evaluating parts
 -- of the expression that are not needed.
 verifyPropertyBooleanStructure ::
   forall m.
   (MonadVerifyProperty m) =>
-  Property QueryMetaData ->
-  m PropertyStatus
-verifyPropertyBooleanStructure = \case
-  Trivial status -> return $ PropertyStatus (Trivial status)
-  NonTrivial structure -> do
-    (negationStatus, status) <- go structure
-    return $ PropertyStatus $ NonTrivial (negationStatus, status)
+  BooleanExpr (QuerySet QueryMetaData) ->
+  m (QuerySetNegationStatus, QueryResult UserVariableAssignment)
+verifyPropertyBooleanStructure = go
   where
     go ::
       BooleanExpr (QuerySet QueryMetaData) ->
@@ -365,12 +377,13 @@ verifyQuery ::
   (MonadVerifyProperty m) =>
   QueryMetaData ->
   m (QueryResult UserVariableAssignment)
-verifyQuery (QueryMetaData queryAddress metaNetwork reconstruction) = do
+verifyQuery queryMetaData@(QueryMetaData queryAddress metaNetwork reconstruction) = do
   logCompilerSection MidDetail ("Verifying query" <+> quotePretty queryAddress) $ do
-    (verifierSettings@VerifierSettings {..}, folder, progressBar) <- ask
-    let queryFile = folder </> calculateQueryFileName queryAddress
+    (verifierSettings, verificationCache, progressBar) <- ask
+    let queryFile = calculateQueryFileName verificationCache queryAddress
+
+    tell (Sum 1)
     errorOrResult <- runExceptT $ do
-      tell (Sum 1)
       result <- invokeVerifier verifierSettings metaNetwork queryFile
       liftIO $ incProgress progressBar 1
 
@@ -388,12 +401,11 @@ verifyQuery (QueryMetaData queryAddress metaNetwork reconstruction) = do
           return UnSAT
 
     case errorOrResult of
+      Left err -> throwError (queryMetaData, err)
       Right result -> return result
-      Left err -> do
-        handleVerificationError verifier verifierExecutable metaNetwork queryAddress queryFile err
 
 invokeVerifier ::
-  (MonadVerifyProperty m, MonadError VerificationError m) =>
+  (MonadVerifyQuery m) =>
   VerifierSettings ->
   MetaNetwork ->
   QueryFile ->
@@ -423,12 +435,10 @@ invokeVerifier VerifierSettings {..} metaNetworkEntries queryFile = do
       -- See System.Process.html#waitForProcess documentation
       | exitValue < 0 -> throwError $ VerifierTerminatedByOS (-exitValue)
       | otherwise -> throwError $ VerifierError (if null err then out else err)
-    _ -> return ()
+    -- Parse the result
+    _ -> parseOutput verifier out
 
-  -- Parse the result
-  parseOutput verifier out
-
-checkWitness :: (MonadError VerificationError m) => [QueryVariable] -> QueryVariableAssignment -> m ()
+checkWitness :: (MonadVerifyQuery m) => [QueryVariable] -> QueryVariableAssignment -> m ()
 checkWitness queryVariables (QueryVariableAssignment witness) = do
   let allVariables = Set.fromList queryVariables
   let providedVariables = Map.keysSet witness
@@ -437,35 +447,18 @@ checkWitness queryVariables (QueryVariableAssignment witness) = do
     throwError $
       VerifierIncompleteWitness missingVariables
 
-handleVerificationError ::
-  (MonadVerifyProperty m) =>
-  Verifier ->
-  VerifierExecutable ->
-  MetaNetwork ->
-  QueryAddress ->
-  QueryFile ->
-  VerificationError ->
-  m a
-handleVerificationError verifier verifierExecutable metaNetwork queryAddress queryFile err = do
-  let VerificationErrorAction {..} = convertVerificationError verifier queryAddress err
-
-  reproducerMessage <-
-    if reproducerIsUseful
-      then createReproducer verifier verifierExecutable metaNetwork queryFile
-      else return ""
-
-  let finalMessage = "\n\nError: " <> verificationErrorMessage <> reproducerMessage
-  writeStderrLn (layoutAsText finalMessage)
-  liftIO exitFailure
+--------------------------------------------------------------------------------
+-- Errors
 
 createReproducer ::
-  (MonadIO m) =>
+  (MonadVerify m) =>
   Verifier ->
   VerifierExecutable ->
+  FilePath ->
   MetaNetwork ->
-  QueryFile ->
+  QueryAddress ->
   m (Doc a)
-createReproducer verifier verifierExecutable metaNetwork queryFile = do
+createReproducer verifier verifierExecutable verificationCache metaNetwork queryAddress = do
   -- Create the reproducer directory
   vehiclePath <- getVehiclePath
   randomNumber <- liftIO (randomIO :: IO Int)
@@ -480,6 +473,7 @@ createReproducer verifier verifierExecutable metaNetwork queryFile = do
         return resultName
 
   -- Copy the query file over
+  let queryFile = calculateQueryFileName verificationCache queryAddress
   copiedQueryFile <- liftIO $ copyOverFile queryFile
 
   -- Copy the network files over
@@ -508,32 +502,46 @@ createReproducer verifier verifierExecutable metaNetwork queryFile = do
 -- Assignments
 
 outputPropertyResult ::
-  (MonadIO m, MonadStdIO m) =>
+  (MonadVerify m) =>
+  VerifierSettings ->
   FilePath ->
   PropertyAddress ->
   PropertyStatus ->
   m ()
-outputPropertyResult verificationCache address result@(PropertyStatus status) = do
+outputPropertyResult verifierSettings verificationCache address result = do
   VIO.writeStdoutLn (layoutAsText $ "    result: " <> pretty result)
   writePropertyResult verificationCache address (isVerified result)
-  case status of
-    NonTrivial (_, SAT (Just (UserVariableAssignment assignments))) -> do
-      -- Output assignments to command line
-      let assignmentDocs = vsep (fmap prettyUserVariableAssignment assignments)
-      let witnessDoc = indent 6 assignmentDocs
-      liftIO $ TIO.hPutStrLn stdout (layoutAsText witnessDoc)
+  case result of
+    PropertyCompleted status -> case status of
+      NonTrivial (_, SAT (Just (UserVariableAssignment assignments))) -> do
+        -- Output assignments to command line
+        let assignmentDocs = vsep (fmap prettyUserVariableAssignment assignments)
+        let witnessDoc = indent 6 assignmentDocs
+        liftIO $ TIO.hPutStrLn stdout (layoutAsText witnessDoc)
 
-      -- Output assignments to file
-      let witnessFolder = verificationCache </> layoutAsString (pretty address) <> "-assignments"
-      liftIO $ createDirectoryIfMissing True witnessFolder
-      forM_ assignments $ \(var, Tensor varDims value) -> do
-        let file = witnessFolder </> show var
-        let dims = Vector.fromList varDims
-        -- TODO got to be a better way to do this conversion...
-        let unboxedVector = Vector.fromList $ BoxedVector.toList (fmap realToFrac value)
-        let idxData = IDXDoubles IDXDouble dims unboxedVector
-        liftIO $ encodeIDXFile idxData file
-    _ -> return ()
+        -- Output assignments to file
+        let witnessFolder = verificationCache </> layoutAsString (pretty address) <> "-assignments"
+        liftIO $ createDirectoryIfMissing True witnessFolder
+        forM_ assignments $ \(var, Tensor varDims value) -> do
+          let file = witnessFolder </> show var
+          let dims = Vector.fromList varDims
+          -- TODO got to be a better way to do this conversion...
+          let unboxedVector = Vector.fromList $ BoxedVector.toList (fmap realToFrac value)
+          let idxData = IDXDoubles IDXDouble dims unboxedVector
+          liftIO $ encodeIDXFile idxData file
+      _ -> return ()
+    PropertyErrored (QueryMetaData {..}, err) -> do
+      let VerifierSettings {..} = verifierSettings
+      let VerificationErrorAction {..} = convertVerificationError verifier queryAddress err
+
+      reproducerMessage <-
+        if reproducerIsUseful
+          then createReproducer verifier verifierExecutable verificationCache metaNetwork queryAddress
+          else return ""
+
+      unless (isTimeoutError err) $ do
+        let finalMessage = "\nError: " <> verificationErrorMessage <> reproducerMessage
+        writeStderrLn (layoutAsText finalMessage)
 
 --------------------------------------------------------------------------------
 -- Calculation of file paths
