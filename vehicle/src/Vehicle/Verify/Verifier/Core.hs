@@ -2,17 +2,17 @@
 
 module Vehicle.Verify.Verifier.Core where
 
+# ifdef mingw32_HOST_OS
+# else
+import System.Posix.Signals
+# endif
+
 import Control.Monad.Error.Class (MonadError (..))
 import Data.Map (Map)
 import Vehicle.Compile.Prelude
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core
-
-# ifdef mingw32_HOST_OS
-# else
-import System.Posix.Signals
 import Vehicle.Verify.Specification.Status
-# endif
 
 --------------------------------------------------------------------------------
 -- Verifier interface
