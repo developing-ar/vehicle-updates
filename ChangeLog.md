@@ -8,6 +8,11 @@
 
 * Improved the ordering of constraints in generated query files.
 
+* Added better timeout handling detection.
+
+* If a verifier throws an error whilst verifying a property, Vehicle will now continue to try
+  verify the other properties in the file instead of immediately exiting.
+
 ## Version 0.15
 
 * Added functions `min` and `max` over rationals.
