@@ -10,7 +10,7 @@ import Data.Map (Map)
 import Data.Text (Text, unpack)
 import GHC.Generics (Generic)
 import Prettyprinter (brackets)
-import System.FilePath ((<.>))
+import System.FilePath ((<.>), (</>))
 import Vehicle.Compile.Resource
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.QuantifiedVariable (NetworkElementVariable)
@@ -137,9 +137,13 @@ type QueryID = Int
 
 type QueryAddress = (PropertyAddress, QueryID)
 
-calculateQueryFileName :: QueryAddress -> FilePath
-calculateQueryFileName (propertyAddress, queryID) = do
-  calculatePropertyFilePrefix propertyAddress <> "-query" <> show queryID <.> "txt"
+calculateQueryFileName :: FilePath -> QueryAddress -> FilePath
+calculateQueryFileName verificationCache (propertyAddress, queryID) = do
+  verificationCache
+    </> calculatePropertyFilePrefix propertyAddress
+      <> "-query"
+      <> show queryID
+        <.> "txt"
 
 --------------------------------------------------------------------------------
 -- Queries
@@ -164,15 +168,3 @@ createNetworkVarName networkName application inputOrOutput =
   pretty networkName
     <> pretty (fmap subscript (show application))
     <> brackets (pretty inputOrOutput)
-
---------------------------------------------------------------------------------
--- Network assignments
-
-{-
-instance Pretty NetworkVariableAssignment where
-  pretty (NetworkVariableAssignment assignment) = do
-    vsep (prettyVariable <$> Map.toList assignment)
-    where
-      prettyVariable :: (NetworkVerifierVariable, Rational) -> Doc a
-      prettyVariable (var, value) = "x" <> pretty var <> ":" <+> pretty value
--}

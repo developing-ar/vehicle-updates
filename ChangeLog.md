@@ -8,7 +8,14 @@
 
 * Improved the ordering of constraints in generated query files.
 
+* Added better handling of verifier timeouts.
+
+* If a verifier throws an error whilst verifying a property, Vehicle will now continue to try
+  verify the other properties in the file instead of immediately exiting.
+
 * When multiple similar warnings are thrown at different indices of the same property vector (i.e. properties of type `Vector Bool n`), they are now collapsed into a single warning.
+
+* When Vehicle has finished verifying a vector of properties, Vehicle will now output the stats about the number verified, falsified, timed-out and errored.
 
 ## Version 0.15
 

@@ -10,6 +10,7 @@ module Vehicle.Verify.Verifier
   )
 where
 
+import Vehicle.Verify.Specification.Status
 import Vehicle.Verify.Verifier.Core
 import Vehicle.Verify.Verifier.Marabou (marabouVerifier)
 import Vehicle.Verify.Verifier.Test (testVerifier)
