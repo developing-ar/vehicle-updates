@@ -152,7 +152,7 @@ specificationPropertyNames (Specification properties) = fmap fst properties
 -- verification of an entire specification.
 data SpecificationCacheIndex = SpecificationCacheIndex
   { resourcesIntegrityInfo :: ResourcesIntegrityInfo,
-    properties :: [(Name, MultiProperty ())]
+    properties :: [(PropertyName, MultiProperty ())]
   }
   deriving (Generic)
 

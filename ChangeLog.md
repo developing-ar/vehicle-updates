@@ -15,6 +15,8 @@
 
 * When multiple similar warnings are thrown at different indices of the same property vector (i.e. properties of type `Vector Bool n`), they are now collapsed into a single warning.
 
+* When Vehicle has finished verifying a vector of properties, Vehicle will now output the stats about the number verified, falsified, timed-out and errored.
+
 ## Version 0.15
 
 * Added functions `min` and `max` over rationals.

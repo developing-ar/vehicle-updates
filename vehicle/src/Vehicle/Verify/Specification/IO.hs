@@ -17,7 +17,7 @@ import Control.Monad (forM, forM_, unless, when)
 import Control.Monad.Except (MonadError (..), runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..))
-import Control.Monad.Writer (MonadWriter (..), WriterT (..))
+import Control.Monad.Writer (MonadWriter (..), WriterT (..), execWriterT)
 import Data.Aeson (decode)
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy qualified as BIO
@@ -32,6 +32,7 @@ import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as LazyText
 import Data.Vector qualified as BoxedVector
 import Data.Vector.Unboxed qualified as Vector (fromList)
+import Prettyprinter (fill)
 import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist)
 import System.Exit (ExitCode (..))
 import System.FilePath (takeExtension, takeFileName, (<.>), (</>))
@@ -234,6 +235,58 @@ propertyResultFileName folder propertyAddress =
       <.> propertyVerificationResultFileExtension
 
 --------------------------------------------------------------------------------
+-- Verification stats
+
+data MultiPropertyStats = MultiPropertyStats
+  { numberVerified :: Int,
+    numberFalsified :: Int,
+    numberTimedOut :: Int,
+    numberErrored :: Int
+  }
+
+instance Semigroup MultiPropertyStats where
+  s1 <> s2 =
+    MultiPropertyStats
+      { numberVerified = numberVerified s1 + numberVerified s2,
+        numberFalsified = numberFalsified s1 + numberFalsified s2,
+        numberTimedOut = numberTimedOut s1 + numberTimedOut s2,
+        numberErrored = numberErrored s1 + numberErrored s2
+      }
+
+instance Monoid MultiPropertyStats where
+  mempty =
+    MultiPropertyStats
+      { numberVerified = 0,
+        numberFalsified = 0,
+        numberTimedOut = 0,
+        numberErrored = 0
+      }
+
+outputStats :: (MonadVerify m) => PropertyName -> MultiPropertyStats -> m ()
+outputStats name MultiPropertyStats {..} = do
+  let results =
+        [ ("verified", numberVerified),
+          ("falsified", numberFalsified),
+          ("timed-out", numberTimedOut),
+          ("errored", numberErrored)
+        ] ::
+          [(String, Int)]
+  let totalSize = sum $ fmap snd results
+  when (totalSize > 1) $ do
+    let maxTextLength = maximum $ fmap (length . fst) results
+    let prettyResult (t, x) = fill (maxTextLength + 1) (pretty t <> ":") <+> pretty x <> "/" <> pretty totalSize
+    let finalDoc = pretty name <> ":" <> line <> indent 4 (vsep (fmap prettyResult results))
+    programOutput $ "  " <> finalDoc
+
+logPropertyStatus :: (MonadWriter MultiPropertyStats m) => PropertyStatus -> m ()
+logPropertyStatus status = tell $ case status of
+  PropertyErrored (_, VerifierTimedOut) -> mempty {numberTimedOut = 1}
+  PropertyErrored _ -> mempty {numberErrored = 1}
+  _
+    | isVerified status -> mempty {numberVerified = 1}
+    | otherwise -> mempty {numberFalsified = 1}
+
+--------------------------------------------------------------------------------
 -- Verification
 
 data VerifierSettings = VerifierSettings
@@ -275,14 +328,23 @@ verifySpecification verifierSettings queryFolder = do
   maybeIntegrityError <- checkIntegrityOfResources resourcesIntegrityInfo
   case maybeIntegrityError of
     Just err -> programOutput $ "Resource error:" <+> pretty err
-    Nothing -> do
-      let propertyAddresses = concatMap (multiPropertyAddresses . snd) properties
-      forM_ propertyAddresses $
-        verifyProperty verifierSettings queryFolder
+    Nothing -> forM_ properties $ \(name, multiProperty) -> do
+      stats <- execWriterT $ verifyMultiproperty verifierSettings queryFolder multiProperty
+      outputStats name stats
+
+verifyMultiproperty ::
+  (MonadVerify m, MonadWriter MultiPropertyStats m) =>
+  VerifierSettings ->
+  FilePath ->
+  MultiProperty () ->
+  m ()
+verifyMultiproperty settings queryFolder = \case
+  MultiProperty properties -> forM_ properties (verifyMultiproperty settings queryFolder)
+  SingleProperty address () -> verifyProperty settings queryFolder address
 
 verifyProperty ::
   forall m.
-  (MonadVerify m) =>
+  (MonadVerify m, MonadWriter MultiPropertyStats m) =>
   VerifierSettings ->
   FilePath ->
   PropertyAddress ->
@@ -314,6 +376,8 @@ verifyProperty verifierSettings verificationCache address = do
           Right result -> return $ PropertyCompleted $ NonTrivial result
 
   outputPropertyResult verifierSettings verificationCache address result
+
+  logPropertyStatus result
 
 -- | Lazily tries to verify the property, avoiding evaluating parts
 -- of the expression that are not needed.
