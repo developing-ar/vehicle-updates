@@ -40,14 +40,14 @@ import Vehicle.Data.DeBruijn
 -- | Attempts to solve as many unification constraints as possible. Takes in
 -- the set of meta-variables solved since unification was last run and outputs
 -- the set of meta-variables solved during this run.
-runUnificationSolver :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> MetaSet -> m ()
-runUnificationSolver _ metasSolved =
+runUnificationSolver :: (MonadTypeChecker builtin m) => Proxy builtin -> m ()
+runUnificationSolver proxy =
   logCompilerPass MaxDetail "unification solver run" $
-    runConstraintSolver @builtin
+    runConstraintSolver
+      proxy
       getActiveUnificationConstraints
       setUnificationConstraints
       solveUnificationConstraint
-      metasSolved
 
 --------------------------------------------------------------------------------
 -- Unification algorithm

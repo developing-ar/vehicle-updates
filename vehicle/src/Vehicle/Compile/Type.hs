@@ -17,10 +17,11 @@ import Vehicle.Compile.Print
 import Vehicle.Compile.Type.Bidirectional
 import Vehicle.Compile.Type.Constraint.ApplicationSolver (runApplicationSolver)
 import Vehicle.Compile.Type.Constraint.Core (runConstraintSolver)
+import Vehicle.Compile.Type.Constraint.InstanceDefaultSolver (addNewInstanceConstraintUsingDefaults)
+import Vehicle.Compile.Type.Constraint.InstanceSolver (runInstanceSolver)
 import Vehicle.Compile.Type.Constraint.UnificationSolver
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Generalise
-import Vehicle.Compile.Type.Meta
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class
@@ -110,7 +111,7 @@ typeCheckAbstractDef p ident defSort uncheckedType = do
 
   let substDecl = DefAbstract p ident defSort substCheckedType
 
-  logUnsolvedUnknowns (Just substDecl) Nothing
+  logUnsolvedUnknowns (Just substDecl)
 
   finalDecl <- generaliseOverUnsolvedMetaVariables substDecl
   return finalDecl
@@ -152,7 +153,7 @@ typeCheckFunction p ident anns typ body = do
         if isUserIdent ident
           then addAuxiliaryInputOutputConstraints substDecl
           else return substDecl
-      logUnsolvedUnknowns (Just substDecl) Nothing
+      logUnsolvedUnknowns (Just substDecl)
 
       checkedDecl2 <- generaliseOverUnsolvedConstraints checkedDecl1
       checkedDecl3 <- generaliseOverUnsolvedMetaVariables checkedDecl2
@@ -187,60 +188,79 @@ restrictAbstractDefType resource decl@(ident, _) defType = do
 -- occur in the type or not.
 solveConstraints :: forall builtin m. (TCM builtin m) => Maybe (Decl builtin) -> m ()
 solveConstraints d = logCompilerPass MidDetail "constraint solving" $ do
-  loopOverConstraints mempty 1 d
+  loopOverConstraints 1 d
   where
-    loopOverConstraints :: (TCM builtin m) => MetaSet -> Int -> Maybe (Decl builtin) -> m ()
-    loopOverConstraints recentlySolvedMetas loopNumber decl = do
+    loopOverConstraints :: (TCM builtin m) => Int -> Maybe (Decl builtin) -> m ()
+    loopOverConstraints loopNumber decl = do
       unsolvedConstraints <- getActiveConstraints @builtin
 
       updatedDecl <- traverse substMetas decl
-      logUnsolvedUnknowns updatedDecl (Just recentlySolvedMetas)
+      logUnsolvedUnknowns updatedDecl
 
       unless (null unsolvedConstraints) $ do
-        let allConstraintsBlocked = all (constraintIsBlocked recentlySolvedMetas) unsolvedConstraints
+        isUnblocked <- getIsUnblockedFn
 
-        if allConstraintsBlocked
+        if any isUnblocked unsolvedConstraints
           then do
-            -- If no constraints are unblocked then try generating new constraints using defaults.
-            instanceCandidates <- getInstanceCandidates
-            successfullyGeneratedDefault <- generateDefaultConstraint instanceCandidates decl
-            when successfullyGeneratedDefault $
-              -- If new constraints generated then continue solving.
-              loopOverConstraints mempty loopNumber decl
-          else do
-            -- If we have made useful progress then start a new pass
+            -- If we have unblocked constraints then start a new pass
             let passDoc = "constraint solving pass" <+> pretty loopNumber
-            newMetasSolved <- logCompilerPass MaxDetail passDoc $ do
-              metasSolvedDuringApplications <-
-                trackSolvedMetas (Proxy @builtin) $
-                  runApplicationSolver (Proxy @builtin) recentlySolvedMetas
+            logCompilerPass MaxDetail passDoc $
+              runSolvers updatedDecl
+            loopOverConstraints (loopNumber + 1) updatedDecl
+          else do
+            -- If no constraints are unblocked then try generating new constraints using defaults.
+            logDebug MaxDetail $ "Temporarily stuck" <> line
+            success <- tryToUnstick updatedDecl
+            when success $
+              -- If new constraints generated then continue solving.
+              loopOverConstraints loopNumber decl
 
-              metasSolvedDuringUnification <-
-                trackSolvedMetas (Proxy @builtin) $
-                  runUnificationSolver (Proxy @builtin) (metasSolvedDuringApplications <> recentlySolvedMetas)
+    runSolvers :: (TCM builtin m) => Maybe (Decl builtin) -> m ()
+    runSolvers maybeDecl = do
+      let proxy = Proxy @builtin
 
-              logUnsolvedUnknowns updatedDecl (Just recentlySolvedMetas)
+      logUnsolvedUnknowns maybeDecl
+      runApplicationSolver proxy
 
-              metasSolvedDuringInstanceResolution <-
-                trackSolvedMetas (Proxy @builtin) $
-                  runInstanceSolver (Proxy @builtin) (metasSolvedDuringUnification <> metasSolvedDuringApplications)
+      logUnsolvedUnknowns maybeDecl
+      runUnificationSolver proxy
 
-              return (metasSolvedDuringInstanceResolution <> metasSolvedDuringUnification)
+      logUnsolvedUnknowns maybeDecl
+      runInstanceSolver proxy 0
 
-            loopOverConstraints newMetasSolved (loopNumber + 1) updatedDecl
+      logUnsolvedUnknowns maybeDecl
+      runAuxiliarySolver proxy
+
+    tryToUnstick :: (TCM builtin m) => Maybe (Decl builtin) -> m Bool
+    tryToUnstick decl = do
+      -- First try to increase the depth limit for instance search
+      solvedMetas <- logCompilerPass MidDetail "trying to increase the depth for instance search" $ do
+        trackSolvedMetas (Proxy @builtin) $ runInstanceSolver (Proxy @builtin) 1
+
+      if not (MetaSet.null solvedMetas)
+        then return True
+        else do
+          -- Then if that fails try to use default instances
+          success <- logCompilerPass MidDetail "trying to generate a new constraint using instance defaults" $ do
+            addNewInstanceConstraintUsingDefaults decl
+
+          if success
+            then return True
+            else logCompilerPass MidDetail "trying to generate a new constraint using instance defaults" $ do
+              -- Then if that fails try to use default auxiliary instances
+              generateDefaultAuxiliaryConstraint decl
 
 -- | Attempts to solve as many type-class constraints as possible. Takes in
 -- the set of meta-variables solved since the solver was last run and outputs
 -- the set of meta-variables solved during this run.
-runInstanceSolver :: forall builtin m. (TCM builtin m) => Proxy builtin -> MetaSet -> m ()
-runInstanceSolver _ metasSolved = do
-  instanceCandidates <- getInstanceCandidates
-  logCompilerPass MaxDetail ("instance solver run" <> line) $
+runAuxiliarySolver :: forall builtin m. (TCM builtin m) => Proxy builtin -> m ()
+runAuxiliarySolver proxy = do
+  logCompilerPass MaxDetail ("auxiliary solver run" <> line) $
     runConstraintSolver @builtin
-      getActiveInstanceConstraints
-      setInstanceConstraints
-      (solveInstance instanceCandidates)
-      metasSolved
+      proxy
+      getActiveAuxiliaryInstanceConstraints
+      setAuxiliaryInstanceConstraints
+      solveAuxiliaryInstanceConstraint
 
 -------------------------------------------------------------------------------
 -- Unsolved constraint checks
@@ -279,8 +299,8 @@ checkAllMetasSolved proxy = do
           )
       throwError $ TypingError $ UnsolvedMetas proxy metasAndOrigins
 
-logUnsolvedUnknowns :: forall builtin m. (TCM builtin m) => Maybe (Decl builtin) -> Maybe MetaSet -> m ()
-logUnsolvedUnknowns maybeDecl maybeSolvedMetas = do
+logUnsolvedUnknowns :: forall builtin m. (TCM builtin m) => Maybe (Decl builtin) -> m ()
+logUnsolvedUnknowns maybeDecl = do
   logDebugM MaxDetail $ do
     newSubstitution <- getMetaSubstitution (Proxy @builtin)
     updatedSubst <- substMetas newSubstitution
@@ -289,23 +309,17 @@ logUnsolvedUnknowns maybeDecl maybeSolvedMetas = do
     unsolvedMetasDoc <- prettyMetas (Proxy @builtin) unsolvedMetas
     unsolvedConstraints <- getActiveConstraints @builtin
 
-    let constraintsDoc = case maybeSolvedMetas of
-          Nothing ->
-            "unsolved-constraints:"
-              <> line
-              <> indent 2 (prettyVerbose unsolvedConstraints)
-              <> line
-          Just solvedMetas -> do
-            let isUnblocked = not . constraintIsBlocked solvedMetas
-            let (unblockedConstraints, blockedConstraints) = partition isUnblocked unsolvedConstraints
-            "unsolved-blocked-constraints:"
-              <> line
-              <> indent 2 (prettyBlockedConstraints blockedConstraints)
-              <> line
-              <> "unsolved-unblocked-constraints:"
-              <> line
-              <> indent 2 (prettyVerbose unblockedConstraints)
-              <> line
+    isUnblocked <- getIsUnblockedFn
+    let (unblockedConstraints, blockedConstraints) = partition isUnblocked unsolvedConstraints
+    let constraintsDoc =
+          "unsolved-blocked-constraints:"
+            <> line
+            <> indent 2 (prettyBlockedConstraints blockedConstraints)
+            <> line
+            <> "unsolved-unblocked-constraints:"
+            <> line
+            <> indent 2 (prettyVerbose unblockedConstraints)
+            <> line
 
     let declDoc = case maybeDecl of
           Nothing -> ""
