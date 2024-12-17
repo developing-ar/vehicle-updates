@@ -18,6 +18,7 @@ import Vehicle.Data.Builtin.Linearity
 import Vehicle.Data.Builtin.Polarity
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.Interface (getDimsExprs)
+import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
 import Vehicle.Syntax.Parse (ParseError (..))
 import Prelude hiding (pi)
@@ -403,7 +404,7 @@ instance MeaningfulError CompileError where
                 <> "."
                 <> line
                 <> "According to the specification it should be"
-                  <+> dimensionsOf (normalised expectedType)
+                  <+> maybe "?" pretty (dimensionsOf (normalised expectedType))
                 <> "-dimensional"
                   <+> "but was actually found to be"
                   <+> pretty (length actualDims)
@@ -414,8 +415,11 @@ instance MeaningfulError CompileError where
             fix = Just $ datasetDimensionsFix "dimensions" ident file
           }
       where
-        dimensionsOf :: VType Builtin -> Doc a
-        dimensionsOf t = either (const "?") (pretty . length) (getDimsExprs t)
+        dimensionsOf :: VType Builtin -> Maybe Int
+        dimensionsOf t = case t of
+          ITensorType _ dims -> either (const Nothing) (Just . length) (getDimsExprs dims)
+          VBuiltin (BuiltinType ListType) [tElem] -> fmap (+ 1) $ dimensionsOf $ argExpr tElem
+          _ -> Nothing
     DatasetDimensionSizeMismatch (ident, p) file expectedSize actualSize wrongDimensionIndex ->
       UError $
         UserError

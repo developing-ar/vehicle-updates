@@ -119,8 +119,6 @@ checkTensorDimensions dimNo ctx expectedShape actualShape = case (toDimensionsVa
 
 checkTensorDimension :: (MonadExpandResources m) => Int -> ParseContext m a -> VType Builtin -> Int -> m ()
 checkTensorDimension dimNo ctx@(decl, file, _, _, _) expectedDimValue actualDim = do
-  logDebug MaxDetail $ prettyVerbose expectedDimValue
-  logDebug MaxDetail $ pretty actualDim
   case toNatValue expectedDimValue of
     VNatLiteral expectedDim
       | expectedDim == actualDim -> return ()
