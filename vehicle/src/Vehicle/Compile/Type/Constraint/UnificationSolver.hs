@@ -157,7 +157,7 @@ unification info@(constraint, _) = \case
     | v1 == v2 -> solveSpine info spine1 spine2
   VBuiltin b1 spine1 :~: VBuiltin b2 spine2
     | b1 == b2 -> solveSpine info spine1 spine2
-    | isConstructor b1 && isConstructor b2 -> return $ HardFailure [constraint]
+    | not (couldBeEqual b1 b2) -> return $ HardFailure [constraint]
   VPi binder1 closure1 :~: VPi binder2 closure2
     | visibilityMatches binder1 binder2 -> solveClosure info (binder1, closure1) (binder2, closure2)
   VLam binder1 closure1 :~: VLam binder2 closure2 ->

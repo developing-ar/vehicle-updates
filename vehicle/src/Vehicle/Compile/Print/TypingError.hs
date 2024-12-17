@@ -403,31 +403,34 @@ runNorm :: SilentLoggerT Identity b -> b
 runNorm = fst . runIdentity . runSilentLoggerT
 
 unsupportedAnnotationTypeDescription ::
+  forall builtin a.
   (Eq builtin, PrintableBuiltin builtin) =>
   Doc a ->
   Identifier ->
   GluedType builtin ->
   Doc a
-unsupportedAnnotationTypeDescription annotation ident resourceType =
+unsupportedAnnotationTypeDescription annotation ident resourceType = do
+  let unreducedResourceType = unnormalised resourceType
+  let reducedResourceType = (unnormalise 0 (normalised resourceType) :: Expr builtin)
+  let reducedResourceTypeDoc = prettyFriendlyEmptyCtx reducedResourceType
+  let unreducedResourceTypeDoc = prettyFriendlyEmptyCtx unreducedResourceType
+
   "The type of"
     <+> annotation
     <+> quotePretty (nameOf ident :: Text)
     <> ":"
     <> line
-    <> indent 2 (prettyFriendlyEmptyCtx unreducedResourceType)
+    <> indent 2 unreducedResourceTypeDoc
     <> line
-    <> ( if reducedResourceType == unreducedResourceType
+    <> ( if layoutAsString reducedResourceTypeDoc == layoutAsString unreducedResourceTypeDoc
            then ""
            else
              "which reduces to:"
                <> line
-               <> indent 2 (prettyFriendlyEmptyCtx reducedResourceType)
+               <> indent 2 reducedResourceTypeDoc
                <> line
        )
     <> "is not supported"
-  where
-    unreducedResourceType = unnormalised resourceType
-    reducedResourceType = unnormalise 0 (normalised resourceType)
 
 prettyIdentName :: Identifier -> Doc a
 prettyIdentName ident = quotePretty (nameOf ident :: Name)

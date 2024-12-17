@@ -8,7 +8,8 @@ import Vehicle.Compile.Type.Builtin.Polarity (isPolarityBuiltinConstructor, type
 import Vehicle.Compile.Type.Builtin.Standard (isStandardConstructor, typeStandardBuiltin)
 import Vehicle.Data.Builtin.Linearity (LinearityBuiltin)
 import Vehicle.Data.Builtin.Polarity (PolarityBuiltin)
-import Vehicle.Data.Builtin.Standard (Builtin)
+import Vehicle.Data.Builtin.Standard (Builtin (..), BuiltinFunction (..))
+import Vehicle.Syntax.Builtin (BuiltinType (..))
 
 class (PrintableBuiltin builtin) => TypableBuiltin builtin where
   -- | Construct a type for the builtin
@@ -18,20 +19,26 @@ class (PrintableBuiltin builtin) => TypableBuiltin builtin where
   -- Efficiency hack for polarity/linearity subsystems.
   useDependentMetas :: Proxy builtin -> Bool
 
-  -- | Is the builtin a constructor?
-  isConstructor :: builtin -> Bool
+  -- | Could the constructors end up the same if applied to some
+  -- suitable set of arguments.
+  couldBeEqual :: builtin -> builtin -> Bool
 
 instance TypableBuiltin LinearityBuiltin where
   typeBuiltin = typeLinearityBuiltin
   useDependentMetas _ = False
-  isConstructor = isLinearityBuiltinConstructor
+  couldBeEqual b1 b2 =
+    not (isLinearityBuiltinConstructor b1 && isLinearityBuiltinConstructor b2)
 
 instance TypableBuiltin PolarityBuiltin where
   typeBuiltin = typePolarityBuiltin
   useDependentMetas _ = False
-  isConstructor = isPolarityBuiltinConstructor
+  couldBeEqual b1 b2 =
+    not (isPolarityBuiltinConstructor b1 && isPolarityBuiltinConstructor b2)
 
 instance TypableBuiltin Builtin where
   typeBuiltin = typeStandardBuiltin
   useDependentMetas _ = True
-  isConstructor = isStandardConstructor
+  couldBeEqual b1 b2 =
+    not (isStandardConstructor b1 && isStandardConstructor b2)
+      && not (b1 == BuiltinFunction FlattenTensorType && b2 == BuiltinType ListType)
+      && not (b2 == BuiltinFunction FlattenTensorType && b1 == BuiltinType ListType)

@@ -107,7 +107,6 @@ parseTensor ::
   m (Value Builtin)
 parseTensor ctx actualDims elems expectedElemType expectedDims = do
   checkTensorDimensions 0 ctx expectedDims actualDims
-  logDebug MaxDetail "Hit4"
   parseElements ctx actualDims elems expectedElemType
 
 checkTensorDimensions :: (MonadExpandResources m) => Int -> ParseContext m a -> VType Builtin -> TensorShape -> m ()
@@ -115,9 +114,7 @@ checkTensorDimensions dimNo ctx expectedShape actualShape = case (toDimensionsVa
   (VDimsNil, []) -> return ()
   (VDimsCons dim dims, d : ds) -> do
     checkTensorDimension dimNo ctx dim d
-    logDebug MaxDetail "Hit2"
     checkTensorDimensions (dimNo + 1) ctx dims ds
-    logDebug MaxDetail "Hit3"
   _ -> dimensionMismatchError ctx
 
 checkTensorDimension :: (MonadExpandResources m) => Int -> ParseContext m a -> VType Builtin -> Int -> m ()
@@ -128,7 +125,6 @@ checkTensorDimension dimNo ctx@(decl, file, _, _, _) expectedDimValue actualDim 
     VNatLiteral expectedDim
       | expectedDim == actualDim -> return ()
       | otherwise -> do
-          logDebug MaxDetail "Hit"
           throwError $ DatasetDimensionSizeMismatch decl file expectedDim actualDim dimNo
     VNatParameter dimIdent -> do
       implicitParams <- getInferableParameterContext

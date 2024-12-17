@@ -3,8 +3,8 @@ module Vehicle.Compile.Simplify
   )
 where
 
-import Data.List.NonEmpty (NonEmpty (..), toList)
-import Data.List.NonEmpty qualified as NonEmpty (filter)
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.List.NonEmpty qualified as NonEmpty (filter, reverse, toList)
 import Data.Text qualified as Text
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Standard ()
@@ -33,14 +33,13 @@ instance Simplify Decl where
 instance Simplify Expr where
   uninsert = mapApp $ \fun args -> do
     let fun' = uninsert fun
-    let args' = simplifyArgs args
     -- Remove automatically inserted cast functions
-    removeInsertedCasts fun' args'
+    removeInsertedCasts fun' args
 
   shortenVec = mapApp $ \fun args ->
     case (fun, args) of
       (Builtin p (BuiltinFunction StackTensor), (argExpr -> (Builtin _ (BuiltinConstructor (NatLiteral n)))) :| _) ->
-        case getHeadMidTail (drop (length args - n) $ toList args) of
+        case getHeadMidTail (drop (length args - n) $ NonEmpty.toList args) of
           Just (firstArg, numberOfMiddleArgs, lastArg)
             | numberOfMiddleArgs > 3 ->
                 normAppList
@@ -82,6 +81,22 @@ mapApp f expr = case expr of
   Lam p binder body -> Lam p (fmap (mapApp f) binder) (mapApp f body)
   App fun args -> f fun args
 
+removeInsertedCasts :: Expr -> NonEmpty Arg -> Expr
+removeInsertedCasts fun args
+  | null args = fun
+  | otherwise = case fun of
+      Builtin p b -> case b of
+        BuiltinFunction FromNat {} -> argExpr $ last $ simplifyArgs args
+        BuiltinFunction FromRat {} -> argExpr $ last $ simplifyArgs args
+        BuiltinFunction FlattenTensorType -> normAppList (Builtin p (BuiltinType TensorType)) $ simplifyArgs args
+        BuiltinFunction StackTensor -> normAppList (Builtin p (TypeClassOp VecLiteralTC)) $ simplifyArgs args
+        BuiltinConstructor Cons -> delabList fun args
+        BuiltinType TensorType -> delabTensorType $ simplifyArgs args
+        TypeClassOp FromNatTC {} -> argExpr $ last $ simplifyArgs args
+        TypeClassOp FromRatTC {} -> argExpr $ last $ simplifyArgs args
+        _ -> normAppList fun $ simplifyArgs args
+      _ -> normAppList fun $ simplifyArgs args
+
 simplifyArgs :: NonEmpty Arg -> [Arg]
 simplifyArgs = fmap uninsert . NonEmpty.filter (not . wasInserted)
 
@@ -90,20 +105,6 @@ wasInserted arg = case visibilityOf arg of
   Implicit True -> True
   Instance True -> True
   _ -> False
-
-removeInsertedCasts :: Expr -> [Arg] -> Expr
-removeInsertedCasts fun args
-  | null args = fun
-  | otherwise = case fun of
-      Builtin p b -> case b of
-        BuiltinFunction FromNat {} -> argExpr $ last args
-        BuiltinFunction FromRat {} -> argExpr $ last args
-        BuiltinFunction FlattenTensorType -> normAppList (Builtin p (BuiltinType TensorType)) args
-        BuiltinType TensorType -> delabTensorType args
-        TypeClassOp FromNatTC {} -> argExpr $ last args
-        TypeClassOp FromRatTC {} -> argExpr $ last args
-        _ -> normAppList fun args
-      _ -> normAppList fun args
 
 delabTensorType :: [Arg] -> Expr
 delabTensorType = \case
@@ -115,3 +116,16 @@ delabTensorType = \case
       Builtin _ (BuiltinConstructor Nil) -> True
       App (Builtin _ (BuiltinConstructor Nil)) _ -> True
       _ -> False
+
+delabList :: Expr -> NonEmpty Arg -> Expr
+delabList fun args = case go (App fun args) of
+  Nothing -> normAppList fun $ simplifyArgs args
+  Just xs -> normAppList (Builtin mempty (TypeClassOp VecLiteralTC)) $ fmap uninsert xs
+  where
+    go :: Expr -> Maybe [Arg]
+    go = \case
+      Builtin _ (BuiltinConstructor Nil) -> Just []
+      App (Builtin _ (BuiltinConstructor Nil)) _ -> Just []
+      App (Builtin _ (BuiltinConstructor Cons)) (NonEmpty.reverse -> xs :| x : _) ->
+        (x :) <$> go (argExpr xs)
+      _ -> Nothing
