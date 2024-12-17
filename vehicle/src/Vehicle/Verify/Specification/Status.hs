@@ -2,7 +2,6 @@ module Vehicle.Verify.Specification.Status where
 
 import Data.List.Split (chunksOf)
 import Data.Set (Set)
-import Data.Text (Text)
 import System.Console.ANSI (Color (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Standard
@@ -56,32 +55,16 @@ instance IsVerified PropertyStatus where
       NonTrivial (negated, result) -> evaluateQuery negated result
     PropertyErrored {} -> False
 
-instance Pretty PropertyStatus where
-  pretty propertyStatus = do
-    let (verified, evidenceText) = case propertyStatus of
-          PropertyCompleted maybeResult -> do
-            case maybeResult of
-              Trivial status -> (status, "(trivial)")
-              NonTrivial (negated, status) -> do
-                let witnessText = if negated then "counterexample" else "witness"
-                case status of
-                  UnSAT -> (negated, "proved no" <+> witnessText <+> "exists")
-                  SAT Nothing -> (not negated, "no" <> witnessText <+> "found")
-                  SAT Just {} -> (not negated, witnessText <+> "found")
-          PropertyErrored (_, err) -> (False, if isTimeoutError err then "verifier timed out" else "verifier errored")
-    pretty (statusSymbol verified) <+> "-" <+> evidenceText
-
 --------------------------------------------------------------------------------
 -- Verification status of a multi property
 
-statusSymbol :: Bool -> String
+statusSymbol :: Maybe Bool -> String
 statusSymbol verified = do
-  let (colour, symbol) = if verified then (Green, "🗸") else (Red, "✗")
+  let (colour, symbol) = case verified of
+        Just True -> (Green, "🗸")
+        Nothing -> (Yellow, "?")
+        Just False -> (Red, "✗")
   setTextColour colour symbol
-
-prettyNameAndStatus :: Text -> Bool -> Doc a
-prettyNameAndStatus name verified = do
-  pretty (statusSymbol verified) <+> pretty name
 
 prettyUserVariableAssignment :: (Name, RationalTensor) -> Doc a
 prettyUserVariableAssignment (var, variableValue) =

@@ -1,5 +1,9 @@
 # Changelog for Vehicle
 
+## Version 0.16.1
+
+* Fixed detection of Marabou timeouts.
+
 ## Version 0.16
 
 * Decreased type-checking time by ~50%

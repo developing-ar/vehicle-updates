@@ -1,3 +1,5 @@
 Verifying properties:
-  p1 [.............................................................] 0/1 queries    result: [91m✗[m - verifier timed out
-  p2 [.............................................................] 0/1 queries    result: [91m✗[m - verifier timed out
+  p1 [.............................................................] 0/1 queries
+    result: [93m?[m - TestVerifier timed out
+  p2 [.............................................................] 0/1 queries
+    result: [93m?[m - TestVerifier timed out

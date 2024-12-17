@@ -447,7 +447,6 @@ verifyQuery queryMetaData@(QueryMetaData queryAddress metaNetwork reconstruction
     (verifierSettings, verificationCache, progressBar) <- ask
     let queryFile = calculateQueryFileName verificationCache queryAddress
 
-    tell (Sum 1)
     errorOrResult <- runExceptT $ do
       result <- invokeVerifier verifierSettings metaNetwork queryFile
       liftIO $ incProgress progressBar 1
@@ -467,7 +466,9 @@ verifyQuery queryMetaData@(QueryMetaData queryAddress metaNetwork reconstruction
 
     case errorOrResult of
       Left err -> throwError (queryMetaData, err)
-      Right result -> return result
+      Right result -> do
+        tell (Sum 1)
+        return result
 
 invokeVerifier ::
   (MonadVerifyQuery m) =>
@@ -575,8 +576,28 @@ outputPropertyResult ::
   m ()
 outputPropertyResult verifierSettings verificationCache address result = do
   let VerifierSettings {..} = verifierSettings
-  VIO.writeStdoutLn (layoutAsText $ "    result: " <> pretty result)
+
+  -- Write the result to the cache
   writePropertyResult verificationCache address (isVerified result)
+
+  -- Print result to command line
+  let verifierName = pretty (verifierID verifier)
+  let (verified, evidenceText) = case result of
+        PropertyCompleted maybeResult -> do
+          case maybeResult of
+            Trivial status -> (Just status, "(trivial)")
+            NonTrivial (negated, status) -> do
+              let witnessText = if negated then "counterexample" else "witness"
+              case status of
+                UnSAT -> (Just negated, verifierName <+> "proved no" <+> witnessText <+> "exists")
+                SAT Nothing -> (Just (not negated), verifierName <+> "found no" <> witnessText)
+                SAT Just {} -> (Just (not negated), verifierName <+> "found a" <+> witnessText)
+        PropertyErrored (_, err) -> do
+          let cause = if isTimeoutError err then "timed out" else "errored"
+          (Nothing, verifierName <+> cause)
+  VIO.writeStdoutLn (layoutAsText $ "    result: " <> pretty (statusSymbol verified) <+> "-" <+> evidenceText)
+
+  -- Output any additional information
   case result of
     PropertyCompleted status -> case status of
       NonTrivial (_, SAT (Just (UserVariableAssignment assignments))) -> do

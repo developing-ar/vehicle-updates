@@ -36,11 +36,13 @@ prepareMarabouArgs metaNetwork queryFile = case metaNetwork of
 parseMarabouOutput :: ParseVerifierOutput
 parseMarabouOutput output = do
   let outputLines = fmap Text.pack (lines output)
-  let resultIndex = findIndex (\v -> v == "sat" || v == "unsat" || v == "timeout") outputLines
+  let resultIndex = findIndex (\v -> v == "sat" || v == "unsat" || v == "Timeout") outputLines
   case resultIndex of
-    Nothing -> throwError $ VerifierOutputMalformed "Cannot find 'sat' or 'unsat'"
+    Nothing -> do
+      logDebug MinDetail $ pretty output
+      throwError $ VerifierOutputMalformed "Cannot find 'sat', 'unsat' or 'timeout'"
     Just i
-      | outputLines !! i == "timeout" -> throwError VerifierTimedOut
+      | outputLines !! i == "Timeout" -> throwError VerifierTimedOut
       | outputLines !! i == "unsat" -> return UnSAT
       | otherwise -> do
           let assignmentOutput = drop (i + 1) outputLines

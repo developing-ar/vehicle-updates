@@ -25,7 +25,7 @@ data VerifierID
 instance Show VerifierID where
   show = \case
     Marabou -> "Marabou"
-    TestVerifier -> "Test"
+    TestVerifier -> "TestVerifier"
 
 instance Pretty VerifierID where
   pretty = pretty . show
