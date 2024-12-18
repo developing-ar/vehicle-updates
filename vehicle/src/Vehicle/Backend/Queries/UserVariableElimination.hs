@@ -57,7 +57,9 @@ eliminateUserVariables expr = case toBoolValue expr of
   ----------------
   VBoolTensorLiteral b -> compileTrivial b
   VQuantifyRatTensor Exists dims binder closure -> compileQuantifiedQuerySet False dims binder closure
-  VQuantifyRatTensor Forall dims binder closure -> compileQuantifiedQuerySet True dims binder (notClosure closure)
+  VQuantifyRatTensor Forall dims binder closure -> do
+    let negatedClosure = notClosure 0 dims closure
+    compileQuantifiedQuerySet True dims binder negatedClosure
   ---------------------
   -- Recursive cases --
   ---------------------
@@ -77,7 +79,7 @@ eliminateUserVariables expr = case toBoolValue expr of
   VEqualsNat {} -> eliminateUserVariables =<< unblock expr
   VOrderIndex {} -> eliminateUserVariables =<< unblock expr
   VOrderNat {} -> eliminateUserVariables =<< unblock expr
-  VNot {} -> eliminateUserVariables =<< lowerNot unblock expr
+  VNot {} -> eliminateUserVariables =<< lowerNot 0 unblock expr
   -----------------
   -- Mixed cases --
   -----------------
@@ -160,7 +162,9 @@ compileBoolExpr expr = case toBoolValue expr of
   ---------------------
   -- Recursive cases --
   ---------------------
-  VNot _dims e -> compileBoolExpr =<< lowerNot unblockBoolExpr e
+  VNot _dims e -> do
+    lv <- boundCtxLv <$> getGlobalNamedBoundCtx
+    compileBoolExpr =<< lowerNot lv unblockBoolExpr e
   VBoolIf _dims c x y -> compileBoolExpr =<< unfoldIf c x y
   VEqualsRatTensor Neq dims xs ys -> compileBoolExpr =<< eliminateNotEqualRatTensor dims xs ys
   VAnd _dims x y -> andTrivial andPartitions <$> compileBoolExpr x <*> compileBoolExpr y

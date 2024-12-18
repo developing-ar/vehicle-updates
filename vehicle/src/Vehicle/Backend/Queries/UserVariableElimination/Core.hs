@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-{-# HLINT ignore "Use fewer imports" #-}
 module Vehicle.Backend.Queries.UserVariableElimination.Core where
 
 import Control.DeepSeq (NFData)

@@ -243,7 +243,7 @@ typeOfAt =
   forAll "A" type0 $ \tElem ->
     forAllDim Irrelevant $ \d ->
       forAllDims $ \ds ->
-        tTensor tElem (dimCons d ds) ~> tIndex d ~> tTensor tElem ds
+        tFlattenTensor tElem (dimCons d ds) ~> tIndex d ~> tFlattenTensor tElem ds
 
 typeOfMap :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin
 typeOfMap f =
@@ -282,7 +282,7 @@ typeOfStackTensor :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfStackTensor =
   forAllDim Relevant $ \d ->
     forAllDims $ \ds ->
-      typeOfVecLiteralCast d (explLam "A" type0 $ \t -> tTensor t (dimCons d ds))
+      typeOfVecLiteralCast d (explLam "A" type0 $ \t -> tFlattenTensor t (dimCons d ds))
 
 typeOfFromVectorToList :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfFromVectorToList =
@@ -297,4 +297,4 @@ typeOfForeach =
   forAll "A" type0 $ \tElem ->
     forAll "d" tDim $ \d ->
       forAllDims $ \ds ->
-        (tIndex d ~> tTensor tElem ds) ~> tTensor tElem (dimCons d ds)
+        (tIndex d ~> tFlattenTensor tElem ds) ~> tFlattenTensor tElem (dimCons d ds)

@@ -21,11 +21,10 @@ import Vehicle.Compile.Context.Bound.Class (MonadBoundContext (..))
 import Vehicle.Compile.Context.Free.Class (MonadFreeContext (..), getFreeEnv)
 import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, getBinderContext)
 import Vehicle.Compile.Normalise.Builtin
-    ( NormalisableBuiltin(..),
-      filterOutIrrelevantArgs,
-      findInstanceArg,
-      NormalisableBuiltin(..),
-      filterOutIrrelevantArgs )
+  ( NormalisableBuiltin (..),
+    filterOutIrrelevantArgs,
+    findInstanceArg,
+  )
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
@@ -223,7 +222,6 @@ showExit _boundEnv result = do
   -- logDebug MidDetail $ "nbe-exit" <+> prettyFriendly (WithContext result (fmap fst boundEnv))
   return ()
 -}
-
 showApp :: (MonadNorm builtin m) => Value builtin -> Spine builtin -> m ()
 showApp _ _ = return ()
 

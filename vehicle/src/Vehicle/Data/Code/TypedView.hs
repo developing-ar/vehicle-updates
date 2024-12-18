@@ -1,5 +1,6 @@
 module Vehicle.Data.Code.TypedView where
 
+import GHC.Stack (HasCallStack)
 import Vehicle.Compile.Print (prettyVerbose)
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.Interface
@@ -57,7 +58,7 @@ data TypeValue
   | VPiType (VBinder Builtin) (Closure Builtin)
   | VBoundTypeVar Lv (Spine Builtin)
 
-toTypeValue :: Value Builtin -> TypeValue
+toTypeValue :: (HasCallStack) => Value Builtin -> TypeValue
 toTypeValue t = case t of
   VPi binder value -> VPiType binder value
   VBoundVar lv spine -> VBoundTypeVar lv spine
@@ -86,7 +87,7 @@ data IndexValue
   | VIndexBoundVar Lv (Spine Builtin)
   | VIndexIf (Value Builtin) (Value Builtin) (Value Builtin)
 
-toIndexValue :: Value Builtin -> IndexValue
+toIndexValue :: (HasCallStack) => Value Builtin -> IndexValue
 toIndexValue = \case
   IIndexLiteral i -> VIndexLiteral i
   VBoundVar v spine -> VIndexBoundVar v spine
@@ -105,7 +106,7 @@ data NatValue
   | VNatMul (Value Builtin) (Value Builtin)
   | VNatParameter Identifier
 
-toNatValue :: Value Builtin -> NatValue
+toNatValue :: (HasCallStack) => Value Builtin -> NatValue
 toNatValue = \case
   INatLiteral i -> VNatLiteral i
   VBoundVar v spine -> VNatBoundVar v spine
@@ -148,7 +149,7 @@ data BooleanTensorValue
   | VBoolStackTensor (VArg Builtin) (VArg Builtin) (Spine Builtin)
   | VBoolForeach (VArg Builtin) (VArg Builtin) (Value Builtin)
 
-toBoolValue :: Value Builtin -> BooleanTensorValue
+toBoolValue :: (HasCallStack) => Value Builtin -> BooleanTensorValue
 toBoolValue (VBuiltin b args) = case b of
   BuiltinConstructor c -> case (c, args) of
     (BoolTensorLiteral t, []) -> VBoolTensorLiteral t
@@ -224,14 +225,14 @@ data RatTensorValue
   | VRatAt (VArg Builtin) (VArg Builtin) (Value Builtin) (Value Builtin)
   | VRatForeach (VArg Builtin) (VArg Builtin) (Value Builtin)
 
-toRatTensorValue :: Value Builtin -> RatTensorValue
-toRatTensorValue = \case
+toRatTensorValue :: (HasCallStack) => Value Builtin -> RatTensorValue
+toRatTensorValue expr = case expr of
   VBoundVar lv [] -> VRatTensorVar lv
   VFreeVar n spine -> VNetworkApp n spine
   VBuiltin b args -> case b of
     BuiltinConstructor c -> case (c, args) of
       (RatTensorLiteral t, []) -> VRatTensorLiteral t
-      _ -> developerError "ill-typed RatTensor expression"
+      _ -> illTyped
     BuiltinFunction f -> case (f, args) of
       (Neg NegRatTensor, [dims, x]) -> VNegRatTensor dims (argExpr x)
       (Add AddRatTensor, [dims, x, y]) -> VAddRatTensor dims (argExpr x) (argExpr y)
@@ -249,9 +250,11 @@ toRatTensorValue = \case
       (StackTensor, d : ds : (argExpr -> IRatType) : xs) -> VRatStackTensor d ds xs
       (At, [argExpr -> IRatType, d, ds, argExpr -> xs, argExpr -> i]) -> VRatAt d ds xs i
       (Foreach, [argExpr -> IRatType, d, ds, argExpr -> fn]) -> VRatForeach d ds fn
-      _ -> developerError "ill-typed RatTensor expression"
-    _ -> developerError "ill-typed RatTensor expression"
-  _ -> developerError "ill-typed RatTensor expression"
+      _ -> illTyped
+    _ -> illTyped
+  _ -> illTyped
+  where
+    illTyped = developerError $ "ill-typed RatTensor expression:" <+> prettyVerbose expr
 
 fromRatTensorValue :: RatTensorValue -> Value Builtin
 fromRatTensorValue = \case
