@@ -186,16 +186,20 @@ allInstances =
           ----------------
           ( forAllDim Irrelevant $ \d ->
               forAllDims $ \ds ->
-                hasVecLits (lamType $ \tElem -> builtin (TypeClassOp TensorTypeTC) @@ [tElem, dimCons d ds]) d,
+                forAllTypes $ \t ->
+                  hasVecLits (tTensor t (dimCons d ds)) (tTensor t ds) d,
             lamDim $ \d ->
               lamDims $ \ds ->
-                builtinFunction StackTensor @@@ [d] .@@@ [ds],
+                implLam "t" type0 $ \t ->
+                  builtinFunction StackTensor @@@ [d] .@@@ [ds] @@@ [t],
             False
           ),
           ( forAllDim Irrelevant $ \d ->
-              hasVecLits tListRaw d,
+              forAllTypes $ \t ->
+                hasVecLits (tList t) t d,
             lamDim $ \d ->
-              builtinFunction FromVectorToList @@@ [d],
+              implLam "t" type0 $ \t ->
+                builtinFunction FromVectorToList @@@ [d, t],
             False
           ),
           ------------------

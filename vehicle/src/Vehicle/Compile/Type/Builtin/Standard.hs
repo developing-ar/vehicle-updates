@@ -270,28 +270,30 @@ typeOfFromNat t = forAllExpl "n" tNat $ \n -> natInDomainConstraint n t .~~~> t
 typeOfFromRat :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin
 typeOfFromRat t = tRatTensor dimNil ~> t
 
-typeOfVecLiteralCast :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-typeOfVecLiteralCast d f =
-  forAllTypes $ \tElem ->
-    iterate type0 (\fn t -> tElem ~> fn @@ [t]) d (f @@ [tElem])
+typeOfVecLiteralCast :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
+typeOfVecLiteralCast tCont tElem d =
+  iterate type0 (\fn t -> tElem ~> fn @@ [t]) d tCont
 
 typeOfVectorLiteral :: (BuiltinHasStandardTypeClasses builtin, HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfVectorLiteral =
-  forAll "f" (type0 ~> type0) $ \f ->
-    forAllDim Relevant $ \d ->
-      hasVecLits f d
-        ~~~> typeOfVecLiteralCast d f
+  forAll "tCont" type0 $ \tCont ->
+    forAll "tElem" type0 $ \tElem ->
+      forAllDim Relevant $ \d ->
+        hasVecLits tCont tElem d
+          ~~~> typeOfVecLiteralCast tCont tElem d
 
 typeOfStackTensor :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfStackTensor =
   forAllDim Relevant $ \d ->
     forAllDims $ \ds ->
-      typeOfVecLiteralCast d (explLam "A" type0 $ \t -> tTensor t (dimCons d ds))
+      forAllTypes $ \t ->
+        typeOfVecLiteralCast (tTensor t (dimCons d ds)) (tTensor t ds) d
 
 typeOfFromVectorToList :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfFromVectorToList =
   forAllDim Relevant $ \d ->
-    typeOfVecLiteralCast d (explLam "A" type0 $ \t -> tList t)
+    forAllTypes $ \t ->
+      typeOfVecLiteralCast (tList t) t d
 
 typeOfNatInDomainConstraint :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfNatInDomainConstraint = forAll "A" type0 $ \t -> tNat ~> t ~> type0

@@ -159,8 +159,8 @@ hasNatLits t = typeClass HasNatLits [t]
 hasRatLits :: (BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin
 hasRatLits t = typeClass HasRatLits [t]
 
-hasVecLits :: (BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-hasVecLits t d = typeClass HasVecLits [t, d]
+hasVecLits :: (BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
+hasVecLits tCont tElem d = typeClass HasVecLits [tCont, tElem, d]
 
 isTensorType :: (BuiltinHasStandardData builtin, BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
 isTensorType tElem ds = builtinTypeClass IsTensorType @@ [tElem] .@@ [ds]

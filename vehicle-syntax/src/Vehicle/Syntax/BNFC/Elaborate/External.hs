@@ -530,10 +530,11 @@ app fun argExprs = V.normAppList fun args
 elabVecLiteral :: (MonadElab m, IsToken token) => token -> [B.Expr] -> m V.Expr
 elabVecLiteral tk xs = do
   p <- mkProvenance tk
-  let t = V.Arg p (V.Implicit True) V.Relevant (V.mkHole p "container")
+  let tCont = V.Arg p (V.Implicit True) V.Relevant (V.mkHole p "tCont")
+  let tElem = V.Arg p (V.Implicit True) V.Relevant (V.mkHole p "tElem")
   let n = V.Arg p (V.Implicit True) V.Relevant (V.Builtin p (V.BuiltinConstructor $ V.NatLiteral (length xs)))
   xs' <- fmap (mkArg V.Explicit) <$> traverse elabExpr xs
-  return $ V.normAppList (V.Builtin p (V.TypeClassOp V.VecLiteralTC)) (t : n : xs')
+  return $ V.normAppList (V.Builtin p (V.TypeClassOp V.VecLiteralTC)) (tCont : tElem : n : xs')
 
 elabApp :: (MonadElab m) => B.Expr -> B.Arg -> m V.Expr
 elabApp fun arg = do
