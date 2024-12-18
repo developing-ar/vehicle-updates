@@ -122,7 +122,6 @@ data BuiltinFunction
     FromNat FromNatDomain
   | FromRat FromRatDomain
   | FromVectorToList
-  | FlattenTensorType
   | -- Generic tensor operations
     At
   | StackTensor
@@ -175,7 +174,6 @@ instance Pretty BuiltinFunction where
     At -> "!"
     StackTensor {} -> "stack"
     ConstTensor -> "const"
-    FlattenTensorType -> "FlattenTensorType"
 
 -- | Builtins in the Vehicle language
 data Builtin

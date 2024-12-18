@@ -88,12 +88,12 @@ removeInsertedCasts fun args
       Builtin p b -> case b of
         BuiltinFunction FromNat {} -> argExpr $ last $ simplifyArgs args
         BuiltinFunction FromRat {} -> argExpr $ last $ simplifyArgs args
-        BuiltinFunction FlattenTensorType -> normAppList (Builtin p (BuiltinType TensorType)) $ simplifyArgs args
         BuiltinFunction StackTensor -> normAppList (Builtin p (TypeClassOp VecLiteralTC)) $ simplifyArgs args
         BuiltinConstructor Cons -> delabList fun args
         BuiltinType TensorType -> delabTensorType $ simplifyArgs args
         TypeClassOp FromNatTC {} -> argExpr $ last $ simplifyArgs args
         TypeClassOp FromRatTC {} -> argExpr $ last $ simplifyArgs args
+        TypeClassOp TensorTypeTC -> normAppList (Builtin p (BuiltinType TensorType)) $ simplifyArgs args
         _ -> normAppList fun $ simplifyArgs args
       _ -> normAppList fun $ simplifyArgs args
 

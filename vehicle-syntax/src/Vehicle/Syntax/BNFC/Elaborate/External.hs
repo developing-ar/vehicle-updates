@@ -357,7 +357,7 @@ elabExpr expr = case expr of
   B.Rat tk -> castToTensorType V.RatType tk
   B.Nat tk -> builtinType V.NatType tk []
   B.List tk -> builtinType V.ListType tk []
-  B.Tensor tk -> builtinFunction V.FlattenTensorType tk []
+  B.Tensor tk -> builtinTypeClassOp V.TensorTypeTC tk []
   B.Nil tk -> constructor V.Nil tk []
   B.Cons e1 tk e2 -> constructor V.Cons tk [e1, e2]
   B.Not tk e -> builtinFunction V.Not tk [e]
@@ -389,6 +389,7 @@ elabExpr expr = case expr of
   B.HasMul tk -> builtinTypeClass V.HasMul tk []
   B.HasMap tk -> builtinTypeClass V.HasMap tk []
   B.HasFold tk -> builtinTypeClass V.HasFold tk []
+  B.IsTensorType tk -> builtinTypeClass V.IsTensorType tk []
   -- NOTE: we reverse the arguments to make it well-typed.
   B.Ann e tk t -> elabExpr (B.App (B.App (B.Var (B.Name (tkLocation tk, "typeAnn"))) (B.ExplicitArg t)) (B.ExplicitArg e))
 

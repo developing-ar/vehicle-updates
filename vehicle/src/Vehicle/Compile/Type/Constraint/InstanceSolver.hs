@@ -8,12 +8,11 @@ import Control.Monad.Except (MonadError (..))
 import Data.Either (partitionEithers)
 import Data.Hashable (Hashable)
 import Data.Proxy (Proxy (..))
-import Prettyprinter (list)
 import Vehicle.Compile.Context.Free (getFreeEnv)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Normalise.NBE (normaliseInEnv)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal, prettyFriendly)
+import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal)
 import Vehicle.Compile.Print.Error (MeaningfulError (..))
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Constraint.UnificationSolver (runUnificationSolver)
@@ -64,7 +63,7 @@ solveInstanceConstraint ::
   m ()
 solveInstanceConstraint depth constraint = do
   normConstraint <- substMetas constraint
-  logDebug MaxDetail $ "Forced:" <+> prettyFriendly normConstraint
+  logDebug MaxDetail $ "Forced:" <+> prettyExternal normConstraint
 
   let goal = parseInstanceGoal normConstraint
   database <- getInstanceCandidates
@@ -90,13 +89,14 @@ solveInstanceGoal constraint rawBuiltinCandidates depth goal = do
     line
       <> "Builtin candidates:"
       <> line
-      <> indent 2 (list (fmap prettyCandidate builtinCandidates))
+      <> indent 2 (prettyMultiLineList (fmap prettyCandidate builtinCandidates))
       <> line
       <> "Context candidates:"
       <> line
-      <> indent 2 (list (fmap prettyCandidate candidatesInBoundCtx))
+      <> indent 2 (prettyMultiLineList (fmap prettyCandidate candidatesInBoundCtx))
       <> line
       <> "Depth:" <+> pretty depth
+      <> line
 
   -- Try all candidates
   (unsuccessfulCandidates, successfulCandidates) <-
@@ -211,8 +211,6 @@ acceptCandidate (WithContext Resolve {..} constraintCtx) goal candidate = do
   -- Add the solution of the type-class as well (if we had first class records
   -- then we wouldn't need to do this manually).
   instantiateTypeClassSolution extendedGoalInfo instanceSolutionMeta finalCandidateSolution extendedGoalCtx
-
-  addInstanceConstraints recInstanceConstraints
 
 instantiateTypeClassSolution ::
   forall builtin m.

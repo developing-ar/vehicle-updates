@@ -157,7 +157,7 @@ unification info@(constraint, _) = \case
     | v1 == v2 -> solveSpine info spine1 spine2
   VBuiltin b1 spine1 :~: VBuiltin b2 spine2
     | b1 == b2 -> solveSpine info spine1 spine2
-    | not (couldBeEqual b1 b2) -> return $ HardFailure [constraint]
+    | not (couldBeEqual b1 b2) -> hardFail constraint
   VPi binder1 closure1 :~: VPi binder2 closure2
     | visibilityMatches binder1 binder2 -> solveClosure info (binder1, closure1) (binder2, closure2)
   VLam binder1 closure1 :~: VLam binder2 closure2 ->
@@ -192,7 +192,7 @@ solveArg ::
   (VArg builtin, VArg builtin) ->
   m (UnificationResult builtin)
 solveArg info@(constraint, _) (arg1, arg2)
-  | not (visibilityMatches arg1 arg2) = return $ HardFailure [constraint]
+  | not (visibilityMatches arg1 arg2) = hardFail constraint
   -- Don't unify instances, they should be uniquely determined by the type.
   | isInstance arg1 = return Success
   | otherwise = subUnify info (argExpr arg1, argExpr arg2)
@@ -204,7 +204,7 @@ solveSpine ::
   Spine builtin ->
   m (UnificationResult builtin)
 solveSpine info@(constraint, _) args1 args2
-  | length args1 /= length args2 = return $ HardFailure [constraint]
+  | length args1 /= length args2 = hardFail constraint
   | otherwise = mconcat <$> traverse (solveArg info) (zip args1 args2)
 
 solveClosure ::
@@ -364,6 +364,14 @@ updateInfoUnderBinder (WithContext constraint ctx, blockingMeta) (binder1, _bind
   let unnormBinder = fmap (unnormalise (contextDBLevel ctx)) binder1
   let newCtx = updateConstraintBoundCtx ctx (unnormBinder :)
   (WithContext constraint newCtx, blockingMeta)
+
+hardFail ::
+  (MonadUnify builtin m) =>
+  WithContext (UnificationConstraint builtin) ->
+  m (UnificationResult builtin)
+hardFail constraint = do
+  logDebug MaxDetail "failed"
+  return $ HardFailure [constraint]
 
 --------------------------------------------------------------------------------
 -- Argument patterns

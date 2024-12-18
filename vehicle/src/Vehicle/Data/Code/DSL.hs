@@ -25,9 +25,6 @@ tRat = builtinType RatType
 tTensor :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
 tTensor tElem ds = builtinType TensorType @@ [tElem, ds]
 
-tFlattenTensor :: (BuiltinHasStandardData builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-tFlattenTensor tElem ds = builtinFunction FlattenTensorType @@ [tElem, ds]
-
 {-
 tVector :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
 tVector tElem d = builtinType VectorType @@ [tElem] .@@ [d]
@@ -165,6 +162,9 @@ hasRatLits t = typeClass HasRatLits [t]
 hasVecLits :: (BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
 hasVecLits t d = typeClass HasVecLits [t, d]
 
+isTensorType :: (BuiltinHasStandardData builtin, BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
+isTensorType tElem ds = builtinTypeClass IsTensorType @@ [tElem] .@@ [ds]
+
 validParameterType :: (BuiltinHasStandardTypeClasses builtin) => ParameterSort -> DSLExpr builtin -> DSLExpr builtin
 validParameterType s t = typeClass (ValidParameterType s) [t]
 
@@ -189,8 +189,8 @@ validDatasetType t = typeClass ValidDatasetType [t]
 validDatasetListElementType :: (BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin
 validDatasetListElementType t = typeClass ValidDatasetListElementType [t]
 
-validDatasetBaseElementType :: (BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin
-validDatasetBaseElementType t = typeClass ValidDatasetBaseElementType [t]
+validDatasetTensorElementType :: (BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin
+validDatasetTensorElementType t = typeClass ValidDatasetTensorElementType [t]
 
 --------------------------------------------------------------------------------
 -- Dimension types DSL

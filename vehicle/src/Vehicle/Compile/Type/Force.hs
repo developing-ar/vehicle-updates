@@ -39,9 +39,9 @@ forceHead ctx expr = do
     Just forcedExpr -> do
       logDebug MaxDetail $
         "forced"
-          <+> prettyExternal (WithContext expr ctx)
+          <+> squotes (prettyExternal (WithContext expr ctx))
           <+> "to"
-          <+> prettyExternal (WithContext forcedExpr ctx)
+          <+> squotes (prettyExternal (WithContext forcedExpr ctx))
       return forcedExpr
   return (forcedExpr, blockingMetas)
 

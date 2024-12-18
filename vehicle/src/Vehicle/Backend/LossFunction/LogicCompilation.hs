@@ -246,7 +246,6 @@ isLiftableOp = \case
   ConstTensor -> False
   Foreach -> False
   Iterate -> False
-  FlattenTensorType -> False
 
 reduceOp :: BuiltinFunction -> Maybe BuiltinFunction
 reduceOp = \case
@@ -284,7 +283,6 @@ reduceOp = \case
   ConstTensor -> Nothing
   Foreach -> Nothing
   Iterate -> Nothing
-  FlattenTensorType -> Nothing
 
 type MonadCompileBody m =
   ( MonadLogger m,

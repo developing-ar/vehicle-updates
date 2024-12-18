@@ -68,6 +68,7 @@ position token TokHasSub    {"HasSub"};
 position token TokHasMul    {"HasMul"};
 position token TokHasFold   {"HasFold"};
 position token TokHasMap    {"HasMap"};
+position token TokIsTensorType {"IsTensorType"};
 
 position token TokAnnNameOpt  {"name"};
 position token TokAnnInferOpt {"infer"};
@@ -205,6 +206,8 @@ HasSub.   Expr15 ::= TokHasSub;
 HasMul.   Expr15 ::= TokHasMul;
 HasMap.   Expr15 ::= TokHasMap;
 HasFold.  Expr15 ::= TokHasFold;
+
+IsTensorType.  Expr15 ::= TokIsTensorType;
 
 coercions Expr 15;
 separator Expr ",";

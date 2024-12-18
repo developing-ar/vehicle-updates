@@ -469,6 +469,7 @@ instance MeaningfulError CompileError where
                 <> line
                 <> "Expected elements of type"
                   <+> squotes (pretty IndexType <+> pretty n)
+                  <+> parens ("i.e. values between 0 and" <+> pretty (n - 1) <+> "inclusive")
                   <+> "but found value"
                   <+> quotePretty v
                   <+> "when reading"

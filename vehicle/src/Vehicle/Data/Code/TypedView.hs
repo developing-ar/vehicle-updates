@@ -28,6 +28,8 @@ pattern IBoolType = INullaryTypeExpr BoolType
 
 pattern IIndexType :: Value Builtin -> Value Builtin
 pattern IIndexType size <- VBuiltin (BuiltinType IndexType) [argExpr -> size]
+  where
+    IIndexType size = VBuiltin (BuiltinType IndexType) [Arg mempty Explicit Irrelevant size]
 
 pattern INatType :: Value Builtin
 pattern INatType = INullaryTypeExpr NatType

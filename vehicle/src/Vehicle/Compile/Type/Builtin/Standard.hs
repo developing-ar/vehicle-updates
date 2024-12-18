@@ -41,7 +41,7 @@ typeStandardBuiltin p b = fromDSL p $ case b of
 --------------------------------------------------------------------------------
 -- Type classes
 
-typeOfTypeClass :: (BuiltinHasStandardTypes builtin) => TypeClass -> DSLExpr builtin
+typeOfTypeClass :: (HasStandardBuiltins builtin) => TypeClass -> DSLExpr builtin
 typeOfTypeClass tc = case tc of
   HasEq {} -> type0 ~> type0 ~> type0
   HasOrd {} -> type0 ~> type0 ~> type0
@@ -63,10 +63,15 @@ typeOfTypeClass tc = case tc of
   ValidNetworkTensorType -> type0 ~> type0
   ValidDatasetType -> type0 ~> type0
   ValidDatasetListElementType -> type0 ~> type0
-  ValidDatasetBaseElementType -> type0 ~> type0
+  ValidDatasetTensorElementType -> type0 ~> type0
+  IsTensorType {} -> typeOfBuiltinType TensorType
 
 typeOfTypeClassOp :: (HasStandardBuiltins builtin, BuiltinHasStandardTypeClasses builtin) => TypeClassOp -> DSLExpr builtin
 typeOfTypeClassOp b = case b of
+  TensorTypeTC ->
+    forAllExpl "t" type0 $ \t ->
+      forAllExpl "ds" tDims $ \ds ->
+        isTensorType t ds ~~~> type0
   FromNatTC -> forAllTypes $ \t -> hasNatLits t ~~~> typeOfFromNat t
   FromRatTC -> forAllTypes $ \t -> hasRatLits t ~~~> typeOfFromRat t
   VecLiteralTC -> typeOfVectorLiteral
@@ -150,7 +155,6 @@ typeOfBuiltinFunction = \case
   ConstTensor -> typeOfConstTensor
   Foreach -> typeOfForeach
   Iterate -> forAllTypes $ \t -> ((t ~> t) ~> t ~> t) ~> tNat ~> t
-  FlattenTensorType -> type0 ~> tList tNat ~> type0
 
 typeOfBuiltinType :: (HasStandardBuiltins builtin) => BuiltinType -> DSLExpr builtin
 typeOfBuiltinType = \case
@@ -243,7 +247,7 @@ typeOfAt =
   forAll "A" type0 $ \tElem ->
     forAllDim Irrelevant $ \d ->
       forAllDims $ \ds ->
-        tFlattenTensor tElem (dimCons d ds) ~> tIndex d ~> tFlattenTensor tElem ds
+        tTensor tElem (dimCons d ds) ~> tIndex d ~> tTensor tElem ds
 
 typeOfMap :: (HasStandardBuiltins builtin) => DSLExpr builtin -> DSLExpr builtin
 typeOfMap f =
@@ -282,7 +286,7 @@ typeOfStackTensor :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfStackTensor =
   forAllDim Relevant $ \d ->
     forAllDims $ \ds ->
-      typeOfVecLiteralCast d (explLam "A" type0 $ \t -> tFlattenTensor t (dimCons d ds))
+      typeOfVecLiteralCast d (explLam "A" type0 $ \t -> tTensor t (dimCons d ds))
 
 typeOfFromVectorToList :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfFromVectorToList =
@@ -297,4 +301,4 @@ typeOfForeach =
   forAll "A" type0 $ \tElem ->
     forAll "d" tDim $ \d ->
       forAllDims $ \ds ->
-        (tIndex d ~> tFlattenTensor tElem ds) ~> tFlattenTensor tElem (dimCons d ds)
+        (tIndex d ~> tTensor tElem ds) ~> tTensor tElem (dimCons d ds)

@@ -92,6 +92,7 @@ parseContainer ctx topLevel actualDims elems expectedType = case toTypeValue exp
   VBoolTensorType expectedDims -> parseTensor ctx actualDims elems IBoolType expectedDims
   VRatTensorType expectedDims -> parseTensor ctx actualDims elems IRatType expectedDims
   VNatTensorType expectedDims -> parseTensor ctx actualDims elems INatType expectedDims
+  VIndexTensorType n expectedDims -> parseTensor ctx actualDims elems (IIndexType n) expectedDims
   _ ->
     if topLevel
       then typingError ctx
@@ -189,10 +190,11 @@ intElemParser ::
   GluedType Builtin ->
   FilePath ->
   ElemParser m Int
-intElemParser decl datasetType file dims values expectedElementType =
+intElemParser decl datasetType file dims values expectedElementType = do
+  logDebug MaxDetail $ prettyVerbose expectedElementType
   case toTypeValue expectedElementType of
     VIndexType (INatLiteral n) -> do
-      let invalid = Vector.filter (\value -> value < 0 && value >= n) values
+      let invalid = Vector.filter (\value -> value < 0 || value >= n) values
       if Vector.null invalid
         then return $ IIndexTensor (Tensor dims (Values $ V.convert values))
         else throwError $ DatasetInvalidIndex decl file (Vector.head invalid) n

@@ -191,7 +191,6 @@ convertBuiltinToLoss b spine = case b of
     S.FoldList -> unsupportedBuiltin
     S.MapList -> unsupportedBuiltin
     S.Iterate -> unsupportedBuiltin
-    S.FlattenTensorType -> unsupportedBuiltin
     ----------------------
     -- Other operations --
     ----------------------

@@ -6,7 +6,7 @@ where
 
 import Control.Monad (forM, unless, when)
 import Control.Monad.Except (MonadError (..))
-import Data.List (partition)
+import Data.List (partition, sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Context.Free
@@ -23,6 +23,7 @@ import Vehicle.Compile.Type.Constraint.UnificationSolver
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Generalise
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
+import Vehicle.Compile.Type.Meta.Substitution qualified as MetaSubstitution
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.System (HasTypeSystem (..), TCM)
@@ -312,19 +313,20 @@ logUnsolvedUnknowns maybeDecl = do
     let constraintsDoc =
           "unsolved-blocked-constraints:"
             <> line
-            <> indent 2 (prettyBlockedConstraints blockedConstraints)
+            <> indent 2 (prettyConstraints blockedConstraints)
             <> line
             <> "unsolved-unblocked-constraints:"
             <> line
-            <> indent 2 (prettyVerbose unblockedConstraints)
+            <> indent 2 (prettyConstraints unblockedConstraints)
             <> line
 
-    let declDoc = case maybeDecl of
+    updatedDecl <- traverse (MetaSubstitution.subst updatedSubst) maybeDecl
+    let declDoc = case updatedDecl of
           Nothing -> ""
           Just decl ->
             "current-decl:"
               <> line
-              <> indent 2 (prettyVerbose decl)
+              <> indent 2 (prettyExternal decl)
               <> line
 
     return $
@@ -339,9 +341,10 @@ logUnsolvedUnknowns maybeDecl = do
         <> constraintsDoc
         <> declDoc
 
-prettyBlockedConstraints :: (PrintableBuiltin builtin) => [WithContext (Constraint builtin)] -> Doc a
-prettyBlockedConstraints constraints = do
-  let pairs = fmap (\c -> prettyFriendly c <> "   " <> pretty (blockedBy $ contextOf c)) constraints
+prettyConstraints :: (PrintableBuiltin builtin) => [WithContext (Constraint builtin)] -> Doc a
+prettyConstraints constraints = do
+  let sortedConstraints = sortOn (constraintID . contextOf) constraints
+  let pairs = fmap (\c -> prettyExternal c <> "   " <> pretty (blockedBy $ contextOf c)) sortedConstraints
   prettySetLike pairs
 
 bidirectionalPassDoc :: Doc a

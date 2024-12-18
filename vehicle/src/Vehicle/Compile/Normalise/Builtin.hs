@@ -10,10 +10,8 @@ import Vehicle.Data.Builtin.Loss (LossBuiltin (..))
 import Vehicle.Data.Builtin.Loss qualified as L
 import Vehicle.Data.Builtin.Polarity (PolarityBuiltin (..))
 import Vehicle.Data.Code.Interface
-import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Tensor (Tensor, at, foldTensor, stack, zipWithTensor, pattern ConstantTensor, pattern ZeroDimTensor)
-import Vehicle.Libraries.StandardLibrary.Definitions (StdLibFunction (StdAppendList))
 
 -- Okay so the important thing to remember about this module is that we have
 -- a variety of different typing schemes for builtins (standard, polarity,
@@ -384,7 +382,9 @@ evalReduceOrTensor = evalReduceTensor getBoolTensorLit (zipWithTensor (||)) mkBo
 -----------------------------------------------------------------------------
 -- Generic tensor operations
 
-data PrimitiveTensor expr = forall a. (Eq a) => PrimitiveTensor
+data PrimitiveTensor expr = forall a.
+  (Eq a) =>
+  PrimitiveTensor
   { getTensor :: expr -> Maybe (Tensor a),
     mkTensor :: Tensor a -> expr
   }
@@ -576,7 +576,6 @@ functionBlockingArgs = \case
   Iterate -> Known [2]
   StackTensor -> Unknown
   FromVectorToList -> Known [0]
-  FlattenTensorType -> Known [0]
 
 -----------------------------------------------------------------------------
 -- Type-class
@@ -654,24 +653,8 @@ evalMax :: (HasRatLits expr) => MaxDomain -> EvalSimpleBuiltin expr
 evalMax = \case
   MaxRatTensor -> evalMaxRatTensor
 
-evalFlattenTensorType :: FreeEnv Builtin -> EvalBuiltin (Value Builtin) m
-evalFlattenTensorType freeEnv evalApp originalExpr = \case
-  [argExpr -> t, argExpr -> dims] -> case t of
-    ITensorType tElem dims2 -> do
-      -- appendList : List A -> List A -> List A
-      -- appendList xs ys = fold (\x y -> x :: y) ys xs
-      let appendList = lookupIdentValueInEnv freeEnv (identifierOf StdAppendList)
-      let args = [implicit INatType, explicit dims2, explicit dims]
-      newDims <- evalApp appendList args
-      return $ ITensorType tElem newDims
-    IBoolType -> return $ ITensorType t dims
-    INatType -> return $ ITensorType t dims
-    IRatType -> return $ ITensorType t dims
-    _ -> return originalExpr
-  _ -> return originalExpr
-
-evalBuiltinFunction :: FreeEnv Builtin -> BuiltinFunction -> EvalBuiltin (Value Builtin) m
-evalBuiltinFunction freeEnv b evalApp originalValue args = case b of
+evalBuiltinFunction :: BuiltinFunction -> EvalBuiltin (Value Builtin) m
+evalBuiltinFunction b evalApp originalValue args = case b of
   QuantifyRatTensor {} -> return originalValue
   Equals dom op -> return $ evalEquals dom op originalValue args
   Order dom op -> return $ evalOrder dom op originalValue args
@@ -706,13 +689,12 @@ evalBuiltinFunction freeEnv b evalApp originalValue args = case b of
   ConstTensor -> return $ evalConstTensor originalValue args
   Foreach -> evalForeach evalApp originalValue args
   Iterate -> evalIterate (VBuiltin (BuiltinFunction Iterate)) evalApp originalValue args
-  FlattenTensorType -> evalFlattenTensorType freeEnv evalApp originalValue args
 
 instance NormalisableBuiltin Builtin where
-  evalBuiltinApp evalApp freeEnv originalExpr b normArgs =
+  evalBuiltinApp evalApp _freeEnv originalExpr b normArgs =
     case getBuiltinFunction b of
       Nothing -> return originalExpr
-      Just f -> evalBuiltinFunction freeEnv f evalApp originalExpr normArgs
+      Just f -> evalBuiltinFunction f evalApp originalExpr normArgs
 
   blockingArgs = \case
     BuiltinFunction f -> functionBlockingArgs f

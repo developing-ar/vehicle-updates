@@ -8,8 +8,7 @@ import Vehicle.Compile.Type.Builtin.Polarity (isPolarityBuiltinConstructor, type
 import Vehicle.Compile.Type.Builtin.Standard (isStandardConstructor, typeStandardBuiltin)
 import Vehicle.Data.Builtin.Linearity (LinearityBuiltin)
 import Vehicle.Data.Builtin.Polarity (PolarityBuiltin)
-import Vehicle.Data.Builtin.Standard (Builtin (..), BuiltinFunction (..))
-import Vehicle.Syntax.Builtin (BuiltinType (..))
+import Vehicle.Data.Builtin.Standard (Builtin (..))
 
 class (PrintableBuiltin builtin) => TypableBuiltin builtin where
   -- | Construct a type for the builtin
@@ -40,5 +39,3 @@ instance TypableBuiltin Builtin where
   useDependentMetas _ = True
   couldBeEqual b1 b2 =
     not (isStandardConstructor b1 && isStandardConstructor b2)
-      && not (b1 == BuiltinFunction FlattenTensorType && b2 == BuiltinType ListType)
-      && not (b2 == BuiltinFunction FlattenTensorType && b1 == BuiltinType ListType)

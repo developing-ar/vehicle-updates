@@ -70,7 +70,6 @@ typeOfBuiltinFunction = \case
   ConstTensor -> forAllLinearities $ \l -> l ~> constant ~> l
   Foreach -> forAllLinearities $ \l -> l ~> l
   Iterate -> typeOfIterate
-  FlattenTensorType -> type0 ~> type0
 
 typeOfConstructor :: BuiltinConstructor -> LinearityDSLExpr
 typeOfConstructor = \case

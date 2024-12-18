@@ -26,7 +26,7 @@ import Data.IntMap (IntMap)
 import Data.IntMap qualified as IntMap (assocs)
 import Data.Text (Text)
 import GHC.TypeLits (ErrorMessage (..), TypeError)
-import Prettyprinter (fill, list)
+import Prettyprinter (fill)
 import Vehicle.Compile.Descope
 import Vehicle.Compile.Normalise.Quote (unnormalise)
 import Vehicle.Compile.Prelude
@@ -140,6 +140,16 @@ type family StrategyFor (tags :: Tags) a :: Strategy where
   -- Otherwise converting it to an unnamed representation we descope naively by just converting the variables directly
   StrategyFor ('Named tags) (LinearExpr constant `In` NamedBoundCtx) = 'DescopeWithNames (StrategyFor tags (constant `In` NamedBoundCtx))
   StrategyFor ('Unnamed tags) (LinearExpr constant `In` ctx) = 'DescopeNaively (StrategyFor tags (constant `In` ctx))
+  -------------------
+  -- Context setup --
+  -------------------
+  StrategyFor tags (GenericProg expr) = 'SetupContext (StrategyFor tags (GenericProg expr `In` NamedBoundCtx))
+  StrategyFor tags (GenericDecl expr) = 'SetupContext (StrategyFor tags (GenericDecl expr `In` NamedBoundCtx))
+  StrategyFor tags (Contextualised object ctx) = 'SetupContext (StrategyFor tags (object `In` ctx))
+  StrategyFor tags (Contextualised object ctx `In` NoCtx) = 'SetupContext (StrategyFor tags (object `In` ctx))
+  StrategyFor tags (S.Expr `In` NoCtx) = 'SetupContext (StrategyFor tags S.Expr)
+  StrategyFor tags (S.Arg `In` NoCtx) = 'SetupContext (StrategyFor tags S.Expr)
+  StrategyFor tags (S.Binder `In` NoCtx) = 'SetupContext (StrategyFor tags S.Expr)
   --------------------------------
   -- Distributing over functors --
   --------------------------------
@@ -179,13 +189,6 @@ type family StrategyFor (tags :: Tags) a :: Strategy where
   --------------------
   StrategyFor ('Uninserted tags) a = 'UninsertArgsAndBinders (StrategyFor tags a)
   StrategyFor ('ShortVectors tags) a = 'ShortenVectors (StrategyFor tags a)
-  -------------------
-  -- Context setup --
-  -------------------
-  StrategyFor tags (GenericProg expr) = 'SetupContext (StrategyFor tags (GenericProg expr `In` NamedBoundCtx))
-  StrategyFor tags (GenericDecl expr) = 'SetupContext (StrategyFor tags (GenericDecl expr `In` NamedBoundCtx))
-  StrategyFor tags (Contextualised object ctx) = 'SetupContext (StrategyFor tags (object `In` ctx))
-  StrategyFor tags (Contextualised object ctx `In` NoCtx) = 'SetupContext (StrategyFor tags (object `In` ctx))
   -- StrategyFor tags (Contextualised object (ConstraintContext builtin)) = 'SetupContext (StrategyFor tags (object `In` NamedBoundCtx))
   ----------------
   -- Error case --
@@ -230,6 +233,15 @@ instance (PrettyUsing rest (GenericProg expr `In` NamedBoundCtx)) => PrettyUsing
 
 instance (PrettyUsing rest (GenericDecl expr `In` NamedBoundCtx)) => PrettyUsing ('SetupContext rest) (GenericDecl expr) where
   prettyUsing decl = prettyUsing @rest (decl, emptyNamedCtx)
+
+instance (PrettyUsing rest S.Expr) => PrettyUsing ('SetupContext rest) (S.Expr `In` NoCtx) where
+  prettyUsing (e, ()) = prettyUsing @rest e
+
+instance (PrettyUsing rest S.Arg) => PrettyUsing ('SetupContext rest) (S.Arg `In` NoCtx) where
+  prettyUsing (e, ()) = prettyUsing @rest e
+
+instance (PrettyUsing rest S.Binder) => PrettyUsing ('SetupContext rest) (S.Binder `In` NoCtx) where
+  prettyUsing (e, ()) = prettyUsing @rest e
 
 --------------------------------------------------------------------------------
 -- DescopeNaively
@@ -570,7 +582,7 @@ instance
   (PrettyUsing rest (a `In` ctx)) =>
   PrettyUsing rest ([a] `In` ctx)
   where
-  prettyUsing (es, ctx) = list (prettyUsing @rest . (,ctx) <$> es)
+  prettyUsing (es, ctx) = prettyFlatList (prettyUsing @rest . (,ctx) <$> es)
 
 instance
   (PrettyUsing rest (a `In` ctx)) =>

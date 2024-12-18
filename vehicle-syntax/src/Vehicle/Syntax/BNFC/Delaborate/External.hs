@@ -188,7 +188,6 @@ delabBuiltinFunction fun args = case fun of
   V.ReduceAndTensor -> delabApp (B.ReduceAnd tokReduceAnd) args
   V.ReduceOrTensor -> delabApp (B.ReduceOr tokReduceOr) args
   -- Builtins not in the surface syntax.
-  V.FlattenTensorType -> rawDelab
   V.FromNat {} -> rawDelab
   V.FromRat {} -> rawDelab
   V.FromVectorToList {} -> rawDelab
@@ -262,6 +261,7 @@ delabTypeClassOp op args = case op of
   V.MapTC -> delabApp (B.Map tokMap) args
   V.FoldTC -> delabApp (B.Fold tokFold) args
   V.QuantifierTC q -> delabQuantifier q args
+  V.TensorTypeTC -> delabApp (cheatDelab "TensorTypeTC") args
 
 delabOp1 :: (MonadDelab m, IsToken token) => (token -> B.Expr -> B.Expr) -> token -> [V.Arg] -> m B.Expr
 delabOp1 op tk [arg]

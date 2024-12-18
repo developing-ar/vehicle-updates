@@ -508,13 +508,14 @@ compileBuiltin _p b args = case b of
     HasFold -> unsupportedError
     HasMap -> unsupportedError
     HasQuantifierIn {} -> unsupportedError
+    IsTensorType {} -> unsupportedError
     ValidPropertyType -> unsupportedError
     ValidParameterType {} -> unsupportedError
     ValidNetworkType {} -> unsupportedError
     ValidNetworkTensorType {} -> unsupportedError
     ValidDatasetType {} -> unsupportedError
     ValidDatasetListElementType {} -> unsupportedError
-    ValidDatasetBaseElementType {} -> unsupportedError
+    ValidDatasetTensorElementType {} -> unsupportedError
   TypeClassOp op -> case op of
     QuantifierTC q -> case reverse args of
       (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
@@ -524,6 +525,7 @@ compileBuiltin _p b args = case b of
     FromNatTC {} -> resolveInstance b args
     FromRatTC {} -> resolveInstance b args
     VecLiteralTC {} -> resolveInstance b args
+    TensorTypeTC {} -> resolveInstance b args
     AddTC {} -> annotateInfixOp2 [VehicleUtils] 6 id Nothing "⊕" <$> compileArgs args
     SubTC {} -> annotateInfixOp2 [VehicleUtils] 6 id Nothing "⊖" <$> compileArgs args
     -- TODO we should really have our own Agda type-classes for all of these
@@ -606,7 +608,6 @@ compileBuiltin _p b args = case b of
       _ -> unsupportedArgsError
     Foreach -> unsupportedError
     Iterate -> unsupportedError
-    FlattenTensorType -> unsupportedError
   NatInDomainConstraint -> unsupportedError
   where
     unsupportedError :: (MonadAgdaCompile m) => m a

@@ -28,6 +28,8 @@ data TypeClass
     HasNatLits
   | HasRatLits
   | HasVecLits
+  | -- Overloading of the tensor type
+    IsTensorType
   | -- Declaration type restrictions
     ValidPropertyType
   | ValidParameterType ParameterSort
@@ -35,7 +37,7 @@ data TypeClass
   | ValidNetworkTensorType
   | ValidDatasetType
   | ValidDatasetListElementType
-  | ValidDatasetBaseElementType
+  | ValidDatasetTensorElementType
   deriving (Eq, Ord, Generic, Show)
 
 instance NFData TypeClass
@@ -60,13 +62,14 @@ instance Pretty TypeClass where
     HasNatLits -> "HasNatLiterals"
     HasRatLits -> "HasRatLiterals"
     HasVecLits -> "HasVecLiterals"
+    IsTensorType -> "IsTensorType"
     ValidPropertyType -> "ValidPropertyType"
     ValidParameterType {} -> "ValidParameterType"
     ValidNetworkType -> "ValidNetworkType"
     ValidNetworkTensorType -> "ValidNetworkTensorType"
     ValidDatasetType -> "ValidDatasetType"
     ValidDatasetListElementType -> "ValidDatasetListElementType"
-    ValidDatasetBaseElementType -> "ValidDatasetBaseElementType"
+    ValidDatasetTensorElementType -> "ValidDatasetTensorElementType"
 
 -- Builtin operations for type-classes
 data TypeClassOp
@@ -88,6 +91,7 @@ data TypeClassOp
   | MapTC
   | FoldTC
   | QuantifierTC Quantifier
+  | TensorTypeTC
   deriving (Eq, Ord, Generic, Show)
 
 instance NFData TypeClassOp
@@ -111,3 +115,4 @@ instance Pretty TypeClassOp where
     MapTC -> "map"
     FoldTC -> "fold"
     QuantifierTC q -> pretty q
+    TensorTypeTC -> "TensorTC"

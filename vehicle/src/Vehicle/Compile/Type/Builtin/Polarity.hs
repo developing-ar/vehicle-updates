@@ -66,7 +66,6 @@ typeOfBuiltinFunction = \case
   ConstTensor -> forAllPolarities $ \p -> p ~> unquantified ~> p
   Foreach -> forAllPolarities $ \p -> p ~> p
   Iterate -> typeOfIterate
-  FlattenTensorType -> type0 ~> type0
 
 typeOfConstructor :: BuiltinConstructor -> PolarityDSLExpr
 typeOfConstructor = \case
