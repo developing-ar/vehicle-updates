@@ -270,9 +270,11 @@ compileAssertion mkAssertion rel dims x y = do
     Right (e1, e2) -> return $ mkTrivialPartition (mkAssertion e1 e2)
     Left NonLinearity -> throwError catchableUnsupportedNonLinearConstraint
     Left (UnexpectedExpr e) -> compilerDeveloperError ("unexpected expression" <+> prettyVerbose e)
-    Left (UnreducedExpr _e) -> case toDimensionsValue (argExpr dims) of
+    Left (UnreducedExpr e) -> case toDimensionsValue (argExpr dims) of
       VDimsCons (INatLiteral dim) elemDims -> compileBoolExpr =<< eliminateTensorAssertion rel dim elemDims x y
-      _ -> compilerDeveloperError ("unexpected dimensions" <+> prettyVerbose dims)
+      _ -> do
+        logDebug MaxDetail $ prettyVerbose e
+        compilerDeveloperError ("unexpected dimensions" <+> prettyVerbose dims)
 
 --------------------------------------------------------------------------------
 -- Elimination operations

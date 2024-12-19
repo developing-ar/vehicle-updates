@@ -50,8 +50,10 @@ instance Pretty TypeClass where
   pretty = \case
     HasEq {} -> "HasEq"
     HasOrd {} -> "HasOrd"
-    HasQuantifier q -> "Has" <> pretty q
-    HasQuantifierIn q -> "Has" <> pretty q <> "In"
+    HasQuantifier Forall -> "HasForall"
+    HasQuantifier Exists -> "HasExists"
+    HasQuantifierIn Forall -> "HasForallIn"
+    HasQuantifierIn Exists -> "HasExistsIn"
     HasAdd -> "HasAdd"
     HasSub -> "HasSub"
     HasMul -> "HasMul"
