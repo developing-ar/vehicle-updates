@@ -5,7 +5,7 @@ import System.Console.ANSI (Color (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Code.BooleanExpr (MaybeTrivial (..))
 import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RationalTensor)
+import Vehicle.Data.Tensor (RatTensor)
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core (QueryVariable)
 import Vehicle.Verify.Specification (QueryMetaData)
@@ -63,6 +63,6 @@ statusSymbol verified = do
         Just False -> (Red, "✗")
   setTextColour colour symbol
 
-prettyUserVariableAssignment :: (Name, RationalTensor) -> Doc a
+prettyUserVariableAssignment :: (Name, RatTensor) -> Doc a
 prettyUserVariableAssignment (var, variableValue) =
   pretty var <> ":" <+> pretty variableValue

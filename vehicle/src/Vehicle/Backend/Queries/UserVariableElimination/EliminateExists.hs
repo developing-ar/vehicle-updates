@@ -18,7 +18,7 @@ import Vehicle.Data.Assertion
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr (Constant (..), LinearExpr, eliminateVars, rearrangeExprToSolveFor, referencesVariable)
 import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RationalTensor, allTensor, tensorToList)
+import Vehicle.Data.Tensor (RatTensor, allTensor, tensorToList)
 import Vehicle.Prelude.Warning (CompileWarning (..))
 import Vehicle.Syntax.Builtin.BasicOperations (Strictness (..))
 
@@ -98,7 +98,7 @@ solveVariable originalTree userVar solutions constrainedTree = do
         return $ mkSinglePartition (step : solutions, updatedTree)
 
 substituteThrough ::
-  Map Variable (LinearExpr RationalTensor) ->
+  Map Variable (LinearExpr RatTensor) ->
   MaybeTrivial AssertionTree ->
   MaybeTrivial AssertionTree
 substituteThrough f =
@@ -123,7 +123,7 @@ substituteThrough f =
 logEqualitySolved ::
   (MonadSolveExists m) =>
   Variable ->
-  LinearExpr RationalTensor ->
+  LinearExpr RatTensor ->
   MaybeTrivial AssertionTree ->
   MaybeTrivial AssertionTree ->
   m ()

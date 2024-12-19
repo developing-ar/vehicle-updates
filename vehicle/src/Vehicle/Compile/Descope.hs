@@ -22,10 +22,9 @@ import Vehicle.Syntax.AST.Expr qualified as S
 -- Interface
 
 descopeExpr :: (PrintableBuiltin builtin) => Expr builtin -> NamedBoundCtx -> S.Expr
-descopeExpr e ctx = do
-  let binderCtx = fmap (mkExplicitBinder ()) ctx
-  let fun = genericDescopeExpr (ixToName Named) (convertExprBuiltins e)
-  runNameContext binderCtx fun
+descopeExpr e ctx =
+  runNameContext ctx $
+    genericDescopeExpr (ixToName Named) (convertExprBuiltins e)
 
 descopeExprInEmptyCtx :: (PrintableBuiltin builtin) => Expr builtin -> S.Expr
 descopeExprInEmptyCtx e = descopeExpr e mempty

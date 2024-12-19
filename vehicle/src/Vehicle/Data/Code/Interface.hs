@@ -17,105 +17,89 @@ import Vehicle.Prelude
 -- of builtins being used, and therefore allows us to define operations
 -- (e.g. normalisation) once, rather than once for each builtin type.
 
+data Accessor expr a = Access
+  { getExpr :: expr -> Maybe a,
+    mkExpr :: a -> expr
+  }
+
 --------------------------------------------------------------------------------
 -- Naturals
 
 class HasBoolLits expr where
-  mkBoolTensorLit :: Tensor Bool -> expr
-  getBoolTensorLit :: expr -> Maybe (Tensor Bool)
+  accessBoolTensorLiteral :: Accessor expr BoolTensor
 
-  getBoolConstTensor :: expr -> Maybe (expr, expr)
-
-pattern IBoolTensor :: (HasBoolLits expr) => Tensor Bool -> expr
-pattern IBoolTensor n <- (getBoolTensorLit -> Just n)
+pattern IBoolTensorLiteral :: (HasBoolLits expr) => BoolTensor -> expr
+pattern IBoolTensorLiteral n <- (getExpr accessBoolTensorLiteral -> Just n)
   where
-    IBoolTensor n = mkBoolTensorLit n
+    IBoolTensorLiteral n = mkExpr accessBoolTensorLiteral n
 
 pattern IBoolLiteral :: (HasBoolLits expr) => Bool -> expr
-pattern IBoolLiteral n = IBoolTensor (ZeroDimTensor n)
-
-pattern IBoolConstTensor :: (HasBoolLits expr) => expr -> expr -> expr
-pattern IBoolConstTensor value dims <- (getBoolConstTensor -> Just (value, dims))
+pattern IBoolLiteral n = IBoolTensorLiteral (ZeroDimTensor n)
 
 --------------------------------------------------------------------------------
 -- Indices
 
 class HasIndexLits expr where
-  mkIndexLit :: Int -> expr
-  getIndexLit :: expr -> Maybe Int
-
-  mkIndexTensorLit :: Tensor Int -> expr
-  getIndexTensorLit :: expr -> Maybe (Tensor Int)
+  accessIndexLiteral :: Accessor expr Int
+  accessIndexTensorLiteral :: Accessor expr IndexTensor
 
 pattern IIndexLiteral :: (HasIndexLits expr) => Int -> expr
-pattern IIndexLiteral n <- (getIndexLit -> Just n)
+pattern IIndexLiteral n <- (getExpr accessIndexLiteral -> Just n)
   where
-    IIndexLiteral n = mkIndexLit n
+    IIndexLiteral n = mkExpr accessIndexLiteral n
 
 pattern IIndexTensor :: (HasIndexLits expr) => Tensor Int -> expr
-pattern IIndexTensor n <- (getIndexTensorLit -> Just n)
+pattern IIndexTensor n <- (getExpr accessIndexTensorLiteral -> Just n)
   where
-    IIndexTensor n = mkIndexTensorLit n
+    IIndexTensor n = mkExpr accessIndexTensorLiteral n
 
 --------------------------------------------------------------------------------
 -- Naturals
 
 class HasNatLits expr where
-  mkNatLit :: Int -> expr
-  getNatLit :: expr -> Maybe Int
-
-  mkNatTensorLit :: Tensor Int -> expr
-  getNatTensorLit :: expr -> Maybe (Tensor Int)
+  accessNatLiteral :: Accessor expr Int
+  accessNatTensorLiteral :: Accessor expr NatTensor
 
 pattern INatLiteral :: (HasNatLits expr) => Int -> expr
-pattern INatLiteral n <- (getNatLit -> Just n)
+pattern INatLiteral n <- (getExpr accessNatLiteral -> Just n)
   where
-    INatLiteral n = mkNatLit n
+    INatLiteral n = mkExpr accessNatLiteral n
 
 pattern INatTensor :: (HasNatLits expr) => Tensor Int -> expr
-pattern INatTensor n <- (getNatTensorLit -> Just n)
+pattern INatTensor n <- (getExpr accessNatTensorLiteral -> Just n)
   where
-    INatTensor n = mkNatTensorLit n
+    INatTensor n = mkExpr accessNatTensorLiteral n
 
 --------------------------------------------------------------------------------
 -- Rationals
 
 class HasRatLits expr where
-  mkRatTensorLit :: RationalTensor -> expr
-  getRatTensorLit :: expr -> Maybe RationalTensor
-
-  getRatConstTensor :: expr -> Maybe (expr, expr)
+  accessRatTensor :: Accessor expr RatTensor
 
 pattern IRatTensor :: (HasRatLits expr) => Tensor Rational -> expr
-pattern IRatTensor n <- (getRatTensorLit -> Just n)
+pattern IRatTensor n <- (getExpr accessRatTensor -> Just n)
   where
-    IRatTensor n = mkRatTensorLit n
+    IRatTensor n = mkExpr accessRatTensor n
 
 pattern IRatLiteral :: (HasRatLits expr) => Rational -> expr
 pattern IRatLiteral n = IRatTensor (ZeroDimTensor n)
-
-pattern IRatConstTensor :: (HasRatLits expr) => expr -> expr -> expr
-pattern IRatConstTensor value dims <- (getRatConstTensor -> Just (value, dims))
 
 --------------------------------------------------------------------------------
 -- Lists
 
 class HasStandardListLits expr where
-  getNil :: expr -> Maybe (GenericArg expr)
-  mkNil :: GenericArg expr -> expr
-
-  getCons :: expr -> Maybe (GenericArg expr, GenericArg expr, GenericArg expr)
-  mkCons :: GenericArg expr -> GenericArg expr -> GenericArg expr -> expr
+  accessNil :: Accessor expr (GenericArg expr)
+  accessCons :: Accessor expr (GenericArg expr, GenericArg expr, GenericArg expr)
 
 pattern INil :: (HasStandardListLits expr) => GenericArg expr -> expr
-pattern INil t <- (getNil -> Just t)
+pattern INil t <- (getExpr accessNil -> Just t)
   where
-    INil t = mkNil t
+    INil t = mkExpr accessNil t
 
 pattern ICons :: (HasStandardListLits expr) => GenericArg expr -> GenericArg expr -> GenericArg expr -> expr
-pattern ICons t x xs <- (getCons -> Just (t, x, xs))
+pattern ICons t x xs <- (getExpr accessCons -> Just (t, x, xs))
   where
-    ICons t x xs = mkCons t x xs
+    ICons t x xs = mkExpr accessCons (t, x, xs)
 
 mkListExpr :: (HasStandardListLits expr) => expr -> [expr] -> expr
 mkListExpr tElem = foldr cons nil
@@ -143,27 +127,26 @@ getDims v = case getDimsExprs v of
   Right xs -> traverse getDim xs
 
 --------------------------------------------------------------------------------
--- Vectors
+-- Tensors
 
--- | Class for expressions that have vectors where all elements have a single
--- type and therefore the type is at the start
-class HasStandardVecLits expr where
-  mkHomoVector :: GenericArg expr -> [GenericArg expr] -> expr
-  getHomoVector :: expr -> Maybe (GenericArg expr, [GenericArg expr])
+class HasTensorPseudoConstructors expr where
+  accessStackTensor :: Accessor expr (GenericArg expr, GenericArg expr, GenericArg expr, [GenericArg expr])
+  accessConstTensor :: Accessor expr (GenericArg expr, expr, expr)
 
-pattern IVecLiteral :: (HasStandardVecLits expr) => GenericArg expr -> [GenericArg expr] -> expr
-pattern IVecLiteral t xs <- (getHomoVector -> Just (t, xs))
+pattern IStackTensor :: (HasTensorPseudoConstructors expr) => GenericArg expr -> GenericArg expr -> GenericArg expr -> [GenericArg expr] -> expr
+pattern IStackTensor d ds t xs <- (getExpr accessStackTensor -> Just (d, ds, t, xs))
   where
-    IVecLiteral t xs = mkHomoVector t xs
+    IStackTensor d ds t xs = mkExpr accessStackTensor (d, ds, t, xs)
 
---------------------------------------------------------------------------------
--- Constructors
-
-class HasUnitLits expr where
-  mkUnitLit :: expr
-  isUnitLit :: expr -> Bool
-
-pattern IUnitLiteral :: (HasUnitLits expr) => expr
-pattern IUnitLiteral <- (isUnitLit -> True)
+pattern IConstTensor :: (HasTensorPseudoConstructors expr) => GenericArg expr -> expr -> expr -> expr
+pattern IConstTensor t v ds <- (getExpr accessConstTensor -> Just (t, v, ds))
   where
-    IUnitLiteral = mkUnitLit
+    IConstTensor t v ds = mkExpr accessConstTensor (t, v, ds)
+
+{-
+pattern IBoolConstTensor :: (HasBoolLits expr) => expr -> expr -> expr
+pattern IBoolConstTensor value dims <- (getBoolConstTensor -> Just (value, dims))
+
+pattern IRatConstTensor :: (HasRatLits expr) => expr -> expr -> expr
+pattern IRatConstTensor value dims <- (getRatConstTensor -> Just (value, dims))
+-}

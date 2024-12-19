@@ -15,11 +15,15 @@ type MonadNameContext m = MonadBoundContext () m
 
 type NameContextT m = BoundContextT () m
 
-runNameContext :: BoundCtx () -> BoundContext () a -> a
-runNameContext = runBoundContext
+runNameContext :: NamedBoundCtx -> BoundContext () a -> a
+runNameContext ctx = do
+  let binderCtx = fmap (mkExplicitBinder ()) ctx
+  runBoundContext binderCtx
 
-runNameContextT :: (Monad m) => BoundCtx () -> NameContextT m a -> m a
-runNameContextT = runBoundContextT
+runNameContextT :: (Monad m) => NamedBoundCtx -> NameContextT m a -> m a
+runNameContextT ctx = do
+  let binderCtx = fmap (mkExplicitBinder ()) ctx
+  runBoundContextT binderCtx
 
 runFreshNameContext :: BoundContext () a -> a
 runFreshNameContext = runFreshBoundContext (Proxy @())

@@ -152,31 +152,26 @@ data BooleanTensorValue
   | VBoolForeach (VArg Builtin) (VArg Builtin) (Value Builtin)
 
 toBoolValue :: (HasCallStack) => Value Builtin -> BooleanTensorValue
-toBoolValue (VBuiltin b args) = case b of
-  BuiltinConstructor c -> case (c, args) of
-    (BoolTensorLiteral t, []) -> VBoolTensorLiteral t
-    _ -> developerError "ill-typed BoolTensor expression"
-  BuiltinFunction f -> case (f, args) of
-    (And, [dims, x, y]) -> VAnd dims (argExpr x) (argExpr y)
-    (Or, [dims, x, y]) -> VOr dims (argExpr x) (argExpr y)
-    (Not, [dims, x]) -> VNot dims (argExpr x)
-    (Order OrderRatTensor op, [dims, x, y]) -> VOrderRatTensor op dims (argExpr x) (argExpr y)
-    (Order OrderNat op, [x, y]) -> VOrderNat op (argExpr x) (argExpr y)
-    (Order OrderIndex op, [n1, n2, x, y]) -> VOrderIndex op n1 n2 (argExpr x) (argExpr y)
-    (Equals EqRatTensor op, [dims, x, y]) -> VEqualsRatTensor op dims (argExpr x) (argExpr y)
-    (Equals EqNat op, [x, y]) -> VEqualsNat op (argExpr x) (argExpr y)
-    (Equals EqIndex op, [n1, n2, x, y]) -> VEqualsIndex op n1 n2 (argExpr x) (argExpr y)
-    (QuantifyRatTensor op, [dims, argExpr -> VLam binder closure]) -> VQuantifyRatTensor op dims binder closure
-    (ReduceAndTensor, [dims, x]) -> VReduceAndTensor dims (argExpr x)
-    (ReduceOrTensor, [dims, x]) -> VReduceOrTensor dims (argExpr x)
-    (ConstTensor, [argExpr -> IBoolType, x, dims]) -> VConstBoolTensor (argExpr x) (argExpr dims)
-    (StackTensor, d : ds : (argExpr -> IBoolType) : xs) -> VBoolStackTensor d ds xs
-    (At, [argExpr -> IBoolType, d, ds, argExpr -> xs, argExpr -> i]) -> VBoolAt d ds xs i
-    (Foreach, [argExpr -> IBoolType, d, ds, argExpr -> fn]) -> VBoolForeach d ds fn
-    (If, [argExpr -> IBoolTensorType dims, c, x, y]) -> VBoolIf dims (argExpr c) (argExpr x) (argExpr y)
-    _ -> developerError "ill-typed BoolTensor expression"
-  _ -> developerError "ill-typed BoolTensor expression"
-toBoolValue _ = developerError "ill-typed BoolTensor expression"
+toBoolValue expr = case expr of
+  IBoolTensorLiteral t -> VBoolTensorLiteral t
+  IConstTensor (argExpr -> IBoolType) x dims -> VConstBoolTensor x dims
+  IStackTensor d ds (argExpr -> IBoolType) xs -> VBoolStackTensor d ds xs
+  VBuiltin (BuiltinFunction And) [dims, x, y] -> VAnd dims (argExpr x) (argExpr y)
+  VBuiltin (BuiltinFunction Or) [dims, x, y] -> VOr dims (argExpr x) (argExpr y)
+  VBuiltin (BuiltinFunction Not) [dims, x] -> VNot dims (argExpr x)
+  VBuiltin (BuiltinFunction (Order OrderRatTensor op)) [dims, x, y] -> VOrderRatTensor op dims (argExpr x) (argExpr y)
+  VBuiltin (BuiltinFunction (Order OrderNat op)) [x, y] -> VOrderNat op (argExpr x) (argExpr y)
+  VBuiltin (BuiltinFunction (Order OrderIndex op)) [n1, n2, x, y] -> VOrderIndex op n1 n2 (argExpr x) (argExpr y)
+  VBuiltin (BuiltinFunction (Equals EqRatTensor op)) [dims, x, y] -> VEqualsRatTensor op dims (argExpr x) (argExpr y)
+  VBuiltin (BuiltinFunction (Equals EqNat op)) [x, y] -> VEqualsNat op (argExpr x) (argExpr y)
+  VBuiltin (BuiltinFunction (Equals EqIndex op)) [n1, n2, x, y] -> VEqualsIndex op n1 n2 (argExpr x) (argExpr y)
+  VBuiltin (BuiltinFunction (QuantifyRatTensor op)) [dims, argExpr -> VLam binder closure] -> VQuantifyRatTensor op dims binder closure
+  VBuiltin (BuiltinFunction ReduceAndTensor) [dims, x] -> VReduceAndTensor dims (argExpr x)
+  VBuiltin (BuiltinFunction ReduceOrTensor) [dims, x] -> VReduceOrTensor dims (argExpr x)
+  VBuiltin (BuiltinFunction At) [argExpr -> IBoolType, d, ds, argExpr -> xs, argExpr -> i] -> VBoolAt d ds xs i
+  VBuiltin (BuiltinFunction Foreach) [argExpr -> IBoolType, d, ds, argExpr -> fn] -> VBoolForeach d ds fn
+  VBuiltin (BuiltinFunction If) [argExpr -> IBoolTensorType dims, c, x, y] -> VBoolIf dims (argExpr c) (argExpr x) (argExpr y)
+  _ -> developerError $ "ill-typed RatTensor expression:" <+> prettyVerbose expr
 
 fromBoolValue :: BooleanTensorValue -> Value Builtin
 fromBoolValue = \case

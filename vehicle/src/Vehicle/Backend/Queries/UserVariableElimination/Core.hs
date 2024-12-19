@@ -188,8 +188,8 @@ instance FromJSON VariableType
 -- | One step in the process for transforming unreduced user variables into
 -- reduced network input and output variables.
 data UserVariableReconstructionStep
-  = SolveEquality Bool Variable (LinearExpr RationalTensor)
-  | SolveInequalities Variable (Bounds RationalTensor)
+  = SolveEquality Bool Variable (LinearExpr RatTensor)
+  | SolveInequalities Variable (Bounds RatTensor)
   | ReconstructTensor VariableType TensorVariable (Tensor Variable)
   deriving (Eq, Ord, Show, Generic)
 
@@ -321,8 +321,8 @@ getReducedVariableExprFor var = do
 
 reduceTensorExpr ::
   GlobalCtx ->
-  LinearExpr RationalTensor ->
-  [LinearExpr RationalTensor]
+  LinearExpr RatTensor ->
+  [LinearExpr RatTensor]
 reduceTensorExpr globalCtx (Sparse coeff constant) = do
   let constValues = tensorToList constant
   let numRatEqs = product (tensorShape constant)
@@ -334,7 +334,7 @@ reduceTensorExpr globalCtx (Sparse coeff constant) = do
       [([Variable], Coefficient)] ->
       [Rational] ->
       Int ->
-      LinearExpr RationalTensor
+      LinearExpr RatTensor
     mkRatEquality coeffs consts i =
       Sparse (Map.fromList (fmap (first (!! i)) coeffs)) (ZeroDimTensor (consts !! i))
 

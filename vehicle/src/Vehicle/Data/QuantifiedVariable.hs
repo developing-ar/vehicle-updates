@@ -93,7 +93,7 @@ prettyRationalAsFloat p = do
 
 -- | A (satisfying) assignment to a set of user-level variables.
 newtype UserVariableAssignment
-  = UserVariableAssignment [(Name, RationalTensor)]
+  = UserVariableAssignment [(Name, RatTensor)]
   deriving (Generic)
 
 instance ToJSON UserVariableAssignment

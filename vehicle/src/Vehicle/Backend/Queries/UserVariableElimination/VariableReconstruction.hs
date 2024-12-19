@@ -10,7 +10,7 @@ import Vehicle.Compile.FourierMotzkinElimination
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Code.LinearExpr (evaluateExpr)
 import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RationalTensor, Tensor (..), pattern ZeroDimTensor)
+import Vehicle.Data.Tensor (RatTensor, Tensor (..), pattern ZeroDimTensor)
 import Vehicle.Verify.QueryFormat.Core
 import Vehicle.Verify.Verifier.Core
 
@@ -37,7 +37,7 @@ reconstructUserVars (Reconstruction variables steps) networkVariableAssignment =
 -- Mixed variable assignments
 
 data MixedVariableAssignment = VariableAssignment
-  { variableValues :: Map Variable RationalTensor,
+  { variableValues :: Map Variable RatTensor,
     userVariables :: [TensorVariable]
   }
 

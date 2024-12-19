@@ -8,7 +8,7 @@ import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.Hashing ()
-import Vehicle.Data.Tensor (RationalTensor, allTensor)
+import Vehicle.Data.Tensor (RatTensor, allTensor)
 import Vehicle.Prelude
 
 --------------------------------------------------------------------------------
@@ -26,7 +26,7 @@ instance (FromJSON constant) => FromJSON (Equality constant)
 -- | Checks whether an equality is trivial or not. Returns `Nothing` if
 -- non-trivial, and otherwise `Just b` where `b` is the value of the assertion
 -- if it is trivial.
-checkEqualityTriviality :: Equality RationalTensor -> Maybe Bool
+checkEqualityTriviality :: Equality RatTensor -> Maybe Bool
 checkEqualityTriviality (Equality e) = fmap isZero (isConstant e)
 
 --------------------------------------------------------------------------------
@@ -55,7 +55,7 @@ mkInequality op e1 e2 =
 -- | Checks whether an assertion is trivial or not. Returns `Nothing` if
 -- non-trivial, and otherwise `Just b` where `b` is the value of the assertion
 -- if it is trivial.
-checkInequalityTriviality :: Inequality RationalTensor -> Maybe Bool
+checkInequalityTriviality :: Inequality RatTensor -> Maybe Bool
 checkInequalityTriviality (Inequality s e) = case isConstant e of
   Nothing -> Nothing
   Just tensor -> Just $ case s of
@@ -66,8 +66,8 @@ checkInequalityTriviality (Inequality s e) = case isConstant e of
 -- Assertions
 
 data Assertion
-  = InequalityAssertion (Inequality RationalTensor)
-  | EqualityAssertion (Equality RationalTensor)
+  = InequalityAssertion (Inequality RatTensor)
+  | EqualityAssertion (Equality RatTensor)
   deriving (Show, Eq, Generic)
 
 instance ToJSON Assertion
@@ -92,10 +92,10 @@ assertionRel = \case
     | strictness ineq == Strict -> LessThan
     | otherwise -> LessThanOrEqual
 
-eqToAssertion :: LinearExpr RationalTensor -> LinearExpr RationalTensor -> Assertion
+eqToAssertion :: LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion
 eqToAssertion e1 e2 = EqualityAssertion $ Equality $ addExprs 1 (-1) e1 e2
 
-ordToAssertion :: OrderOp -> LinearExpr RationalTensor -> LinearExpr RationalTensor -> Assertion
+ordToAssertion :: OrderOp -> LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion
 ordToAssertion op e1 e2 = InequalityAssertion $ mkInequality op e1 e2
 
 --------------------------------------------------------------------------------

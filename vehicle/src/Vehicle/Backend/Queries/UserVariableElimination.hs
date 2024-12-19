@@ -35,7 +35,7 @@ import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.Code.TypedView (BooleanTensorValue (..), DimensionsValue (..), RatTensorValue (..), fromBoolValue, fromRatTensorValue, toBoolValue, toDimensionsValue, pattern INatType)
 import Vehicle.Data.Code.Value
-import Vehicle.Data.Tensor (RationalTensor, Tensor, pattern ZeroDimTensor)
+import Vehicle.Data.Tensor (RatTensor, Tensor, pattern ZeroDimTensor)
 import Vehicle.Verify.Core (NetworkContextInfo (..), QuerySetNegationStatus)
 import Vehicle.Verify.QueryFormat (QueryFormat (..), supportsStrictInequalities)
 import Vehicle.Verify.Specification
@@ -258,7 +258,7 @@ unblockNetworkApplication unblockVector ident spine = do
 
 compileAssertion ::
   (MonadQuantifierBody m) =>
-  (LinearExpr RationalTensor -> LinearExpr RationalTensor -> Assertion) ->
+  (LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion) ->
   BuiltinFunction ->
   VArg Builtin ->
   Value Builtin ->

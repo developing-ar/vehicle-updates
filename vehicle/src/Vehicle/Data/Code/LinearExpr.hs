@@ -8,7 +8,7 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import GHC.Generics (Generic)
 import Vehicle.Data.DeBruijn (Lv)
-import Vehicle.Data.Tensor (RationalTensor, allTensor, zipWithTensor, pattern ZeroDimTensor)
+import Vehicle.Data.Tensor (RatTensor, allTensor, zipWithTensor, pattern ZeroDimTensor)
 import Vehicle.Prelude
 
 -------------------------------------------------------------------------------
@@ -28,22 +28,22 @@ class Constant constant where
   -- identity when added.
   isZero :: constant -> Bool
 
-instance Constant RationalTensor where
-  addConstants :: Coefficient -> Coefficient -> RationalTensor -> RationalTensor -> RationalTensor
+instance Constant RatTensor where
+  addConstants :: Coefficient -> Coefficient -> RatTensor -> RatTensor -> RatTensor
   addConstants a b = zipWithTensor (\x y -> a * x + b * y)
 
-  scaleConstant :: Coefficient -> RationalTensor -> RationalTensor
+  scaleConstant :: Coefficient -> RatTensor -> RatTensor
   scaleConstant a = fmap (\x -> a * x)
 
-  isZero :: RationalTensor -> Bool
+  isZero :: RatTensor -> Bool
   isZero = allTensor (== 0)
 
 {-
-extractTensorConstant :: Maybe RationalTensor -> RationalTensor
+extractTensorConstant :: Maybe RatTensor -> RatTensor
 extractTensorConstant Nothing = 0
 extractTensorConstant (Just v) = v
 -}
-extractRationalConstant :: RationalTensor -> Rational
+extractRationalConstant :: RatTensor -> Rational
 extractRationalConstant (ZeroDimTensor v) = v
 extractRationalConstant _ = developerError "FM-elimination doesn't yet work over tensors"
 

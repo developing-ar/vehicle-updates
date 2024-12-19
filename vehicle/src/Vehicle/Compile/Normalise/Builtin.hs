@@ -2,6 +2,7 @@ module Vehicle.Compile.Normalise.Builtin where
 
 import Vehicle.Compile.Context.Free.Class (MonadFreeContext)
 import Vehicle.Compile.Prelude
+import Vehicle.Compile.Print (prettyVerbose)
 import Vehicle.Compile.Print.Builtin
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Interface (BuiltinHasStandardData (..))
@@ -107,14 +108,24 @@ evalOp2 getArg1 getArg2 op mkResult originalExpr = \case
   [argExpr -> (getArg1 -> Just x), argExpr -> (getArg2 -> Just y)] -> mkResult (op x y)
   _ -> originalExpr
 
+-----------------------------------------------------------------------------
+-- Evaluating reductions
+
+data TensorLiteralAccess expr a = Access
+  { getTensorLiteral :: expr -> Maybe (Tensor a),
+    mkTensorLiteral :: Tensor a -> expr
+  }
+
 evalReduceTensor ::
-  (expr -> Maybe (Tensor a)) ->
+  (HasTensorPseudoConstructors expr) =>
   (Tensor a -> Tensor a -> Tensor a) ->
-  (Tensor a -> expr) ->
+  (GenericArg expr -> expr -> expr -> expr) ->
   EvalSimpleBuiltin expr
-evalReduceTensor getTensor f mkTensor originalExpr = \case
-  [argExpr -> (getTensor -> Just e), argExpr -> (getTensor -> Just t)] ->
-    mkTensor $ foldTensor f e t
+evalReduceTensor getTensor mkTensor f fExpr originalExpr = \case
+  [argExpr -> baseCase, argExpr -> tensor] -> case (baseCase, tensor) of
+    (getTensor -> Just e, getTensor -> Just t) -> mkTensor $ foldTensor f e t
+    (_, getStackTensor -> Just (_, ds, _, xs)) -> foldr (fExpr ds . argExpr) baseCase xs
+    _ -> originalExpr
   _ -> originalExpr
 
 -----------------------------------------------------------------------------
@@ -128,7 +139,7 @@ evalNotBoolTensor = evalOp1 getBoolTensorLit (fmap not) mkBoolTensorLit
 evalAndBoolTensor :: (HasBoolLits expr) => EvalSimpleBuiltin expr
 evalAndBoolTensor originalExpr = \case
   [argExpr -> e1, argExpr -> e2] -> case (e1, e2) of
-    (IBoolTensor x, IBoolTensor y) -> IBoolTensor $ zipWithTensor (&&) x y
+    (IBoolTensorLiteral x, IBoolTensorLiteral y) -> IBoolTensorLiteral $ zipWithTensor (&&) x y
     (IBoolConstTensor (IBoolLiteral b) _, _) -> if b then e2 else e1
     (_, IBoolConstTensor (IBoolLiteral b) _) -> if b then e1 else e2
     _ -> originalExpr
@@ -137,7 +148,7 @@ evalAndBoolTensor originalExpr = \case
 evalOrBoolTensor :: (HasBoolLits expr) => EvalSimpleBuiltin expr
 evalOrBoolTensor originalExpr = \case
   [argExpr -> e1, argExpr -> e2] -> case (e1, e2) of
-    (IBoolTensor x, IBoolTensor y) -> IBoolTensor $ zipWithTensor (||) x y
+    (IBoolTensorLiteral x, IBoolTensorLiteral y) -> IBoolTensorLiteral $ zipWithTensor (||) x y
     (IBoolConstTensor (IBoolLiteral b) _, _) -> if b then e1 else e2
     (_, IBoolConstTensor (IBoolLiteral b) _) -> if b then e2 else e1
     _ -> originalExpr
@@ -146,7 +157,7 @@ evalOrBoolTensor originalExpr = \case
 evalImplies :: (HasBoolLits expr) => EvalSimpleBuiltin expr
 evalImplies originalExpr = \case
   [argExpr -> e1, argExpr -> e2] -> case (e1, e2) of
-    (IBoolTensor x, IBoolTensor y) -> IBoolTensor $ zipWithTensor (\u v -> not u && v) x y
+    (IBoolTensorLiteral x, IBoolTensorLiteral y) -> IBoolTensorLiteral $ zipWithTensor (\u v -> not u && v) x y
     _ -> originalExpr
   _ -> originalExpr
 
@@ -211,13 +222,6 @@ evalVectorToList originalExpr = \case
   _ -> originalExpr
 
 -----------------------------------------------------------------------------
--- From here on, these only work for standard typing systems with implicit
--- arguments in the format expected by the standard typing system, as
--- otherwise we can't reconstruct the MapList and FoldList with the right
--- typing arguments.
------------------------------------------------------------------------------
-
------------------------------------------------------------------------------
 -- List
 
 evalMapList :: (HasStandardListLits expr) => ([GenericArg expr] -> expr) -> EvalBuiltin expr m
@@ -241,73 +245,6 @@ evalFoldList evalApp originalExpr args =
     _ -> return originalExpr
 
 -----------------------------------------------------------------------------
--- Vector
-
-{-
-evalIndices :: (HasStandardVecLits expr, HasIndexLits expr, HasNatLits expr) => ([GenericArg expr] -> expr) -> EvalSimpleBuiltin expr
-evalIndices mkIndexType originalExpr = \case
-  [size@(argExpr -> INatLiteral n)] -> do
-    let t = implicit (mkIndexType [size])
-    let xs = fmap (explicit . IIndexLiteral) ([0 .. n - 1] :: [Int])
-    IVecLiteral t xs
-  _ -> originalExpr
-
-case c of
-  IVecLiteral {} -> do
-    i' <- unblockNonVector actions i
-    liftIf i' $ \i'' -> do
-      forceEvalSimple At evalAt [t, n, explicit c, explicit i'']
-  IMapVector _ _ t2 f xs -> appAt f [(t2, n, xs)] i
-  IZipWithVector t1 t2 _ _ f xs ys -> appAt f [(t1, n, xs), (t2, n, ys)] i
-  IVectorAdd t1 t2 _ _ f xs ys -> appAt (argExpr f) [(t1, n, xs), (t2, n, ys)] i
-  IVectorSub t1 t2 _ _ f xs ys -> appAt (argExpr f) [(t1, n, xs), (t2, n, ys)] i
-  _ -> do
-    -- Don't reduce vector bound variables in container as it may trigger extremely expensive normalisation
-    -- that we can avoid because we're only looking up a single element of it.
-    c' <- unblockVector actions (isVBoundVar c) c
-    unblockAt actions t n c' i
-  where
-    appAt ::
-      (MonadUnblock m) =>
-      Value Builtin ->
-      [(VArg Builtin, VArg Builtin, Value Builtin)] ->
-      Value Builtin ->
-      m (Value Builtin)
-    appAt f args index = normaliseApp f =<< traverse (appIndexToArg index) args
-
-    appIndexToArg ::
-      (MonadUnblock m) =>
-      Value Builtin ->
-      (VArg Builtin, VArg Builtin, Value Builtin) ->
-      m (VArg Builtin)
-    appIndexToArg index (t', n', xs) =
-      Arg mempty Explicit Relevant
-        <$> unblockAt actions t' n' xs index
-
-evalFoldVector :: (HasStandardVecLits expr) => EvalBuiltin expr m
-evalFoldVector evalApp originalExpr args = case args of
-  [_, _, argExpr -> f, argExpr -> e, argExpr -> IVecLiteral _t xs] -> foldrM f' e xs
-    where
-      f' x r = evalApp f [x, explicit r]
-  _ -> return originalExpr
-
-evalZipWith :: (HasStandardVecLits expr) => EvalBuiltin expr m
-evalZipWith evalApp originalExpr = \case
-  [_, _, c, argExpr -> f, argExpr -> IVecLiteral _t1 xs, argExpr -> IVecLiteral _t2 ys] ->
-    IVecLiteral c <$> zipWithM f' xs ys
-    where
-      f' x y = explicit <$> evalApp f [x, y]
-  _ -> return originalExpr
-
-evalMapVector :: (HasStandardVecLits expr) => EvalBuiltin expr m
-evalMapVector evalApp originalExpr = \case
-  [_, b, argExpr -> f, argExpr -> IVecLiteral _t1 xs] ->
-    IVecLiteral b <$> traverse f' xs
-    where
-      f' x = explicit <$> evalApp f [x]
-  _ -> return originalExpr
--}
------------------------------------------------------------------------------
 -- Rational tensors
 
 evalRatTensorOp1 :: (HasRatLits expr) => (Rational -> Rational) -> EvalSimpleBuiltin expr
@@ -317,7 +254,7 @@ evalRatTensorOp2 :: (HasRatLits expr) => (Rational -> Rational -> Rational) -> E
 evalRatTensorOp2 op = evalOp2 getRatTensorLit getRatTensorLit (zipWithTensor op) mkRatTensorLit
 
 evalReduceRatTensor :: (HasRatLits expr) => (Tensor Rational -> Tensor Rational -> Tensor Rational) -> EvalSimpleBuiltin expr
-evalReduceRatTensor f = evalReduceTensor getRatTensorLit f mkRatTensorLit
+evalReduceRatTensor f = evalReduceTensor getRatTensorLit f _ mkRatTensorLit
 
 evalAddRatTensor :: (HasRatLits expr) => EvalSimpleBuiltin expr
 evalAddRatTensor originalExpr = \case
@@ -374,34 +311,21 @@ evalOrderRatTensor :: (HasBoolLits expr, HasRatLits expr) => OrderOp -> EvalSimp
 evalOrderRatTensor op = evalOp2 getRatTensorLit getRatTensorLit (zipWithTensor (orderOp op)) mkBoolTensorLit
 
 evalReduceAndTensor :: (HasBoolLits expr) => EvalSimpleBuiltin expr
-evalReduceAndTensor = evalReduceTensor getBoolTensorLit (zipWithTensor (&&)) mkBoolTensorLit
+evalReduceAndTensor = evalReduceTensor getBoolTensorLit (zipWithTensor (&&)) _ mkBoolTensorLit
 
 evalReduceOrTensor :: (HasBoolLits expr) => EvalSimpleBuiltin expr
-evalReduceOrTensor = evalReduceTensor getBoolTensorLit (zipWithTensor (||)) mkBoolTensorLit
+evalReduceOrTensor = evalReduceTensor getBoolTensorLit (zipWithTensor (||)) _ mkBoolTensorLit
 
 -----------------------------------------------------------------------------
 -- Generic tensor operations
 
-data PrimitiveTensor expr = forall a.
-  (Eq a) =>
-  PrimitiveTensor
-  { getTensor :: expr -> Maybe (Tensor a),
-    mkTensor :: Tensor a -> expr
-  }
+type PrimitiveTensor expr = forall a. (Eq a) => TensorLiteralAccess expr a
 
 primitiveBoolTensor :: (HasBoolLits expr) => PrimitiveTensor expr
-primitiveBoolTensor =
-  PrimitiveTensor
-    { getTensor = getBoolTensorLit,
-      mkTensor = mkBoolTensorLit
-    }
+primitiveBoolTensor = Access getTensorLiteral getBoolTensorLit
 
 primitiveRatTensor :: (HasRatLits expr) => PrimitiveTensor expr
-primitiveRatTensor =
-  PrimitiveTensor
-    { getTensor = getRatTensorLit,
-      mkTensor = mkRatTensorLit
-    }
+primitiveRatTensor = Access getRatTensorLit mkRatTensorLit
 
 class HasPrimitives expr where
   primitives :: [PrimitiveTensor expr]
@@ -412,17 +336,20 @@ instance HasPrimitives (Value Builtin) where
 instance HasPrimitives (Value LossBuiltin) where
   primitives = [primitiveRatTensor]
 
-evalAt :: (HasPrimitives expr, HasIndexLits expr) => EvalSimpleBuiltin expr
+evalAt :: forall expr. (HasPrimitives expr, HasIndexLits expr, HasTensorPseudoConstructors expr) => EvalSimpleBuiltin expr
 evalAt originalExpr args = case args of
   [_, _, argExpr -> t, argExpr -> IIndexLiteral i] -> go originalExpr t i primitives
   _ -> originalExpr
   where
     go :: expr -> expr -> Int -> [PrimitiveTensor expr] -> expr
     go original tensor i = \case
-      [] -> original
-      PrimitiveTensor {..} : prims -> case getTensor tensor of
+      Access {..} : prims -> case getTensorLiteral tensor of
         Just t -> mkTensor (t `at` i)
         Nothing -> go original tensor i prims
+      _ -> case tensor of
+        IStackTensor _ _ _ xs -> argExpr $ xs !! i
+        IConstTensor t v _ -> _
+        _ -> original
 
 evalStackTensor :: (HasPrimitives expr, HasNatLits expr, HasStandardListLits expr) => EvalSimpleBuiltin expr
 evalStackTensor originalExpr = \case
@@ -440,10 +367,10 @@ evalStackTensor originalExpr = \case
   where
     go :: expr -> [Int] -> [expr] -> [PrimitiveTensor expr] -> expr
     go original elemDims args = \case
-      [] -> original
-      PrimitiveTensor {..} : prims -> case traverse getTensor args of
+      Access {..} : prims -> case traverse getTensorLiteral args of
         Just xss -> mkTensor $ stack elemDims xss
         Nothing -> go original elemDims args prims
+      [] -> original
 
 evalConstTensor :: (HasPrimitives expr, HasNatLits expr, HasStandardListLits expr) => EvalSimpleBuiltin expr
 evalConstTensor originalExpr = \case
@@ -457,7 +384,7 @@ evalConstTensor originalExpr = \case
     go :: expr -> expr -> [Int] -> [PrimitiveTensor expr] -> expr
     go original tensorExpr dims = \case
       [] -> original
-      PrimitiveTensor {..} : prims -> case getTensor tensorExpr of
+      Access {..} : prims -> case getTensor tensorExpr of
         Just t -> case t of
           ZeroDimTensor v -> mkTensor $ ConstantTensor dims v
           _ -> developerError "Non-zero dimensional tensor argument for ConstTensor"
@@ -673,7 +600,9 @@ evalBuiltinFunction b evalApp originalValue args = case b of
   ReduceMulRatTensor -> return $ evalReduceMulRatTensor originalValue args
   ReduceMinRatTensor -> return $ evalReduceMinRatTensor originalValue args
   ReduceMaxRatTensor -> return $ evalReduceMaxRatTensor originalValue args
-  ReduceAndTensor -> return $ evalReduceAndTensor originalValue args
+  ReduceAndTensor -> do
+    logDebug MaxDetail $ prettyVerbose args
+    return $ evalReduceAndTensor originalValue args
   ReduceOrTensor -> return $ evalReduceOrTensor originalValue args
   FromNat FromNatToIndex -> return $ evalFromNatToIndex originalValue args
   FromNat FromNatToNat -> return $ evalFromNatToNat originalValue args

@@ -26,7 +26,7 @@ import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RationalTensor, tensorShape, tensorToList)
+import Vehicle.Data.Tensor (RatTensor, tensorShape, tensorToList)
 import Vehicle.Prelude.Warning (CompileWarning (..))
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core
@@ -134,7 +134,7 @@ convertToNetworkRatVarAssertions globalCtx = go
 makeQueryAssertion ::
   (MonadCompile m) =>
   Relation ->
-  LinearExpr RationalTensor ->
+  LinearExpr RatTensor ->
   m (QueryAssertion NetworkElementVariable)
 makeQueryAssertion relation (Sparse coefficients constant) = do
   let finalRelation = case relation of

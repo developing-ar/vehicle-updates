@@ -155,20 +155,22 @@ traverseUnnormalised f (Glued u n) = Glued <$> f u <*> pure n
 -- Instances
 
 instance (BuiltinHasBoolLiterals builtin, BuiltinHasConstTensor builtin) => HasBoolLits (Value builtin) where
-  getBoolTensorLit = \case
-    VBuiltin (getBoolBuiltinTensorLit -> Just b) [] -> Just b
-    _ -> Nothing
-  mkBoolTensorLit b = VBuiltin (mkBoolBuiltinTensorLit b) []
-
-  getBoolConstTensor = \case
-    VBuiltin (isConstTensorBuiltin -> True) (reverse -> dims : v : _) -> Just (argExpr v, argExpr dims)
-    _ -> Nothing
+  accessBoolTensorLiteral =
+    Access
+      ( \case
+          VBuiltin (getBoolBuiltinTensorLit -> Just b) [] -> Just b
+          _ -> Nothing
+      )
+      (\b -> VBuiltin (mkBoolBuiltinTensorLit b) [])
 
 instance (BuiltinHasIndexLiterals builtin, BuiltinHasIndexTensorLiterals builtin) => HasIndexLits (Value builtin) where
-  getIndexLit e = case e of
-    VBuiltin (getIndexBuiltinLit -> Just n) [] -> Just n
-    _ -> Nothing
-  mkIndexLit x = VBuiltin (mkIndexBuiltinLit x) mempty
+  accessIndexLiteral =
+    Access
+      ( \case
+          VBuiltin (getIndexBuiltinLit -> Just n) [] -> Just n
+          _ -> Nothing
+      )
+      (\v -> VBuiltin (mkIndexBuiltinLit x) mempty)
 
   getIndexTensorLit = \case
     VBuiltin (getIndexBuiltinTensorLit -> Just b) [] -> Just b
@@ -197,6 +199,17 @@ instance (BuiltinHasRatLiterals builtin, BuiltinHasConstTensor builtin) => HasRa
     _ -> Nothing
 
 instance (BuiltinHasListLiterals builtin) => HasStandardListLits (Value builtin) where
+  getNil = \case
+    VBuiltin (isBuiltinNil -> True) [t] -> Just t
+    _ -> Nothing
+  mkNil t = VBuiltin mkBuiltinNil [t]
+
+  getCons = \case
+    VBuiltin (isBuiltinCons -> True) [t, x, xs] -> Just (t, x, xs)
+    _ -> Nothing
+  mkCons t x xs = VBuiltin mkBuiltinCons [t, x, xs]
+
+instance HasTensorPseudoConstructors (Value builtin) where
   getNil = \case
     VBuiltin (isBuiltinNil -> True) [t] -> Just t
     _ -> Nothing

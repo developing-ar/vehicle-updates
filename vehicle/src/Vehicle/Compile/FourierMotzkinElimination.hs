@@ -12,7 +12,7 @@ import Vehicle.Compile.Prelude
 import Vehicle.Data.Assertion
 import Vehicle.Data.Builtin.Core (Strictness (..))
 import Vehicle.Data.Code.LinearExpr
-import Vehicle.Data.Tensor (RationalTensor, pattern ZeroDimTensor)
+import Vehicle.Data.Tensor (RatTensor, pattern ZeroDimTensor)
 
 -- | TODO If performance proves unnacceptably poor look into
 -- Imbert's acceleration theorems:
@@ -70,9 +70,9 @@ partition var = foldr categorise (Bounds [] [], [])
 -- required variable that is missing from the assignment or the reconstructed
 -- value.
 reconstructFourierMotzkinVariableValue ::
-  Map Variable RationalTensor ->
-  Bounds RationalTensor ->
-  Either Variable RationalTensor
+  Map Variable RatTensor ->
+  Bounds RatTensor ->
+  Either Variable RatTensor
 reconstructFourierMotzkinVariableValue assignment solution = do
   let initialMax = (-infinity, NonStrict)
   let initialMin = (infinity, NonStrict)
@@ -95,7 +95,7 @@ reconstructFourierMotzkinVariableValue assignment solution = do
   where
     evaluateMinValue ::
       (Rational, Strictness) ->
-      LowerBound RationalTensor ->
+      LowerBound RatTensor ->
       Either Variable (Rational, Strictness)
     evaluateMinValue current@(currentMin, _) (Bound rel expr) = do
       value <- extractRationalConstant <$> evaluateExpr expr assignment
@@ -106,7 +106,7 @@ reconstructFourierMotzkinVariableValue assignment solution = do
 
     evaluateMaxValue ::
       (Rational, Strictness) ->
-      UpperBound RationalTensor ->
+      UpperBound RatTensor ->
       Either Variable (Rational, Strictness)
     evaluateMaxValue current@(currentMax, _) (Bound rel expr) = do
       value <- extractRationalConstant <$> evaluateExpr expr assignment

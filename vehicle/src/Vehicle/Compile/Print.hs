@@ -39,7 +39,7 @@ import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr (Constant (..), LinearExpr, prettyLinearExpr)
 import Vehicle.Data.Code.Value
-import Vehicle.Data.Tensor (RationalTensor)
+import Vehicle.Data.Tensor (RatTensor)
 import Vehicle.Syntax.AST.Expr qualified as S
 import Vehicle.Syntax.Print
 
@@ -164,7 +164,7 @@ type family StrategyFor (tags :: Tags) a :: Strategy where
   StrategyFor tags (Equality constant `In` ctx) = StrategyFor tags (LinearExpr constant `In` ctx)
   StrategyFor tags (Inequality constant `In` ctx) = StrategyFor tags (LinearExpr constant `In` ctx)
   StrategyFor tags (Bounds constant `In` ctx) = StrategyFor tags (Inequality constant `In` ctx)
-  StrategyFor tags (Assertion `In` ctx) = StrategyFor tags (LinearExpr RationalTensor `In` ctx)
+  StrategyFor tags (Assertion `In` ctx) = StrategyFor tags (LinearExpr RatTensor `In` ctx)
   StrategyFor tags (GenericProg expr `In` ctx) = (StrategyFor tags (expr `In` ctx))
   StrategyFor tags (GenericDecl expr `In` ctx) = (StrategyFor tags (expr `In` ctx))
   StrategyFor tags (GenericArg expr `In` ctx) = (StrategyFor tags (expr `In` ctx))
@@ -183,7 +183,7 @@ type family StrategyFor (tags :: Tags) a :: Strategy where
   -- Things that we just pretty print.
   StrategyFor tags (Int `In` ctx) = 'Pretty
   StrategyFor tags (Text `In` ctx) = 'Pretty
-  StrategyFor tags (RationalTensor `In` ctx) = 'Pretty
+  StrategyFor tags (RatTensor `In` ctx) = 'Pretty
   --------------------
   -- Simplification --
   --------------------
@@ -566,8 +566,8 @@ instance
       <+> vsep (fmap (prettyUsing @rest . (,ctx)) upperBounds)
 
 instance
-  ( PrettyUsing rest (Inequality RationalTensor `In` ctx),
-    PrettyUsing rest (Equality RationalTensor `In` ctx)
+  ( PrettyUsing rest (Inequality RatTensor `In` ctx),
+    PrettyUsing rest (Equality RatTensor `In` ctx)
   ) =>
   PrettyUsing rest (Assertion `In` ctx)
   where

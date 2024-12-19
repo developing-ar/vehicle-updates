@@ -12,7 +12,7 @@ import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.LinearExpr (LinearExpr, addExprs, constantExpr, isConstant, scaleExpr, singletonVarExpr)
 import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
-import Vehicle.Data.Tensor (RationalTensor, TensorShape, zeroTensor, pattern ZeroDimTensor)
+import Vehicle.Data.Tensor (RatTensor, TensorShape, zeroTensor, pattern ZeroDimTensor)
 import Prelude hiding (Applicative (..))
 
 type MonadCompileLinearExpr m =
@@ -33,7 +33,7 @@ compileTensorLinearRelation ::
   (Lv -> ExceptT LinearityError m TensorShape) ->
   Value Builtin ->
   Value Builtin ->
-  m (Either LinearityError (LinearExpr RationalTensor, LinearExpr RationalTensor))
+  m (Either LinearityError (LinearExpr RatTensor, LinearExpr RatTensor))
 compileTensorLinearRelation lookupVar x y = do
   runExceptT $ do
     x' <- compile lookupVar x
@@ -45,7 +45,7 @@ compile ::
   (MonadCompileLinearExpr m) =>
   (Lv -> m TensorShape) ->
   Value Builtin ->
-  m (LinearExpr RationalTensor)
+  m (LinearExpr RatTensor)
 compile lookupVar expr = case toRatTensorValue expr of
   ----------------
   -- Base cases --

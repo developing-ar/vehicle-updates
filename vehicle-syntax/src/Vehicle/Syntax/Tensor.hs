@@ -158,9 +158,15 @@ foldMapTensorLike mkValue mkVec (_ : ds) xs = do
 instance (Pretty a) => Pretty (Tensor a) where
   pretty = foldMapTensor pretty (\_dims bs -> "[" <+> concatWith (surround ", ") bs <+> "]")
 
-type RationalTensor = Tensor Rational
+type BoolTensor = Tensor Bool
 
-zeroTensor :: TensorShape -> RationalTensor
+type NatTensor = Tensor Int
+
+type IndexTensor = Tensor Int
+
+type RatTensor = Tensor Rational
+
+zeroTensor :: TensorShape -> RatTensor
 zeroTensor dims = Tensor dims (Constant 0)
 
 singletonTensor :: a -> Tensor a

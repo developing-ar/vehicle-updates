@@ -16,7 +16,7 @@ import Vehicle.Compile.Print (prettyVerbose)
 import Vehicle.Data.Assertion
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.QuantifiedVariable (Variable)
-import Vehicle.Data.Tensor (RationalTensor)
+import Vehicle.Data.Tensor (RatTensor)
 
 --------------------------------------------------------------------------------
 -- Data
@@ -26,8 +26,8 @@ import Vehicle.Data.Tensor (RationalTensor)
 -- field so we can either look for rational equalities, tensor equalities or
 -- no equalties at all.
 data ConstrainedAssertionTree
-  = SingleEquality !(Equality RationalTensor) !(MaybeTrivial AssertionTree)
-  | Inequalities ![Inequality RationalTensor] !(MaybeTrivial AssertionTree)
+  = SingleEquality !(Equality RatTensor) !(MaybeTrivial AssertionTree)
+  | Inequalities ![Inequality RatTensor] !(MaybeTrivial AssertionTree)
 
 instance Pretty ConstrainedAssertionTree where
   pretty = \case

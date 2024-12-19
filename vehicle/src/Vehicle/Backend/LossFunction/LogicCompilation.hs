@@ -196,11 +196,11 @@ runBodyExtraction ::
   m a
 runBodyExtraction originalFn process ctx body = do
   bodyValue <- eval mempty (boundContextToEnv ctx) body
-  resultOrError <- runExceptT $ runNameContextT ctx $ process bodyValue
+  let nameCtx = toNamedBoundCtx ctx
+  resultOrError <- runExceptT $ runNameContextT nameCtx $ process bodyValue
   case resultOrError of
     Right result -> return result
     Left blockedExpr -> do
-      let nameCtx = toNamedBoundCtx ctx
       (logicID, tensorField) <- ask
       throwError $ UnableToLiftLogicFieldToTensors logicID tensorField originalFn nameCtx blockedExpr
 

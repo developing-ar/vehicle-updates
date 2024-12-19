@@ -12,7 +12,7 @@ import Vehicle.Compile.Error
 import Vehicle.Compile.Normalise.Builtin hiding (evalOp2)
 import Vehicle.Compile.Normalise.NBE (evalApp)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (prettyFriendly, prettyVerbose)
+import Vehicle.Compile.Print
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
@@ -42,12 +42,12 @@ data UnblockingActions m = UnblockingActions
 unblockBoolExpr :: (MonadUnblock m) => NamedBoundCtx -> Value Builtin -> m (Value Builtin)
 unblockBoolExpr ctx expr = do
   let exprDoc = prettyFriendly (WithContext expr ctx)
-  logDebug MaxDetail $ line <> "Unblocking" <+> squotes exprDoc
+  logDebug MaxDetail $ line <> "unblocking" <+> squotes exprDoc
   incrCallDepth
 
-  unblockedExpr <- unblockBoolTensorValue expr
+  unblockedExpr <- unblockBoolTensorValue ctx expr
   let unblockedExprDoc = prettyFriendly (WithContext unblockedExpr ctx)
-  logDebug MaxDetail $ "Unblocked to" <+> squotes unblockedExprDoc
+  logDebug MaxDetail $ "result:" <+> squotes unblockedExprDoc
   decrCallDepth
   return unblockedExpr
 
@@ -57,13 +57,13 @@ tryPurifyAssertion ::
   Value Builtin ->
   m (Value Builtin)
 tryPurifyAssertion actions assertion = do
+  preCtx <- getGlobalNamedBoundCtx
   logDebugM MaxDetail $ do
-    preCtx <- getGlobalNamedBoundCtx
     let assertionDoc = prettyFriendly (WithContext assertion preCtx)
     return $ line <> "Trying to purify" <+> squotes assertionDoc
   incrCallDepth
 
-  let unblock = unblockRatTensorValue actions
+  let unblock = unblockRatTensorValue preCtx actions
   unblockedExpr <- case toBoolValue assertion of
     VEqualsRatTensor Eq dims x y -> unblockOp2 (Equals EqRatTensor Eq) (evalEqualityRatTensor Eq) unblock unblock [dims] x y
     VOrderRatTensor op dims x y -> unblockOp2 (Order OrderRatTensor op) (evalOrderRatTensor op) unblock unblock [dims] x y
@@ -82,10 +82,10 @@ tryPurifyAssertion actions assertion = do
 
 type UnblockingFunction m = (MonadUnblock m) => Value Builtin -> m (Value Builtin)
 
-unblockBoolTensorValue :: UnblockingFunction m
-unblockBoolTensorValue expr = do
-  showEntry expr
-  showExit =<< case toBoolValue expr of
+unblockBoolTensorValue :: NamedBoundCtx -> UnblockingFunction m
+unblockBoolTensorValue ctx expr = do
+  showEntry ctx expr
+  showExit ctx =<< case toBoolValue expr of
     -- Already unblocked
     VBoolTensorLiteral {} -> return expr
     VAnd {} -> return expr
@@ -107,12 +107,12 @@ unblockBoolTensorValue expr = do
     VBoolAt d ds xs s -> unblockAtTensor unblock IBoolType d ds xs s
     VBoolForeach d ds f -> unblockForeachTensor IBoolType d ds f
   where
-    unblock = unblockBoolTensorValue
+    unblock = unblockBoolTensorValue ctx
 
-unblockRatTensorValue :: (MonadPurify m) => UnblockingActions m -> Value Builtin -> m (Value Builtin)
-unblockRatTensorValue actions@UnblockingActions {..} expr = do
-  showEntry expr
-  showExit =<< case toRatTensorValue expr of
+unblockRatTensorValue :: (MonadPurify m) => NamedBoundCtx -> UnblockingActions m -> Value Builtin -> m (Value Builtin)
+unblockRatTensorValue ctx actions@UnblockingActions {..} expr = do
+  showEntry ctx expr
+  showExit ctx =<< case toRatTensorValue expr of
     -- Rational operators
     VRatTensorLiteral {} -> return expr
     VIfRatTensor {} -> return expr
@@ -135,7 +135,7 @@ unblockRatTensorValue actions@UnblockingActions {..} expr = do
     VRatAt d ds xs i -> unblockAtTensor unblock IRatType d ds xs i
     VRatForeach d ds fn -> unblockForeachTensor IRatType d ds fn
   where
-    unblock = unblockRatTensorValue actions
+    unblock = unblockRatTensorValue ctx actions
 
 unblockDimensionsValue :: UnblockingFunction m
 unblockDimensionsValue expr = case toDimensionsValue expr of
@@ -174,6 +174,7 @@ unblockOp1 fn evalFn unblock1 implicitArgs x = do
   x' <- unblock1 x
   liftIf x' $ \x'' -> do
     let args = implicitArgs <> [explicit x'']
+    logDebug MaxDetail $ prettyVerbose args
     return $ evalFn (VBuiltin (BuiltinFunction fn) args) args
 
 unblockOp2 ::
@@ -276,15 +277,15 @@ unblockForeachTensor tElem d ds fn = do
 currentPass :: CompilerPass
 currentPass = "unblocking"
 
-showEntry :: forall m. (MonadUnblock m) => Value Builtin -> m ()
-showEntry e = do
+showEntry :: forall m. (MonadUnblock m) => NamedBoundCtx -> Value Builtin -> m ()
+showEntry ctx e = do
   -- ctx <- getNamedBoundCtx (Proxy @(Type Builtin))
-  logDebug MaxDetail $ "unblock-entry" <+> prettyVerbose e
+  logDebug MaxDetail $ "unblock-entry" <+> prettyFriendly (WithContext e ctx)
   incrCallDepth
 
-showExit :: forall m. (MonadUnblock m) => Value Builtin -> m (Value Builtin)
-showExit e = do
+showExit :: forall m. (MonadUnblock m) => NamedBoundCtx -> Value Builtin -> m (Value Builtin)
+showExit ctx e = do
   decrCallDepth
   -- ctx <- getNamedBoundCtx (Proxy @(Type Builtin))
-  logDebug MaxDetail $ "unblock-exit " <+> prettyVerbose e --  (WithContext e ctx)
+  logDebug MaxDetail $ "unblock-exit " <+> prettyFriendly (WithContext e ctx) --  (WithContext e ctx)
   return e
