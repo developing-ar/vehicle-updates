@@ -119,7 +119,7 @@ solveInstanceGoal constraint rawBuiltinCandidates depth goal = do
       logDebug MaxDetail "Multiple possible candidates found so deferring."
       -- TODO can we be more precise with the set of blocking metas?
       -- Probably not as the set of blocking metas will depend on the depth at which we're searching
-      let blockedConstraint = blockConstraintOn constraint mempty
+      blockedConstraint <- blockConstraintOn constraint <$> getUnsolvedMetas (Proxy @builtin)
       addInstanceConstraints [blockedConstraint]
 
 -- | Locates any more candidates that are in the bound context of the constraint
