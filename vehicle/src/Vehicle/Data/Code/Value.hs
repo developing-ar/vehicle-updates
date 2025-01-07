@@ -154,88 +154,11 @@ traverseUnnormalised f (Glued u n) = Glued <$> f u <*> pure n
 -----------------------------------------------------------------------------
 -- Instances
 
-instance (BuiltinHasBoolLiterals builtin, BuiltinHasConstTensor builtin) => HasBoolLits (Value builtin) where
-  accessBoolTensorLiteral =
+instance (HasBuiltinConstructor Value) where
+  accessBuiltinConstructor =
     Access
       { getExpr = \case
-          VBuiltin (getBoolBuiltinTensorLit -> Just b) [] -> Just b
+          VBuiltin b spine -> Just (b, spine)
           _ -> Nothing,
-        mkExpr = \b -> VBuiltin (mkBoolBuiltinTensorLit b) []
-      }
-
-instance (BuiltinHasIndexLiterals builtin, BuiltinHasIndexTensorLiterals builtin) => HasIndexLits (Value builtin) where
-  accessIndexLiteral =
-    Access
-      { getExpr = \case
-          VBuiltin (getIndexBuiltinLit -> Just n) [] -> Just n
-          _ -> Nothing,
-        mkExpr = \v -> VBuiltin (mkIndexBuiltinLit v) mempty
-      }
-
-  accessIndexTensorLiteral =
-    Access
-      { getExpr = \case
-          VBuiltin (getIndexBuiltinTensorLit -> Just b) [] -> Just b
-          _ -> Nothing,
-        mkExpr = \b -> VBuiltin (mkIndexBuiltinTensorLit b) []
-      }
-
-instance (BuiltinHasNatLiterals builtin, BuiltinHasNatTensorLiterals builtin) => HasNatLits (Value builtin) where
-  accessNatLiteral =
-    Access
-      { getExpr = \case
-          VBuiltin (getNatBuiltinLit -> Just b) [] -> Just b
-          _ -> Nothing,
-        mkExpr = \x -> VBuiltin (mkNatBuiltinLit x) mempty
-      }
-
-  accessNatTensorLiteral =
-    Access
-      { getExpr = \case
-          VBuiltin (getNatBuiltinTensorLit -> Just b) [] -> Just b
-          _ -> Nothing,
-        mkExpr = \b -> VBuiltin (mkNatBuiltinTensorLit b) []
-      }
-
-instance (BuiltinHasRatLiterals builtin, BuiltinHasConstTensor builtin) => HasRatLits (Value builtin) where
-  accessRatTensorLiteral =
-    Access
-      { getExpr = \case
-          VBuiltin (getRatBuiltinTensorLit -> Just b) [] -> Just b
-          _ -> Nothing,
-        mkExpr = \b -> VBuiltin (mkRatBuiltinTensorLit b) []
-      }
-
-instance (BuiltinHasListLiterals builtin) => HasStandardListLits (Value builtin) where
-  accessNil =
-    Access
-      { getExpr = \case
-          VBuiltin (isBuiltinNil -> True) [t] -> Just t
-          _ -> Nothing,
-        mkExpr = \t -> VBuiltin mkBuiltinNil [t]
-      }
-
-  accessCons =
-    Access
-      { getExpr = \case
-          VBuiltin (isBuiltinCons -> True) [t, x, xs] -> Just (t, x, xs)
-          _ -> Nothing,
-        mkExpr = \(t, x, xs) -> VBuiltin mkBuiltinCons [t, x, xs]
-      }
-
-instance HasTensorPseudoConstructors (Value builtin) where
-  accessStackTensor =
-    Access
-      { getExpr = \case
-          VBuiltin _ (d : ds : t : xs) -> Just (d, ds, t, xs)
-          _ -> Nothing,
-        mkExpr = \(d, ds, t, xs) -> VBuiltin _ (d : ds : t : xs)
-      }
-
-  accessConstTensor =
-    Access
-      { getExpr = \case
-          VBuiltin _ [t, argExpr -> v, argExpr -> ds] -> Just (t, v, ds)
-          _ -> Nothing,
-        mkExpr = \(t, v, xs) -> VBuiltin _ [t, explicit v, explicit xs]
+        mkExpr = uncurry VBuiltin
       }

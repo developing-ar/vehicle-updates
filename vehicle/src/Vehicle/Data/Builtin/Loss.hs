@@ -121,48 +121,63 @@ instance Pretty LossBuiltin where
   pretty = pretty . show
 
 instance BuiltinHasIndexLiterals LossBuiltin where
-  getIndexBuiltinLit e = case e of
-    LossBuiltinConstructor (IndexLiteral n) -> Just n
-    _ -> Nothing
-  mkIndexBuiltinLit x = LossBuiltinConstructor (IndexLiteral x)
+  accessIndexLitBuiltin =
+    Access
+      { getExpr = \case
+          LossBuiltinConstructor (IndexLiteral n) -> Just n
+          _ -> Nothing,
+        mkExpr = LossBuiltinConstructor . IndexLiteral
+      }
 
-instance BuiltinHasIndexTensorLiterals LossBuiltin where
-  mkIndexBuiltinTensorLit b = LossBuiltinConstructor (IndexTensorLiteral b)
-  getIndexBuiltinTensorLit = \case
-    LossBuiltinConstructor (IndexTensorLiteral b) -> Just b
-    _ -> Nothing
+  accessIndexTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          LossBuiltinConstructor (IndexTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = LossBuiltinConstructor . IndexTensorLiteral
+      }
 
 instance BuiltinHasNatLiterals LossBuiltin where
-  getNatBuiltinLit e = case e of
-    LossBuiltinConstructor (NatLiteral b) -> Just b
-    _ -> Nothing
-  mkNatBuiltinLit x = LossBuiltinConstructor (NatLiteral x)
+  accessNatLitBuiltin =
+    Access
+      { getExpr = \case
+          LossBuiltinConstructor (NatLiteral n) -> Just n
+          _ -> Nothing,
+        mkExpr = LossBuiltinConstructor . NatLiteral
+      }
 
-instance BuiltinHasNatTensorLiterals LossBuiltin where
-  mkNatBuiltinTensorLit b = LossBuiltinConstructor (NatTensorLiteral b)
-  getNatBuiltinTensorLit = \case
-    LossBuiltinConstructor (NatTensorLiteral b) -> Just b
-    _ -> Nothing
+  accessNatTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          LossBuiltinConstructor (NatTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = LossBuiltinConstructor . NatTensorLiteral
+      }
 
-instance BuiltinHasRatLiterals LossBuiltin where
-  mkRatBuiltinTensorLit b = LossBuiltinConstructor (RatTensorLiteral b)
-  getRatBuiltinTensorLit = \case
-    LossBuiltinConstructor (RatTensorLiteral b) -> Just b
-    _ -> Nothing
+  accessAddNatBuiltin = _
+  accessMulNatBuiltin = _
 
+instance BuiltinHasListLiterals LossBuiltin where
+  accessNilBuiltin =
+    Access
+      { getExpr = \case
+          LossBuiltinConstructor Nil -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> LossBuiltinConstructor Nil
+      }
+
+  accessConsBuiltin =
+    Access
+      { getExpr = \case
+          LossBuiltinConstructor Cons -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> LossBuiltinConstructor Cons
+      }
+
+{-
 instance BuiltinHasConstTensor LossBuiltin where
   isConstTensorBuiltin e = case e of
     LossBuiltinFunction ConstTensor -> True
     _ -> False
   mkConstTensorBuiltin = LossBuiltinFunction ConstTensor
-
-instance BuiltinHasListLiterals LossBuiltin where
-  isBuiltinNil e = case e of
-    LossBuiltinConstructor Nil -> True
-    _ -> False
-  mkBuiltinNil = LossBuiltinConstructor Nil
-
-  isBuiltinCons e = case e of
-    LossBuiltinConstructor Cons -> True
-    _ -> False
-  mkBuiltinCons = LossBuiltinConstructor Cons
+-}

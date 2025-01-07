@@ -11,58 +11,137 @@ import Vehicle.Data.Builtin.Interface
 -----------------------------------------------------------------------------
 -- Classes
 
+functionAccessor :: BuiltinFunction -> Accessor Builtin ()
+functionAccessor b =
+  Access
+    { getExpr = \case
+        BuiltinFunction b1 | b == b1 -> Just ()
+        _ -> Nothing,
+      mkExpr = \() -> BuiltinFunction b
+    }
+
+orderAccessor :: OrderDomain -> Accessor Builtin OrderOp
+orderAccessor dom =
+  Access
+    { getExpr = \case
+        BuiltinFunction (Order d op) | d == dom -> Just op
+        _ -> Nothing,
+      mkExpr = \op -> BuiltinFunction (Order dom op)
+    }
+
+equalityAccessor :: EqualityDomain -> Accessor Builtin EqualityOp
+equalityAccessor dom =
+  Access
+    { getExpr = \case
+        BuiltinFunction (Equals d op) | d == dom -> Just op
+        _ -> Nothing,
+      mkExpr = \op -> BuiltinFunction (Equals dom op)
+    }
+
 instance BuiltinHasBoolLiterals Builtin where
-  mkBoolBuiltinTensorLit b = BuiltinConstructor (BoolTensorLiteral b)
-  getBoolBuiltinTensorLit = \case
-    BuiltinConstructor (BoolTensorLiteral b) -> Just b
-    _ -> Nothing
+  accessBoolTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          BuiltinConstructor (BoolTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = BuiltinConstructor . BoolTensorLiteral
+      }
+
+  accessNotBuiltin = functionAccessor Not
+  accessAndBuiltin = functionAccessor And
+  accessOrBuiltin = functionAccessor Or
+  accessImpliesBuiltin = functionAccessor Implies
+  accessReduceAndBuiltin = functionAccessor ReduceAndTensor
+  accessReduceOrBuiltin = functionAccessor ReduceOrTensor
+  accessIfBuiltin = functionAccessor If
+
+  accessOrderIndexBuiltin = orderAccessor OrderIndex
+  accessOrderNatBuiltin = orderAccessor OrderNat
+  accessOrderRatTensorBuiltin = orderAccessor OrderRatTensor
+  accessEqualIndexBuiltin = equalityAccessor EqIndex
+  accessEqualNatBuiltin = equalityAccessor EqNat
+  accessEqualRatTensorBuiltin = equalityAccessor EqRatTensor
 
 instance BuiltinHasIndexLiterals Builtin where
-  getIndexBuiltinLit e = case e of
-    BuiltinConstructor (IndexLiteral n) -> Just n
-    _ -> Nothing
-  mkIndexBuiltinLit x = BuiltinConstructor (IndexLiteral x)
+  accessIndexLitBuiltin =
+    Access
+      { getExpr = \case
+          BuiltinConstructor (IndexLiteral n) -> Just n
+          _ -> Nothing,
+        mkExpr = BuiltinConstructor . IndexLiteral
+      }
 
-instance BuiltinHasIndexTensorLiterals Builtin where
-  mkIndexBuiltinTensorLit b = BuiltinConstructor (IndexTensorLiteral b)
-  getIndexBuiltinTensorLit = \case
-    BuiltinConstructor (IndexTensorLiteral b) -> Just b
-    _ -> Nothing
+  accessIndexTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          BuiltinConstructor (IndexTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = BuiltinConstructor . IndexTensorLiteral
+      }
 
 instance BuiltinHasNatLiterals Builtin where
-  getNatBuiltinLit e = case e of
-    BuiltinConstructor (NatLiteral b) -> Just b
-    _ -> Nothing
-  mkNatBuiltinLit x = BuiltinConstructor (NatLiteral x)
+  accessNatLitBuiltin =
+    Access
+      { getExpr = \case
+          BuiltinConstructor (NatLiteral n) -> Just n
+          _ -> Nothing,
+        mkExpr = BuiltinConstructor . NatLiteral
+      }
 
-instance BuiltinHasNatTensorLiterals Builtin where
-  mkNatBuiltinTensorLit b = BuiltinConstructor (NatTensorLiteral b)
-  getNatBuiltinTensorLit = \case
-    BuiltinConstructor (NatTensorLiteral b) -> Just b
-    _ -> Nothing
+  accessNatTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          BuiltinConstructor (NatTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = BuiltinConstructor . NatTensorLiteral
+      }
+
+  accessAddNatBuiltin = functionAccessor (Add AddNat)
+  accessMulNatBuiltin = functionAccessor (Mul MulNat)
 
 instance BuiltinHasRatLiterals Builtin where
-  mkRatBuiltinTensorLit b = BuiltinConstructor (RatTensorLiteral b)
-  getRatBuiltinTensorLit = \case
-    BuiltinConstructor (RatTensorLiteral b) -> Just b
-    _ -> Nothing
+  accessRatTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          BuiltinConstructor (RatTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = BuiltinConstructor . RatTensorLiteral
+      }
+
+  accessNegRatTensorBuiltin = functionAccessor $ Neg NegRatTensor
+  accessAddRatTensorBuiltin = functionAccessor $ Add AddRatTensor
+  accessMulRatTensorBuiltin = functionAccessor $ Mul MulRatTensor
+  accessSubRatTensorBuiltin = functionAccessor $ Sub SubRatTensor
+  accessDivRatTensorBuiltin = functionAccessor $ Div DivRatTensor
+  accessMinRatTensorBuiltin = functionAccessor $ Min MinRatTensor
+  accessMaxRatTensorBuiltin = functionAccessor $ Max MaxRatTensor
+  accessReduceAddRatBuiltin = functionAccessor ReduceAddRatTensor
+  accessReduceMulRatBuiltin = functionAccessor ReduceMulRatTensor
+  accessReduceMinRatBuiltin = functionAccessor ReduceMinRatTensor
+  accessReduceMaxRatBuiltin = functionAccessor ReduceMaxRatTensor
 
 instance BuiltinHasListLiterals Builtin where
-  isBuiltinNil e = case e of
-    BuiltinConstructor Nil -> True
-    _ -> False
-  mkBuiltinNil = BuiltinConstructor Nil
+  accessNilBuiltin =
+    Access
+      { getExpr = \case
+          BuiltinConstructor Nil -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> BuiltinConstructor Nil
+      }
 
-  isBuiltinCons e = case e of
-    BuiltinConstructor Cons -> True
-    _ -> False
-  mkBuiltinCons = BuiltinConstructor Cons
+  accessConsBuiltin =
+    Access
+      { getExpr = \case
+          BuiltinConstructor Cons -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> BuiltinConstructor Cons
+      }
 
-instance BuiltinHasConstTensor Builtin where
-  isConstTensorBuiltin e = case e of
-    BuiltinFunction ConstTensor -> True
-    _ -> False
-  mkConstTensorBuiltin = BuiltinFunction ConstTensor
+instance BuiltinHasTensors Builtin where
+  accessConstTensorBuiltin = functionAccessor ConstTensor
+  accessStackTensorBuiltin = functionAccessor StackTensor
+  accessAtTensorBuiltin = functionAccessor At
+  accessForeachTensorBuiltin = functionAccessor Foreach
 
 instance BuiltinHasStandardTypeClasses Builtin where
   mkBuiltinTypeClass = TypeClass

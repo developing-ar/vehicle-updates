@@ -135,6 +135,7 @@ instance BuiltinHasStandardData PolarityBuiltin where
     PolarityConstructor c -> Just c
     _ -> Nothing
 
+{-
 instance BuiltinHasBoolLiterals PolarityBuiltin where
   getBoolBuiltinTensorLit = \case
     PolarityConstructor (BoolTensorLiteral b) -> Just b
@@ -164,7 +165,7 @@ instance BuiltinHasConstTensor PolarityBuiltin where
     PolarityFunction ConstTensor -> True
     _ -> False
   mkConstTensorBuiltin = PolarityFunction ConstTensor
-
+-}
 -----------------------------------------------------------------------------
 -- Type synonyms
 

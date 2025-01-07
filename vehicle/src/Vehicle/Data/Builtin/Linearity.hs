@@ -7,7 +7,6 @@ import Data.Serialize (Serialize)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Vehicle.Data.Builtin.Core hiding (Builtin (BuiltinConstructor, BuiltinFunction))
-import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Code.Expr
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
@@ -144,6 +143,7 @@ instance Pretty LinearityBuiltin where
     Linearity l -> pretty l
     LinearityRelation tc -> pretty tc
 
+{-
 instance BuiltinHasStandardData LinearityBuiltin where
   mkBuiltinFunction = LinearityFunction
   getBuiltinFunction = \case
@@ -184,7 +184,7 @@ instance BuiltinHasConstTensor LinearityBuiltin where
     LinearityFunction ConstTensor -> True
     _ -> False
   mkConstTensorBuiltin = LinearityFunction ConstTensor
-
+-}
 -----------------------------------------------------------------------------
 -- Patterns
 
