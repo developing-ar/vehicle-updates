@@ -17,16 +17,41 @@ import Vehicle.Prelude
 -- of builtins being used, and therefore allows us to define operations
 -- (e.g. normalisation) once, rather than once for each builtin type.
 
+type Destruct expr a = expr -> Maybe a
+
+type Construct expr a = a -> expr
+
 data Accessor expr a = Access
-  { getExpr :: expr -> Maybe a,
-    mkExpr :: a -> expr
+  { getExpr :: Destruct expr a,
+    mkExpr :: Construct expr a
   }
+
+type TensorOp1Accessor expr = Accessor expr (GenericArg expr, expr)
+
+type TensorOp2Accessor expr = Accessor expr (GenericArg expr, expr, expr)
+
+type TensorReductionAccessor expr = Accessor expr (GenericArg expr, expr, expr)
+
+singleElement :: Accessor expr (Tensor a) -> Accessor expr a
+singleElement accessTensor =
+  Access
+    { getExpr = _ . getExpr accessTensor,
+      mkExpr = mkExpr accessTensor . ZeroDimTensor
+    }
 
 --------------------------------------------------------------------------------
 -- Naturals
 
 class HasBoolLits expr where
   accessBoolTensorLiteral :: Accessor expr BoolTensor
+
+  accessNotTensor :: Accessor expr (GenericArg expr, expr)
+  accessAndTensor :: Accessor expr (GenericArg expr, expr, expr)
+  accessOrTensor :: Accessor expr (GenericArg expr, expr, expr)
+  accessImpliesTensor :: Accessor expr (GenericArg expr, expr, expr)
+
+  accessReduceAnd :: TensorReductionAccessor expr
+  accessReduceOr :: TensorReductionAccessor expr
 
 pattern IBoolTensorLiteral :: (HasBoolLits expr) => BoolTensor -> expr
 pattern IBoolTensorLiteral n <- (getExpr accessBoolTensorLiteral -> Just n)
@@ -74,12 +99,26 @@ pattern INatTensor n <- (getExpr accessNatTensorLiteral -> Just n)
 -- Rationals
 
 class HasRatLits expr where
-  accessRatTensor :: Accessor expr RatTensor
+  accessRatTensorLiteral :: Accessor expr RatTensor
+
+  accessNegRatTensor :: TensorOp1Accessor expr
+
+  accessAddRatTensor :: TensorOp2Accessor expr
+  accessSubRatTensor :: TensorOp2Accessor expr
+  accessMulRatTensor :: TensorOp2Accessor expr
+  accessDivRatTensor :: TensorOp2Accessor expr
+  accessMinRatTensor :: TensorOp2Accessor expr
+  accessMaxRatTensor :: TensorOp2Accessor expr
+
+  accessReduceAddRat :: TensorReductionAccessor expr
+  accessReduceMulRat :: TensorReductionAccessor expr
+  accessReduceMinRat :: TensorReductionAccessor expr
+  accessReduceMaxRat :: TensorReductionAccessor expr
 
 pattern IRatTensor :: (HasRatLits expr) => Tensor Rational -> expr
-pattern IRatTensor n <- (getExpr accessRatTensor -> Just n)
+pattern IRatTensor n <- (getExpr accessRatTensorLiteral -> Just n)
   where
-    IRatTensor n = mkExpr accessRatTensor n
+    IRatTensor n = mkExpr accessRatTensorLiteral n
 
 pattern IRatLiteral :: (HasRatLits expr) => Rational -> expr
 pattern IRatLiteral n = IRatTensor (ZeroDimTensor n)
@@ -132,6 +171,7 @@ getDims v = case getDimsExprs v of
 class HasTensorPseudoConstructors expr where
   accessStackTensor :: Accessor expr (GenericArg expr, GenericArg expr, GenericArg expr, [GenericArg expr])
   accessConstTensor :: Accessor expr (GenericArg expr, expr, expr)
+  accessAtTensor :: Accessor expr (GenericArg expr, GenericArg expr, expr, expr)
 
 pattern IStackTensor :: (HasTensorPseudoConstructors expr) => GenericArg expr -> GenericArg expr -> GenericArg expr -> [GenericArg expr] -> expr
 pattern IStackTensor d ds t xs <- (getExpr accessStackTensor -> Just (d, ds, t, xs))
@@ -142,6 +182,13 @@ pattern IConstTensor :: (HasTensorPseudoConstructors expr) => GenericArg expr ->
 pattern IConstTensor t v ds <- (getExpr accessConstTensor -> Just (t, v, ds))
   where
     IConstTensor t v ds = mkExpr accessConstTensor (t, v, ds)
+
+constantMatching :: (Eq a, HasTensorPseudoConstructors expr) => a -> Accessor expr a -> Destruct expr ()
+constantMatching value access e = case getExpr accessConstTensor e of
+  Just (_, b, _) -> case getExpr access b of
+    Just v | v == value -> Just ()
+    _ -> Nothing
+  _ -> Nothing
 
 {-
 pattern IBoolConstTensor :: (HasBoolLits expr) => expr -> expr -> expr

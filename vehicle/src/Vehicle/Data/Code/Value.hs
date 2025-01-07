@@ -157,65 +157,85 @@ traverseUnnormalised f (Glued u n) = Glued <$> f u <*> pure n
 instance (BuiltinHasBoolLiterals builtin, BuiltinHasConstTensor builtin) => HasBoolLits (Value builtin) where
   accessBoolTensorLiteral =
     Access
-      ( \case
+      { getExpr = \case
           VBuiltin (getBoolBuiltinTensorLit -> Just b) [] -> Just b
-          _ -> Nothing
-      )
-      (\b -> VBuiltin (mkBoolBuiltinTensorLit b) [])
+          _ -> Nothing,
+        mkExpr = \b -> VBuiltin (mkBoolBuiltinTensorLit b) []
+      }
 
 instance (BuiltinHasIndexLiterals builtin, BuiltinHasIndexTensorLiterals builtin) => HasIndexLits (Value builtin) where
   accessIndexLiteral =
     Access
-      ( \case
+      { getExpr = \case
           VBuiltin (getIndexBuiltinLit -> Just n) [] -> Just n
-          _ -> Nothing
-      )
-      (\v -> VBuiltin (mkIndexBuiltinLit x) mempty)
+          _ -> Nothing,
+        mkExpr = \v -> VBuiltin (mkIndexBuiltinLit v) mempty
+      }
 
-  getIndexTensorLit = \case
-    VBuiltin (getIndexBuiltinTensorLit -> Just b) [] -> Just b
-    _ -> Nothing
-  mkIndexTensorLit b = VBuiltin (mkIndexBuiltinTensorLit b) []
+  accessIndexTensorLiteral =
+    Access
+      { getExpr = \case
+          VBuiltin (getIndexBuiltinTensorLit -> Just b) [] -> Just b
+          _ -> Nothing,
+        mkExpr = \b -> VBuiltin (mkIndexBuiltinTensorLit b) []
+      }
 
 instance (BuiltinHasNatLiterals builtin, BuiltinHasNatTensorLiterals builtin) => HasNatLits (Value builtin) where
-  getNatLit e = case e of
-    VBuiltin (getNatBuiltinLit -> Just b) [] -> Just b
-    _ -> Nothing
-  mkNatLit x = VBuiltin (mkNatBuiltinLit x) mempty
+  accessNatLiteral =
+    Access
+      { getExpr = \case
+          VBuiltin (getNatBuiltinLit -> Just b) [] -> Just b
+          _ -> Nothing,
+        mkExpr = \x -> VBuiltin (mkNatBuiltinLit x) mempty
+      }
 
-  getNatTensorLit = \case
-    VBuiltin (getNatBuiltinTensorLit -> Just b) [] -> Just b
-    _ -> Nothing
-  mkNatTensorLit b = VBuiltin (mkNatBuiltinTensorLit b) []
+  accessNatTensorLiteral =
+    Access
+      { getExpr = \case
+          VBuiltin (getNatBuiltinTensorLit -> Just b) [] -> Just b
+          _ -> Nothing,
+        mkExpr = \b -> VBuiltin (mkNatBuiltinTensorLit b) []
+      }
 
 instance (BuiltinHasRatLiterals builtin, BuiltinHasConstTensor builtin) => HasRatLits (Value builtin) where
-  getRatTensorLit = \case
-    VBuiltin (getRatBuiltinTensorLit -> Just b) [] -> Just b
-    _ -> Nothing
-  mkRatTensorLit b = VBuiltin (mkRatBuiltinTensorLit b) []
-
-  getRatConstTensor = \case
-    VBuiltin (isConstTensorBuiltin -> True) (reverse -> dims : v : _) -> Just (argExpr v, argExpr dims)
-    _ -> Nothing
+  accessRatTensorLiteral =
+    Access
+      { getExpr = \case
+          VBuiltin (getRatBuiltinTensorLit -> Just b) [] -> Just b
+          _ -> Nothing,
+        mkExpr = \b -> VBuiltin (mkRatBuiltinTensorLit b) []
+      }
 
 instance (BuiltinHasListLiterals builtin) => HasStandardListLits (Value builtin) where
-  getNil = \case
-    VBuiltin (isBuiltinNil -> True) [t] -> Just t
-    _ -> Nothing
-  mkNil t = VBuiltin mkBuiltinNil [t]
+  accessNil =
+    Access
+      { getExpr = \case
+          VBuiltin (isBuiltinNil -> True) [t] -> Just t
+          _ -> Nothing,
+        mkExpr = \t -> VBuiltin mkBuiltinNil [t]
+      }
 
-  getCons = \case
-    VBuiltin (isBuiltinCons -> True) [t, x, xs] -> Just (t, x, xs)
-    _ -> Nothing
-  mkCons t x xs = VBuiltin mkBuiltinCons [t, x, xs]
+  accessCons =
+    Access
+      { getExpr = \case
+          VBuiltin (isBuiltinCons -> True) [t, x, xs] -> Just (t, x, xs)
+          _ -> Nothing,
+        mkExpr = \(t, x, xs) -> VBuiltin mkBuiltinCons [t, x, xs]
+      }
 
 instance HasTensorPseudoConstructors (Value builtin) where
-  getNil = \case
-    VBuiltin (isBuiltinNil -> True) [t] -> Just t
-    _ -> Nothing
-  mkNil t = VBuiltin mkBuiltinNil [t]
+  accessStackTensor =
+    Access
+      { getExpr = \case
+          VBuiltin _ (d : ds : t : xs) -> Just (d, ds, t, xs)
+          _ -> Nothing,
+        mkExpr = \(d, ds, t, xs) -> VBuiltin _ (d : ds : t : xs)
+      }
 
-  getCons = \case
-    VBuiltin (isBuiltinCons -> True) [t, x, xs] -> Just (t, x, xs)
-    _ -> Nothing
-  mkCons t x xs = VBuiltin mkBuiltinCons [t, x, xs]
+  accessConstTensor =
+    Access
+      { getExpr = \case
+          VBuiltin _ [t, argExpr -> v, argExpr -> ds] -> Just (t, v, ds)
+          _ -> Nothing,
+        mkExpr = \(t, v, xs) -> VBuiltin _ [t, explicit v, explicit xs]
+      }

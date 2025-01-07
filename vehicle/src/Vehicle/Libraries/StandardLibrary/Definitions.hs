@@ -16,6 +16,7 @@ pattern TensorIdent <- Identifier (ModulePath [StdLib]) "Tensor"
 
 data StdLibFunction
   = StdTypeAnn
+  | StdId
   | StdBigAnd
   | StdBigOr
   | StdExistsIndex
@@ -30,6 +31,7 @@ data StdLibFunction
 instance Show StdLibFunction where
   show = \case
     StdTypeAnn -> "typeAnn"
+    StdId -> "id"
     StdBigAnd -> "bigAnd"
     StdBigOr -> "bigOr"
     StdExistsIndex -> "existsIndex"

@@ -142,7 +142,6 @@ typeOfBuiltinFunction = \case
   -- Conversion functions
   FromNat dom -> case dom of
     FromNatToIndex -> forAllIrrelevantNat "n" $ \s -> typeOfFromNat (tIndex s)
-    FromNatToNat -> typeOfFromNat tNat
     FromNatToRat -> typeOfFromNat (tRatTensor dimNil)
   FromRat dom -> case dom of
     FromRatToRat -> typeOfFromRat (tRatTensor dimNil)
@@ -196,11 +195,17 @@ typeOfTensorBoolOp1 = forAllDims $ \dims -> tBoolTensor dims ~> tBoolTensor dims
 typeOfTensorBoolOp2 :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
 typeOfTensorBoolOp2 = forAllDims $ \dims -> tBoolTensor dims ~> tBoolTensor dims ~> tBoolTensor dims
 
+typeOfTensorReduceOp ::
+  (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) =>
+  DSLExpr builtin ->
+  DSLExpr builtin
+typeOfTensorReduceOp tElem = forAllDims $ \dims -> tTensor tElem dimNil ~> tTensor tElem dims ~> tTensor tElem dimNil
+
 typeOfTensorRatReduceOp :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) => DSLExpr builtin
-typeOfTensorRatReduceOp = forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dimNil
+typeOfTensorRatReduceOp = typeOfTensorReduceOp tRat
 
 typeOfTensorBoolReduceOp :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) => DSLExpr builtin
-typeOfTensorBoolReduceOp = forAllDims $ \dims -> tBoolTensor dims ~> tBoolTensor dimNil
+typeOfTensorBoolReduceOp = typeOfTensorReduceOp tBool
 
 typeOfIf :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) => DSLExpr builtin
 typeOfIf =

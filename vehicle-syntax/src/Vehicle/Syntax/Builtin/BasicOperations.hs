@@ -309,14 +309,12 @@ instance Serialize FromRatDomain
 
 data FromNatDomain
   = FromNatToIndex
-  | FromNatToNat
   | FromNatToRat
   deriving (Eq, Ord, Show, Generic)
 
 instance Pretty FromNatDomain where
   pretty = \case
     FromNatToIndex -> "Index"
-    FromNatToNat -> "Nat"
     FromNatToRat -> "Rat"
 
 instance Serialize FromNatDomain

@@ -111,13 +111,10 @@ allTensor f = allValues f . tensorValue
 zipWithTensor :: (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
 zipWithTensor f (Tensor shape c) (Tensor _shape d) = Tensor shape (zipWithValues f c d)
 
-foldTensor :: (Tensor a -> b -> b) -> b -> Tensor a -> b
-foldTensor f e t = case tensorShape t of
+foldTensor :: (a -> a -> a) -> Tensor a -> Tensor a -> Tensor a
+foldTensor f e t = case tensorToList t of
   [] -> e
-  _d : ds -> do
-    let inputChunks = chunksOf (product ds) (tensorToList t)
-    let inputTensorChunks = fmap (Tensor ds . Values . Vector.fromList) inputChunks
-    foldr f e inputTensorChunks
+  (x : xs) -> ZeroDimTensor $ foldr f x xs
 
 at :: Tensor a -> Int -> Tensor a
 at (Tensor shape values) i = case shape of

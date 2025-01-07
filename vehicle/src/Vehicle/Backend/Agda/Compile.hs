@@ -753,7 +753,6 @@ compileNeg dom args = do
 
 compileFromNat :: (MonadAgdaCompile m) => FromNatDomain -> [Arg Builtin] -> m Code
 compileFromNat dom args = case (dom, args) of
-  (FromNatToNat, [value, _]) -> compileExpr $ argExpr value
   (FromNatToRat, [value, _]) -> do
     v <- compileExpr $ argExpr value
     return $ agdaDivRat [agdaPosInt [v], "1"]

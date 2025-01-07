@@ -143,8 +143,8 @@ data BooleanTensorValue
   | VEqualsNat EqualityOp (Value Builtin) (Value Builtin)
   | VEqualsRatTensor EqualityOp (VArg Builtin) (Value Builtin) (Value Builtin)
   | VQuantifyRatTensor Quantifier (VArg Builtin) (VBinder Builtin) (Closure Builtin)
-  | VReduceAndTensor (VArg Builtin) (Value Builtin)
-  | VReduceOrTensor (VArg Builtin) (Value Builtin)
+  | VReduceAndTensor (VArg Builtin) (Value Builtin) (Value Builtin)
+  | VReduceOrTensor (VArg Builtin) (Value Builtin) (Value Builtin)
   | VBoolIf (Value Builtin) (Value Builtin) (Value Builtin) (Value Builtin)
   | VBoolAt (VArg Builtin) (VArg Builtin) (Value Builtin) (Value Builtin)
   | VBoolTensorLiteral (Tensor Bool)
@@ -166,8 +166,8 @@ toBoolValue expr = case expr of
   VBuiltin (BuiltinFunction (Equals EqNat op)) [x, y] -> VEqualsNat op (argExpr x) (argExpr y)
   VBuiltin (BuiltinFunction (Equals EqIndex op)) [n1, n2, x, y] -> VEqualsIndex op n1 n2 (argExpr x) (argExpr y)
   VBuiltin (BuiltinFunction (QuantifyRatTensor op)) [dims, argExpr -> VLam binder closure] -> VQuantifyRatTensor op dims binder closure
-  VBuiltin (BuiltinFunction ReduceAndTensor) [dims, x] -> VReduceAndTensor dims (argExpr x)
-  VBuiltin (BuiltinFunction ReduceOrTensor) [dims, x] -> VReduceOrTensor dims (argExpr x)
+  VBuiltin (BuiltinFunction ReduceAndTensor) [dims, e, x] -> VReduceAndTensor dims (argExpr e) (argExpr x)
+  VBuiltin (BuiltinFunction ReduceOrTensor) [dims, e, x] -> VReduceOrTensor dims (argExpr e) (argExpr x)
   VBuiltin (BuiltinFunction At) [argExpr -> IBoolType, d, ds, argExpr -> xs, argExpr -> i] -> VBoolAt d ds xs i
   VBuiltin (BuiltinFunction Foreach) [argExpr -> IBoolType, d, ds, argExpr -> fn] -> VBoolForeach d ds fn
   VBuiltin (BuiltinFunction If) [argExpr -> IBoolTensorType dims, c, x, y] -> VBoolIf dims (argExpr c) (argExpr x) (argExpr y)
@@ -186,8 +186,8 @@ fromBoolValue = \case
   VEqualsIndex op n1 n2 x y -> VBuiltin (BuiltinFunction $ Equals EqIndex op) [n1, n2, explicit x, explicit y]
   VEqualsRatTensor op dims x y -> VBuiltin (BuiltinFunction $ Equals EqRatTensor op) [dims, explicit x, explicit y]
   VQuantifyRatTensor q dims binder closure -> VBuiltin (BuiltinFunction $ QuantifyRatTensor q) [dims, explicit (VLam binder closure)]
-  VReduceAndTensor dims x -> VBuiltin (BuiltinFunction ReduceAndTensor) [dims, explicit x]
-  VReduceOrTensor dims x -> VBuiltin (BuiltinFunction ReduceOrTensor) [dims, explicit x]
+  VReduceAndTensor dims e x -> VBuiltin (BuiltinFunction ReduceAndTensor) [dims, explicit e, explicit x]
+  VReduceOrTensor dims e x -> VBuiltin (BuiltinFunction ReduceOrTensor) [dims, explicit e, explicit x]
   VBoolIf dims c x y -> VBuiltin (BuiltinFunction If) [boolTensorType dims, explicit c, explicit x, explicit y]
   VConstBoolTensor x dims -> VBuiltin (BuiltinFunction ConstTensor) [boolType, explicit x, explicit dims]
   VBoolStackTensor d ds xs -> VBuiltin (BuiltinFunction StackTensor) (d : ds : boolType : xs)
@@ -210,10 +210,10 @@ data RatTensorValue
   | VDivRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
   | VMinRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
   | VMaxRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VReduceAddRatTensor (VArg Builtin) (Value Builtin)
-  | VReduceMulRatTensor (VArg Builtin) (Value Builtin)
-  | VReduceMinRatTensor (VArg Builtin) (Value Builtin)
-  | VReduceMaxRatTensor (VArg Builtin) (Value Builtin)
+  | VReduceAddRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
+  | VReduceMulRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
+  | VReduceMinRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
+  | VReduceMaxRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
   | VIfRatTensor (Value Builtin) (Value Builtin) (Value Builtin) (Value Builtin)
   | VRatTensorVar Lv
   | VNetworkApp Identifier (Spine Builtin)
@@ -238,10 +238,10 @@ toRatTensorValue expr = case expr of
       (Div DivRatTensor, [dims, x, y]) -> VDivRatTensor dims (argExpr x) (argExpr y)
       (Min MinRatTensor, [dims, x, y]) -> VMinRatTensor dims (argExpr x) (argExpr y)
       (Max MaxRatTensor, [dims, x, y]) -> VMaxRatTensor dims (argExpr x) (argExpr y)
-      (ReduceAddRatTensor, [dims, x]) -> VReduceAddRatTensor dims (argExpr x)
-      (ReduceMulRatTensor, [dims, x]) -> VReduceMulRatTensor dims (argExpr x)
-      (ReduceMinRatTensor, [dims, x]) -> VReduceMinRatTensor dims (argExpr x)
-      (ReduceMaxRatTensor, [dims, x]) -> VReduceMaxRatTensor dims (argExpr x)
+      (ReduceAddRatTensor, [dims, e, x]) -> VReduceAddRatTensor dims (argExpr e) (argExpr x)
+      (ReduceMulRatTensor, [dims, e, x]) -> VReduceMulRatTensor dims (argExpr e) (argExpr x)
+      (ReduceMinRatTensor, [dims, e, x]) -> VReduceMinRatTensor dims (argExpr e) (argExpr x)
+      (ReduceMaxRatTensor, [dims, e, x]) -> VReduceMaxRatTensor dims (argExpr e) (argExpr x)
       (If, [argExpr -> IRatTensorType dims, c, x, y]) -> VIfRatTensor dims (argExpr c) (argExpr x) (argExpr y)
       (ConstTensor, [argExpr -> IRatType, x, dims]) -> VRatConstTensor (argExpr x) (argExpr dims)
       (StackTensor, d : ds : (argExpr -> IRatType) : xs) -> VRatStackTensor d ds xs
@@ -263,10 +263,10 @@ fromRatTensorValue = \case
   VDivRatTensor dims x y -> VBuiltin (BuiltinFunction $ Div DivRatTensor) [dims, explicit x, explicit y]
   VMinRatTensor dims x y -> VBuiltin (BuiltinFunction $ Min MinRatTensor) [dims, explicit x, explicit y]
   VMaxRatTensor dims x y -> VBuiltin (BuiltinFunction $ Max MaxRatTensor) [dims, explicit x, explicit y]
-  VReduceAddRatTensor dims x -> VBuiltin (BuiltinFunction ReduceAddRatTensor) [dims, explicit x]
-  VReduceMulRatTensor dims x -> VBuiltin (BuiltinFunction ReduceMulRatTensor) [dims, explicit x]
-  VReduceMinRatTensor dims x -> VBuiltin (BuiltinFunction ReduceMinRatTensor) [dims, explicit x]
-  VReduceMaxRatTensor dims x -> VBuiltin (BuiltinFunction ReduceMaxRatTensor) [dims, explicit x]
+  VReduceAddRatTensor dims e x -> VBuiltin (BuiltinFunction ReduceAddRatTensor) [dims, explicit e, explicit x]
+  VReduceMulRatTensor dims e x -> VBuiltin (BuiltinFunction ReduceMulRatTensor) [dims, explicit e, explicit x]
+  VReduceMinRatTensor dims e x -> VBuiltin (BuiltinFunction ReduceMinRatTensor) [dims, explicit e, explicit x]
+  VReduceMaxRatTensor dims e x -> VBuiltin (BuiltinFunction ReduceMaxRatTensor) [dims, explicit e, explicit x]
   VRatTensorVar v -> VBoundVar v []
   VIfRatTensor dims c x y -> VBuiltin (BuiltinFunction If) [ratTensorType dims, explicit c, explicit x, explicit y]
   VNetworkApp n xs -> VFreeVar n xs
