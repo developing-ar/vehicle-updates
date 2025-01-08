@@ -1,8 +1,10 @@
 module Vehicle.Data.Code.Interface where
 
+import Control.Monad.Except (MonadError (..))
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Tensor
 import Vehicle.Prelude
+import Vehicle.Syntax.Builtin.BasicOperations
 
 --------------------------------------------------------------------------------
 -- Interface to standard builtins
@@ -38,6 +40,12 @@ getBuiltin accessBuiltin e = case getExpr accessBuiltinConstructor e of
 -- The interfaces defined in this file allow us to abstract over the exact set
 -- of builtins being used, and therefore allows us to define operations
 -- (e.g. normalisation) once, rather than once for each builtin type.
+
+type NatComparisonAccessor expr op = Accessor expr (op, expr, expr)
+
+type IndexComparisonAccessor expr op = Accessor expr (op, GenericArg expr, GenericArg expr, expr, expr)
+
+type RatTensorComparisonAccessor expr op = Accessor expr (op, GenericArg expr, expr, expr)
 
 type Op1Accessor expr = Accessor expr expr
 
@@ -124,6 +132,42 @@ tensorReductionArgs access =
       mkExpr = \(ds, e, xs) -> mkBuiltin access () [ds, explicit e, explicit xs]
     }
 
+natComparisonArgs ::
+  (HasBuiltinConstructor expr) =>
+  Accessor builtin op ->
+  NatComparisonAccessor (expr builtin) op
+natComparisonArgs accessOp =
+  Access
+    { getExpr = \case
+        (getBuiltin accessOp -> Just (op, [x, y])) -> Just (op, argExpr x, argExpr y)
+        _ -> Nothing,
+      mkExpr = \(op, x, y) -> mkBuiltin accessOp op [explicit x, explicit y]
+    }
+
+indexComparisonArgs ::
+  (HasBuiltinConstructor expr) =>
+  Accessor builtin op ->
+  IndexComparisonAccessor (expr builtin) op
+indexComparisonArgs accessOp =
+  Access
+    { getExpr = \case
+        (getBuiltin accessOp -> Just (op, [n1, n2, x, y])) -> Just (op, n1, n2, argExpr x, argExpr y)
+        _ -> Nothing,
+      mkExpr = \(op, n1, n2, x, y) -> mkBuiltin accessOp op [n1, n2, explicit x, explicit y]
+    }
+
+ratTensorComparisonArgs ::
+  (HasBuiltinConstructor expr) =>
+  Accessor builtin op ->
+  RatTensorComparisonAccessor (expr builtin) op
+ratTensorComparisonArgs accessOp =
+  Access
+    { getExpr = \case
+        (getBuiltin accessOp -> Just (op, [ds, x, y])) -> Just (op, ds, argExpr x, argExpr y)
+        _ -> Nothing,
+      mkExpr = \(op, ds, x, y) -> mkBuiltin accessOp op [ds, explicit x, explicit y]
+    }
+
 --------------------------------------------------------------------------------
 -- Boolean operations
 --------------------------------------------------------------------------------
@@ -158,6 +202,33 @@ accessIf =
         (getBuiltin accessIfBuiltin -> Just ((), [t, c, x, y])) -> Just (t, argExpr c, argExpr x, argExpr y)
         _ -> Nothing,
       mkExpr = \(t, c, x, y) -> mkBuiltin accessIfBuiltin () [t, explicit c, explicit x, explicit y]
+    }
+
+accessOrderIndex :: (HasBoolExpr expr builtin) => IndexComparisonAccessor (expr builtin) OrderOp
+accessOrderIndex = indexComparisonArgs accessOrderRatTensorBuiltin
+
+accessOrderNat :: (HasBoolExpr expr builtin) => NatComparisonAccessor (expr builtin) OrderOp
+accessOrderNat = natComparisonArgs accessOrderNatBuiltin
+
+accessOrderRatTensor :: (HasBoolExpr expr builtin) => RatTensorComparisonAccessor (expr builtin) OrderOp
+accessOrderRatTensor = ratTensorComparisonArgs accessOrderRatTensorBuiltin
+
+accessEqIndex :: (HasBoolExpr expr builtin) => IndexComparisonAccessor (expr builtin) EqualityOp
+accessEqIndex = indexComparisonArgs accessEqRatTensorBuiltin
+
+accessEqNat :: (HasBoolExpr expr builtin) => NatComparisonAccessor (expr builtin) EqualityOp
+accessEqNat = natComparisonArgs accessEqNatBuiltin
+
+accessEqRatTensor :: (HasBoolExpr expr builtin) => RatTensorComparisonAccessor (expr builtin) EqualityOp
+accessEqRatTensor = ratTensorComparisonArgs accessEqRatTensorBuiltin
+
+accessQuantifyRatTensor :: (HasBoolExpr expr builtin) => Accessor (expr builtin) (Quantifier, GenericArg (expr builtin), expr builtin)
+accessQuantifyRatTensor =
+  Access
+    { getExpr = \case
+        (getBuiltin accessQuantifyRatTensorBuiltin -> Just (q, [ds, fn])) -> Just (q, ds, argExpr fn)
+        _ -> Nothing,
+      mkExpr = \(q, ds, fn) -> mkBuiltin accessQuantifyRatTensorBuiltin q [ds, explicit fn]
     }
 
 pattern IBoolTensorLiteral :: (HasBoolExpr expr builtin) => BoolTensor -> expr builtin
@@ -320,28 +391,24 @@ mkListExpr tElem = foldr cons nil
     nil = INil (implicit tElem)
     cons x xs = ICons (implicit tElem) (explicit x) (explicit xs)
 
-{-
-,
-
-mkDims :: (HasNatLits expr, HasStandardListLits expr) => expr -> [Int] -> expr
+mkDims :: (HasNatExpr expr builtin, HasListExpr expr builtin) => expr builtin -> [Int] -> expr builtin
 mkDims natType ds = mkListExpr natType (fmap INatLiteral ds)
 
-getDim :: (HasNatLits expr) => expr -> Maybe Int
+getDim :: (HasNatExpr expr builtin) => expr builtin -> Maybe Int
 getDim = \case
   INatLiteral n -> Just n
   _ -> Nothing
 
-getDimsExprs :: (HasNatLits expr, HasStandardListLits expr) => expr -> Either expr [expr]
+getDimsExprs :: (HasNatExpr expr builtin, HasListExpr expr builtin) => expr builtin -> Either (expr builtin) [expr builtin]
 getDimsExprs = \case
   INil _ -> return []
   ICons _ d ds -> (argExpr d :) <$> getDimsExprs (argExpr ds)
   e -> throwError e
 
-getDims :: (HasNatLits expr, HasStandardListLits expr) => expr -> Maybe [Int]
+getDims :: (HasNatExpr expr builtin, HasListExpr expr builtin) => expr builtin -> Maybe [Int]
 getDims v = case getDimsExprs v of
   Left {} -> Nothing
   Right xs -> traverse getDim xs
--}
 
 --------------------------------------------------------------------------------
 -- Tensors

@@ -58,9 +58,17 @@ instance BuiltinHasBoolLiterals Builtin where
   accessOrderIndexBuiltin = orderAccessor OrderIndex
   accessOrderNatBuiltin = orderAccessor OrderNat
   accessOrderRatTensorBuiltin = orderAccessor OrderRatTensor
-  accessEqualIndexBuiltin = equalityAccessor EqIndex
-  accessEqualNatBuiltin = equalityAccessor EqNat
-  accessEqualRatTensorBuiltin = equalityAccessor EqRatTensor
+  accessEqIndexBuiltin = equalityAccessor EqIndex
+  accessEqNatBuiltin = equalityAccessor EqNat
+  accessEqRatTensorBuiltin = equalityAccessor EqRatTensor
+
+  accessQuantifyRatTensorBuiltin =
+    Access
+      { getExpr = \case
+          BuiltinFunction (QuantifyRatTensor q) -> Just q
+          _ -> Nothing,
+        mkExpr = BuiltinFunction . QuantifyRatTensor
+      }
 
 instance BuiltinHasIndexLiterals Builtin where
   accessIndexLitBuiltin =

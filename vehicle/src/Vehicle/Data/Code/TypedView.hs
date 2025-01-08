@@ -181,7 +181,7 @@ toBoolValue expr = case expr of
   (getExpr accessEqRatTensor -> Just (op, dims, x, y)) -> VEqualsRatTensor op dims x y
   (getExpr accessEqNat -> Just (op, x, y)) -> VEqualsNat op x y
   (getExpr accessEqIndex -> Just (op, n1, n2, x, y)) -> VEqualsIndex op n1 n2 x y
-  (getExpr accessQuantifyRatTensor -> Just (op, dims, argExpr -> VLam binder closure)) -> VQuantifyRatTensor op dims binder closure
+  (getExpr accessQuantifyRatTensor -> Just (op, dims, VLam binder closure)) -> VQuantifyRatTensor op dims binder closure
   (getExpr accessReduceAnd -> Just (dims, e, x)) -> VReduceAndTensor dims e x
   (getExpr accessReduceOr -> Just (dims, e, x)) -> VReduceOrTensor dims e x
   (getExpr accessConstTensor -> Just (argExpr -> IBoolType, x, dims)) -> VConstBoolTensor x dims

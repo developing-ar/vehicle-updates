@@ -46,9 +46,11 @@ class BuiltinHasBoolLiterals builtin where
   accessOrderIndexBuiltin :: Accessor builtin OrderOp
   accessOrderNatBuiltin :: Accessor builtin OrderOp
   accessOrderRatTensorBuiltin :: Accessor builtin OrderOp
-  accessEqualIndexBuiltin :: Accessor builtin EqualityOp
-  accessEqualNatBuiltin :: Accessor builtin EqualityOp
-  accessEqualRatTensorBuiltin :: Accessor builtin EqualityOp
+  accessEqIndexBuiltin :: Accessor builtin EqualityOp
+  accessEqNatBuiltin :: Accessor builtin EqualityOp
+  accessEqRatTensorBuiltin :: Accessor builtin EqualityOp
+
+  accessQuantifyRatTensorBuiltin :: Accessor builtin Quantifier
 
 --------------------------------------------------------------------------------
 -- HasIndex
