@@ -119,7 +119,7 @@ solveDefaultIndexConstraint ::
   m Bool
 solveDefaultIndexConstraint (WithContext constraint ctx) = do
   case instanceGoal constraint of
-    (VBuiltin NatInDomainConstraint [n, argExpr -> IIndexType size]) -> do
+    (VBuiltin NatInDomainConstraint [n, argExpr -> toTypeValue -> VIndexType size]) -> do
       let succN = fromNatValue $ case argExpr n of
             INatLiteral x -> VNatLiteral (x + 1)
             n' -> VNatAdd n' (INatLiteral 1)

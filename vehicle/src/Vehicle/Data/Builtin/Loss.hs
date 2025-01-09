@@ -120,6 +120,24 @@ data LossBuiltin
 instance Pretty LossBuiltin where
   pretty = pretty . show
 
+typeAccessor :: LossBuiltinType -> Accessor LossBuiltin ()
+typeAccessor b =
+  Access
+    { getExpr = \case
+        LossBuiltinType b1 | b == b1 -> Just ()
+        _ -> Nothing,
+      mkExpr = \() -> LossBuiltinType b
+    }
+
+functionAccessor :: LossBuiltinFunction -> Accessor LossBuiltin ()
+functionAccessor b =
+  Access
+    { getExpr = \case
+        LossBuiltinFunction b1 | b == b1 -> Just ()
+        _ -> Nothing,
+      mkExpr = \() -> LossBuiltinFunction b
+    }
+
 instance BuiltinHasIndexLiterals LossBuiltin where
   accessIndexLitBuiltin =
     Access
@@ -138,6 +156,8 @@ instance BuiltinHasIndexLiterals LossBuiltin where
       }
 
 instance BuiltinHasNatLiterals LossBuiltin where
+  accessNatTypeBuiltin = typeAccessor NatType
+
   accessNatLitBuiltin =
     Access
       { getExpr = \case
@@ -154,8 +174,8 @@ instance BuiltinHasNatLiterals LossBuiltin where
         mkExpr = LossBuiltinConstructor . NatTensorLiteral
       }
 
-  accessAddNatBuiltin = _
-  accessMulNatBuiltin = _
+  accessAddNatBuiltin = functionAccessor (Add AddNat)
+  accessMulNatBuiltin = functionAccessor (Mul MulNat)
 
 instance BuiltinHasListLiterals LossBuiltin where
   accessNilBuiltin =
@@ -174,10 +194,28 @@ instance BuiltinHasListLiterals LossBuiltin where
         mkExpr = \() -> LossBuiltinConstructor Cons
       }
 
-{-
-instance BuiltinHasConstTensor LossBuiltin where
-  isConstTensorBuiltin e = case e of
-    LossBuiltinFunction ConstTensor -> True
-    _ -> False
-  mkConstTensorBuiltin = LossBuiltinFunction ConstTensor
--}
+instance BuiltinHasTensors LossBuiltin where
+  accessConstTensorBuiltin = functionAccessor ConstTensor
+  accessStackTensorBuiltin = functionAccessor StackTensor
+  accessAtTensorBuiltin = functionAccessor At
+
+instance BuiltinHasRatLiterals LossBuiltin where
+  accessRatTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          LossBuiltinConstructor (RatTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = LossBuiltinConstructor . RatTensorLiteral
+      }
+
+  accessNegRatTensorBuiltin = functionAccessor $ Neg NegRatTensor
+  accessAddRatTensorBuiltin = functionAccessor $ Add AddRatTensor
+  accessMulRatTensorBuiltin = functionAccessor $ Mul MulRatTensor
+  accessSubRatTensorBuiltin = functionAccessor $ Sub SubRatTensor
+  accessDivRatTensorBuiltin = functionAccessor $ Div DivRatTensor
+  accessMinRatTensorBuiltin = functionAccessor $ Min MinRatTensor
+  accessMaxRatTensorBuiltin = functionAccessor $ Max MaxRatTensor
+  accessReduceAddRatBuiltin = functionAccessor ReduceAddRatTensor
+  accessReduceMulRatBuiltin = functionAccessor ReduceMulRatTensor
+  accessReduceMinRatBuiltin = functionAccessor ReduceMinRatTensor
+  accessReduceMaxRatBuiltin = functionAccessor ReduceMaxRatTensor

@@ -22,7 +22,7 @@ import Vehicle.Compile.Print (prettyFriendly, prettyFriendlyEmptyCtx, prettyVerb
 import Vehicle.Data.Builtin.Core (Builtin (..))
 import Vehicle.Data.Builtin.Core qualified as S
 import Vehicle.Data.Builtin.Loss
-import Vehicle.Data.Code.Interface (mkDims, pattern INatLiteral)
+import Vehicle.Data.Code.Interface (TensorOp1Args (..), mkDims, pattern INatLiteral, pattern INatType)
 import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value (BoundEnv, Closure (..), Spine, VArg, VBinder, Value (..), boundContextToEnv, extendEnvWithBound, traverseSpine)
 import Vehicle.Data.Tensor (Tensor (..), foldMapTensor)
@@ -228,10 +228,9 @@ translateConstant tensor = do
 
   let convertBool b = if b then trueExpr else falseExpr
   let foldLayer shape elems = do
-        let tElem = VBuiltin (LossBuiltinType NatType) []
         let dim = length elems
-        let dims = implicitIrrelevant (mkDims tElem shape)
-        let args = implicit (INatLiteral dim) : dims : implicit tElem : fmap explicit elems
+        let dims = implicitIrrelevant (mkDims shape)
+        let args = implicit (INatLiteral dim) : dims : implicit INatType : fmap explicit elems
         VBuiltin (LossBuiltinFunction StackTensor) args
   return $ foldMapTensor convertBool foldLayer tensor
 
@@ -259,7 +258,7 @@ translateForall ::
   Value Builtin ->
   m (Value LossBuiltin)
 translateForall dims lossDims binder body = do
-  let newBody = fromBoolValue $ VNot dims body
+  let newBody = fromBoolValue $ VNot $ TensorOp1Args dims body
   result <- translateExists lossDims binder newBody
   substField L.PointwiseNegation [lossDims, explicit result]
 

@@ -416,10 +416,16 @@ instance MeaningfulError CompileError where
           }
       where
         dimensionsOf :: VType Builtin -> Maybe Int
-        dimensionsOf t = case t of
-          ITensorType _ dims -> either (const Nothing) (Just . length) (getDimsExprs dims)
-          VBuiltin (BuiltinType ListType) [tElem] -> fmap (+ 1) $ dimensionsOf $ argExpr tElem
+        dimensionsOf t = case toTypeValue t of
+          VRatTensorType dims -> dimLength dims
+          VBoolTensorType dims -> dimLength dims
+          VNatTensorType dims -> dimLength dims
+          VIndexTensorType _ dims -> dimLength dims
+          VListType tElem -> (+ 1) <$> dimensionsOf tElem
           _ -> Nothing
+
+        dimLength :: Value Builtin -> Maybe Int
+        dimLength dims = either (const Nothing) (Just . length) (getDimsExprs dims)
     DatasetDimensionSizeMismatch (ident, p) file expectedSize actualSize wrongDimensionIndex ->
       UError $
         UserError
@@ -514,15 +520,17 @@ instance MeaningfulError CompileError where
                   <+> prettyIdentName ident
                   <+> "in the specification or change the value provided."
           }
-    ParameterTypeVariableSizeIndex (ident, p) parameterType ->
+    ParameterTypeVariableSizeIndex (ident, p) parameterType size ->
       UError $
         UserError
           { provenance = p,
             problem =
               unsupportedAnnotationTypeDescription (pretty (ParameterDef NonInferable)) ident parameterType
-                <+> "as the size of the"
+                <+> "as the size"
+                <+> squotes (prettyFriendlyEmptyCtx size)
+                <+> "for the"
                 <+> pretty IndexType
-                <+> "type is not a known constant.",
+                <+> "type is not a constant.",
             fix = Just "make sure the dimensions of the indices are all constants."
           }
     ParameterValueInvalidIndex (ident, p) value n ->

@@ -41,36 +41,97 @@ getBuiltin accessBuiltin e = case getExpr accessBuiltinConstructor e of
 -- of builtins being used, and therefore allows us to define operations
 -- (e.g. normalisation) once, rather than once for each builtin type.
 
-type NatComparisonAccessor expr op = Accessor expr (op, expr, expr)
+class IsArgs args where
+  accessSpine :: Accessor [GenericArg expr] (args expr)
 
-type IndexComparisonAccessor expr op = Accessor expr (op, GenericArg expr, GenericArg expr, expr, expr)
+-- | Arguments for comparisons (==, <= etc.) over Nat
+data NatOp2Args expr = NatOp2Args
+  { natOp2Arg1 :: expr,
+    natOp2Arg2 :: expr
+  }
 
-type RatTensorComparisonAccessor expr op = Accessor expr (op, GenericArg expr, expr, expr)
+instance IsArgs NatOp2Args where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [x, y] -> Just $ NatOp2Args (argExpr x) (argExpr y)
+          _ -> Nothing,
+        mkExpr = \(NatOp2Args x y) -> explicit <$> [x, y]
+      }
+
+-- | Arguments for comparisons (==, <= etc.) over Index
+data IndexComparisonArgs expr = IndexCompArgs
+  { indexCompSize1 :: GenericArg expr,
+    indexCompSize2 :: GenericArg expr,
+    indexCompArg1 :: expr,
+    indexCompArg2 :: expr
+  }
+
+instance IsArgs IndexComparisonArgs where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [n1, n2, x, y] -> Just $ IndexCompArgs n1 n2 (argExpr x) (argExpr y)
+          _ -> Nothing,
+        mkExpr = \(IndexCompArgs n1 n2 x y) -> [n1, n2, explicit x, explicit y]
+      }
+
+-- | Arguments for unary tensor operations (e.g. -, not)
+data TensorOp1Args expr = TensorOp1Args
+  { tensorOp1Dims :: GenericArg expr,
+    tensorOp1Arg :: expr
+  }
+
+instance IsArgs TensorOp1Args where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [ds, x] -> Just $ TensorOp1Args ds (argExpr x)
+          _ -> Nothing,
+        mkExpr = \(TensorOp1Args ds x) -> [ds, explicit x]
+      }
+
+-- | Arguments for binary tensor operations (e.g. +, -)
+data TensorOp2Args expr = TensorOp2Args
+  { tensorOp2Dims :: GenericArg expr,
+    tensorOp2Arg1 :: expr,
+    tensorOp2Arg2 :: expr
+  }
+
+instance IsArgs TensorOp2Args where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [ds, x, y] -> Just $ TensorOp2Args ds (argExpr x) (argExpr y)
+          _ -> Nothing,
+        mkExpr = \(TensorOp2Args ds x y) -> [ds, explicit x, explicit y]
+      }
+
+type TensorReductionArgs = TensorOp2Args
+
+type NatComparisonAccessor expr op = Accessor expr (op, NatOp2Args expr)
+
+type NatOp2Accessor expr = Accessor expr (NatOp2Args expr)
+
+type IndexComparisonAccessor expr op = Accessor expr (op, IndexComparisonArgs expr)
+
+type RatTensorComparisonAccessor expr op = Accessor expr (op, TensorOp2Args expr)
 
 type Op1Accessor expr = Accessor expr expr
 
 type Op2Accessor expr = Accessor expr (expr, expr)
 
-type TensorOp1Accessor expr = Accessor expr (GenericArg expr, expr)
+type TensorOp1Accessor expr = Accessor expr (TensorOp1Args expr)
 
-type TensorOp2Accessor expr = Accessor expr (GenericArg expr, expr, expr)
+type TensorOp2Accessor expr = Accessor expr (TensorOp2Args expr)
 
-type TensorReductionAccessor expr = Accessor expr (GenericArg expr, expr, expr)
+type TensorReductionAccessor expr = Accessor expr (TensorReductionArgs expr)
 
-singleElement :: Accessor expr (Tensor a) -> Accessor expr a
-singleElement accessTensor =
-  Access
-    { getExpr = \case
-        (getExpr accessTensor -> Just (ZeroDimTensor v)) -> Just v
-        _ -> Nothing,
-      mkExpr = mkExpr accessTensor . ZeroDimTensor
-    }
-
-noArgs ::
+accessNoArgs ::
   (HasBuiltinConstructor expr) =>
   Accessor builtin a ->
   Accessor (expr builtin) a
-noArgs access =
+accessNoArgs access =
   Access
     { getExpr = \case
         (getBuiltin access -> Just (b, [])) -> Just b
@@ -78,13 +139,28 @@ noArgs access =
       mkExpr = \b -> mkBuiltin access b []
     }
 
-op1Args :: (HasBuiltinConstructor expr) => Accessor builtin () -> Op1Accessor (expr builtin)
-op1Args access =
+accessArgs ::
+  (HasBuiltinConstructor expr, IsArgs args) =>
+  Accessor builtin () ->
+  Accessor (expr builtin) (args (expr builtin))
+accessArgs accessOp =
   Access
     { getExpr = \case
-        (getBuiltin access -> Just ((), [xs])) -> Just (argExpr xs)
+        (getBuiltin accessOp -> Just ((), getExpr accessSpine -> Just args)) -> Just args
         _ -> Nothing,
-      mkExpr = \xs -> mkBuiltin access () [explicit xs]
+      mkExpr = \args -> mkBuiltin accessOp () (mkExpr accessSpine args)
+    }
+
+accessOpAndArgs ::
+  (HasBuiltinConstructor expr, IsArgs args) =>
+  Accessor builtin op ->
+  Accessor (expr builtin) (op, args (expr builtin))
+accessOpAndArgs accessOp =
+  Access
+    { getExpr = \case
+        (getBuiltin accessOp -> Just (op, getExpr accessSpine -> Just args)) -> Just (op, args)
+        _ -> Nothing,
+      mkExpr = \(op, args) -> mkBuiltin accessOp op (mkExpr accessSpine args)
     }
 
 op2Args :: (HasBuiltinConstructor expr) => Accessor builtin () -> Op2Accessor (expr builtin)
@@ -96,78 +172,6 @@ op2Args access =
       mkExpr = \(xs, ys) -> mkBuiltin access () [explicit xs, explicit ys]
     }
 
-tensorOp1Args ::
-  (HasBuiltinConstructor expr) =>
-  Accessor builtin () ->
-  TensorOp1Accessor (expr builtin)
-tensorOp1Args access =
-  Access
-    { getExpr = \case
-        (getBuiltin access -> Just ((), [ds, xs])) -> Just (ds, argExpr xs)
-        _ -> Nothing,
-      mkExpr = \(ds, xs) -> mkBuiltin access () [ds, explicit xs]
-    }
-
-tensorOp2Args ::
-  (HasBuiltinConstructor expr) =>
-  Accessor builtin () ->
-  TensorOp2Accessor (expr builtin)
-tensorOp2Args access =
-  Access
-    { getExpr = \case
-        (getBuiltin access -> Just ((), [ds, xs, ys])) -> Just (ds, argExpr xs, argExpr ys)
-        _ -> Nothing,
-      mkExpr = \(ds, xs, ys) -> mkBuiltin access () [ds, explicit xs, explicit ys]
-    }
-
-tensorReductionArgs ::
-  (HasBuiltinConstructor expr) =>
-  Accessor builtin () ->
-  TensorReductionAccessor (expr builtin)
-tensorReductionArgs access =
-  Access
-    { getExpr = \case
-        (getBuiltin access -> Just ((), [ds, e, xs])) -> Just (ds, argExpr e, argExpr xs)
-        _ -> Nothing,
-      mkExpr = \(ds, e, xs) -> mkBuiltin access () [ds, explicit e, explicit xs]
-    }
-
-natComparisonArgs ::
-  (HasBuiltinConstructor expr) =>
-  Accessor builtin op ->
-  NatComparisonAccessor (expr builtin) op
-natComparisonArgs accessOp =
-  Access
-    { getExpr = \case
-        (getBuiltin accessOp -> Just (op, [x, y])) -> Just (op, argExpr x, argExpr y)
-        _ -> Nothing,
-      mkExpr = \(op, x, y) -> mkBuiltin accessOp op [explicit x, explicit y]
-    }
-
-indexComparisonArgs ::
-  (HasBuiltinConstructor expr) =>
-  Accessor builtin op ->
-  IndexComparisonAccessor (expr builtin) op
-indexComparisonArgs accessOp =
-  Access
-    { getExpr = \case
-        (getBuiltin accessOp -> Just (op, [n1, n2, x, y])) -> Just (op, n1, n2, argExpr x, argExpr y)
-        _ -> Nothing,
-      mkExpr = \(op, n1, n2, x, y) -> mkBuiltin accessOp op [n1, n2, explicit x, explicit y]
-    }
-
-ratTensorComparisonArgs ::
-  (HasBuiltinConstructor expr) =>
-  Accessor builtin op ->
-  RatTensorComparisonAccessor (expr builtin) op
-ratTensorComparisonArgs accessOp =
-  Access
-    { getExpr = \case
-        (getBuiltin accessOp -> Just (op, [ds, x, y])) -> Just (op, ds, argExpr x, argExpr y)
-        _ -> Nothing,
-      mkExpr = \(op, ds, x, y) -> mkBuiltin accessOp op [ds, explicit x, explicit y]
-    }
-
 --------------------------------------------------------------------------------
 -- Boolean operations
 --------------------------------------------------------------------------------
@@ -175,25 +179,25 @@ ratTensorComparisonArgs accessOp =
 type HasBoolExpr expr builtin = (HasBuiltinConstructor expr, BuiltinHasBoolLiterals builtin)
 
 accessBoolTensorLiteral :: (HasBoolExpr expr builtin) => Accessor (expr builtin) BoolTensor
-accessBoolTensorLiteral = noArgs accessBoolTensorLitBuiltin
+accessBoolTensorLiteral = accessNoArgs accessBoolTensorLitBuiltin
 
 accessNotTensor :: (HasBoolExpr expr builtin) => TensorOp1Accessor (expr builtin)
-accessNotTensor = tensorOp1Args accessNotBuiltin
+accessNotTensor = accessArgs accessNotBuiltin
 
 accessAndTensor :: (HasBoolExpr expr builtin) => TensorOp2Accessor (expr builtin)
-accessAndTensor = tensorOp2Args accessAndBuiltin
+accessAndTensor = accessArgs accessAndBuiltin
 
 accessOrTensor :: (HasBoolExpr expr builtin) => TensorOp2Accessor (expr builtin)
-accessOrTensor = tensorOp2Args accessOrBuiltin
+accessOrTensor = accessArgs accessOrBuiltin
 
 accessImpliesTensor :: (HasBoolExpr expr builtin) => TensorOp2Accessor (expr builtin)
-accessImpliesTensor = tensorOp2Args accessImpliesBuiltin
+accessImpliesTensor = accessArgs accessImpliesBuiltin
 
 accessReduceAnd :: (HasBoolExpr expr builtin) => TensorReductionAccessor (expr builtin)
-accessReduceAnd = tensorReductionArgs accessReduceAndBuiltin
+accessReduceAnd = accessArgs accessReduceAndBuiltin
 
 accessReduceOr :: (HasBoolExpr expr builtin) => TensorReductionAccessor (expr builtin)
-accessReduceOr = tensorReductionArgs accessReduceOrBuiltin
+accessReduceOr = accessArgs accessReduceOrBuiltin
 
 accessIf :: (HasBoolExpr expr builtin) => Accessor (expr builtin) (GenericArg (expr builtin), expr builtin, expr builtin, expr builtin)
 accessIf =
@@ -205,22 +209,22 @@ accessIf =
     }
 
 accessOrderIndex :: (HasBoolExpr expr builtin) => IndexComparisonAccessor (expr builtin) OrderOp
-accessOrderIndex = indexComparisonArgs accessOrderRatTensorBuiltin
+accessOrderIndex = accessOpAndArgs accessOrderIndexBuiltin
 
 accessOrderNat :: (HasBoolExpr expr builtin) => NatComparisonAccessor (expr builtin) OrderOp
-accessOrderNat = natComparisonArgs accessOrderNatBuiltin
+accessOrderNat = accessOpAndArgs accessOrderNatBuiltin
 
 accessOrderRatTensor :: (HasBoolExpr expr builtin) => RatTensorComparisonAccessor (expr builtin) OrderOp
-accessOrderRatTensor = ratTensorComparisonArgs accessOrderRatTensorBuiltin
+accessOrderRatTensor = accessOpAndArgs accessOrderRatTensorBuiltin
 
 accessEqIndex :: (HasBoolExpr expr builtin) => IndexComparisonAccessor (expr builtin) EqualityOp
-accessEqIndex = indexComparisonArgs accessEqRatTensorBuiltin
+accessEqIndex = accessOpAndArgs accessEqRatTensorBuiltin
 
 accessEqNat :: (HasBoolExpr expr builtin) => NatComparisonAccessor (expr builtin) EqualityOp
-accessEqNat = natComparisonArgs accessEqNatBuiltin
+accessEqNat = accessOpAndArgs accessEqNatBuiltin
 
 accessEqRatTensor :: (HasBoolExpr expr builtin) => RatTensorComparisonAccessor (expr builtin) EqualityOp
-accessEqRatTensor = ratTensorComparisonArgs accessEqRatTensorBuiltin
+accessEqRatTensor = accessOpAndArgs accessEqRatTensorBuiltin
 
 accessQuantifyRatTensor :: (HasBoolExpr expr builtin) => Accessor (expr builtin) (Quantifier, GenericArg (expr builtin), expr builtin)
 accessQuantifyRatTensor =
@@ -245,10 +249,10 @@ pattern IBoolLiteral n = IBoolTensorLiteral (ZeroDimTensor n)
 type HasIndexExpr expr builtin = (HasBuiltinConstructor expr, BuiltinHasIndexLiterals builtin)
 
 accessIndexLiteral :: (HasIndexExpr expr builtin) => Accessor (expr builtin) Int
-accessIndexLiteral = noArgs accessIndexLitBuiltin
+accessIndexLiteral = accessNoArgs accessIndexLitBuiltin
 
 accessIndexTensorLiteral :: (HasIndexExpr expr builtin) => Accessor (expr builtin) IndexTensor
-accessIndexTensorLiteral = noArgs accessIndexTensorLitBuiltin
+accessIndexTensorLiteral = accessNoArgs accessIndexTensorLitBuiltin
 
 pattern IIndexLiteral :: (HasIndexExpr expr builtin) => Int -> expr builtin
 pattern IIndexLiteral n <- (getExpr accessIndexLiteral -> Just n)
@@ -265,17 +269,25 @@ pattern IIndexTensor n <- (getExpr accessIndexTensorLiteral -> Just n)
 
 type HasNatExpr expr builtin = (HasBuiltinConstructor expr, BuiltinHasNatLiterals builtin)
 
+accessNatType :: (HasNatExpr expr builtin) => Accessor (expr builtin) ()
+accessNatType = accessNoArgs accessNatTypeBuiltin
+
 accessNatLiteral :: (HasNatExpr expr builtin) => Accessor (expr builtin) Int
-accessNatLiteral = noArgs accessNatLitBuiltin
+accessNatLiteral = accessNoArgs accessNatLitBuiltin
 
 accessNatTensorLiteral :: (HasNatExpr expr builtin) => Accessor (expr builtin) NatTensor
-accessNatTensorLiteral = noArgs accessNatTensorLitBuiltin
+accessNatTensorLiteral = accessNoArgs accessNatTensorLitBuiltin
 
 accessAddNat :: (HasNatExpr expr builtin) => Op2Accessor (expr builtin)
 accessAddNat = op2Args accessAddNatBuiltin
 
 accessMulNat :: (HasNatExpr expr builtin) => Op2Accessor (expr builtin)
 accessMulNat = op2Args accessMulNatBuiltin
+
+pattern INatType :: (HasNatExpr expr builtin) => expr builtin
+pattern INatType <- (getExpr accessNatType -> Just ())
+  where
+    INatType = mkExpr accessNatType ()
 
 pattern INatLiteral :: (HasNatExpr expr builtin) => Int -> expr builtin
 pattern INatLiteral n <- (getExpr accessNatLiteral -> Just n)
@@ -293,40 +305,40 @@ pattern INatTensor n <- (getExpr accessNatTensorLiteral -> Just n)
 type HasRatExpr expr builtin = (HasBuiltinConstructor expr, BuiltinHasRatLiterals builtin)
 
 accessRatTensorLiteral :: (HasRatExpr expr builtin) => Accessor (expr builtin) RatTensor
-accessRatTensorLiteral = noArgs accessRatTensorLitBuiltin
+accessRatTensorLiteral = accessNoArgs accessRatTensorLitBuiltin
 
 accessNegRatTensor :: (HasRatExpr expr builtin) => TensorOp1Accessor (expr builtin)
-accessNegRatTensor = tensorOp1Args accessNegRatTensorBuiltin
+accessNegRatTensor = accessArgs accessNegRatTensorBuiltin
 
 accessAddRatTensor :: (HasRatExpr expr builtin) => TensorOp2Accessor (expr builtin)
-accessAddRatTensor = tensorOp2Args accessAddRatTensorBuiltin
+accessAddRatTensor = accessArgs accessAddRatTensorBuiltin
 
 accessMulRatTensor :: (HasRatExpr expr builtin) => TensorOp2Accessor (expr builtin)
-accessMulRatTensor = tensorOp2Args accessMulRatTensorBuiltin
+accessMulRatTensor = accessArgs accessMulRatTensorBuiltin
 
 accessSubRatTensor :: (HasRatExpr expr builtin) => TensorOp2Accessor (expr builtin)
-accessSubRatTensor = tensorOp2Args accessSubRatTensorBuiltin
+accessSubRatTensor = accessArgs accessSubRatTensorBuiltin
 
 accessDivRatTensor :: (HasRatExpr expr builtin) => TensorOp2Accessor (expr builtin)
-accessDivRatTensor = tensorOp2Args accessDivRatTensorBuiltin
+accessDivRatTensor = accessArgs accessDivRatTensorBuiltin
 
 accessMinRatTensor :: (HasRatExpr expr builtin) => TensorOp2Accessor (expr builtin)
-accessMinRatTensor = tensorOp2Args accessMinRatTensorBuiltin
+accessMinRatTensor = accessArgs accessMinRatTensorBuiltin
 
 accessMaxRatTensor :: (HasRatExpr expr builtin) => TensorOp2Accessor (expr builtin)
-accessMaxRatTensor = tensorOp2Args accessMaxRatTensorBuiltin
+accessMaxRatTensor = accessArgs accessMaxRatTensorBuiltin
 
 accessReduceAddRat :: (HasRatExpr expr builtin) => TensorReductionAccessor (expr builtin)
-accessReduceAddRat = tensorReductionArgs accessReduceAddRatBuiltin
+accessReduceAddRat = accessArgs accessReduceAddRatBuiltin
 
 accessReduceMulRat :: (HasRatExpr expr builtin) => TensorReductionAccessor (expr builtin)
-accessReduceMulRat = tensorReductionArgs accessReduceMulRatBuiltin
+accessReduceMulRat = accessArgs accessReduceMulRatBuiltin
 
 accessReduceMinRat :: (HasRatExpr expr builtin) => TensorReductionAccessor (expr builtin)
-accessReduceMinRat = tensorReductionArgs accessReduceMinRatBuiltin
+accessReduceMinRat = accessArgs accessReduceMinRatBuiltin
 
 accessReduceMaxRat :: (HasRatExpr expr builtin) => TensorReductionAccessor (expr builtin)
-accessReduceMaxRat = tensorReductionArgs accessReduceMaxRatBuiltin
+accessReduceMaxRat = accessArgs accessReduceMaxRatBuiltin
 
 pattern IRatTensor :: (HasRatExpr expr builtin) => Tensor Rational -> expr builtin
 pattern IRatTensor n <- (getExpr accessRatTensorLiteral -> Just n)
@@ -354,13 +366,13 @@ accessNil = do
 
 accessCons ::
   (HasListExpr expr builtin) =>
-  Accessor (expr builtin) (GenericArg (expr builtin), GenericArg (expr builtin), GenericArg (expr builtin))
+  Accessor (expr builtin) (GenericArg (expr builtin), expr builtin, expr builtin)
 accessCons =
   Access
     { getExpr = \case
-        (getBuiltin accessConsBuiltin -> Just ((), [t, x, xs])) -> Just (t, x, xs)
+        (getBuiltin accessConsBuiltin -> Just ((), [t, x, xs])) -> Just (t, argExpr x, argExpr xs)
         _ -> Nothing,
-      mkExpr = \(t, x, xs) -> mkBuiltin accessConsBuiltin () [t, x, xs]
+      mkExpr = \(t, x, xs) -> mkBuiltin accessConsBuiltin () [t, explicit x, explicit xs]
     }
 
 pattern INil ::
@@ -374,8 +386,8 @@ pattern INil t <- (getExpr accessNil -> Just t)
 pattern ICons ::
   (HasListExpr expr builtin) =>
   GenericArg (expr builtin) ->
-  GenericArg (expr builtin) ->
-  GenericArg (expr builtin) ->
+  expr builtin ->
+  expr builtin ->
   expr builtin
 pattern ICons t x xs <- (getExpr accessCons -> Just (t, x, xs))
   where
@@ -389,10 +401,10 @@ mkListExpr ::
 mkListExpr tElem = foldr cons nil
   where
     nil = INil (implicit tElem)
-    cons x xs = ICons (implicit tElem) (explicit x) (explicit xs)
+    cons = ICons (implicit tElem)
 
-mkDims :: (HasNatExpr expr builtin, HasListExpr expr builtin) => expr builtin -> [Int] -> expr builtin
-mkDims natType ds = mkListExpr natType (fmap INatLiteral ds)
+mkDims :: (HasNatExpr expr builtin, HasListExpr expr builtin) => [Int] -> expr builtin
+mkDims ds = mkListExpr INatType (fmap INatLiteral ds)
 
 getDim :: (HasNatExpr expr builtin) => expr builtin -> Maybe Int
 getDim = \case
@@ -402,7 +414,7 @@ getDim = \case
 getDimsExprs :: (HasNatExpr expr builtin, HasListExpr expr builtin) => expr builtin -> Either (expr builtin) [expr builtin]
 getDimsExprs = \case
   INil _ -> return []
-  ICons _ d ds -> (argExpr d :) <$> getDimsExprs (argExpr ds)
+  ICons _ d ds -> (d :) <$> getDimsExprs ds
   e -> throwError e
 
 getDims :: (HasNatExpr expr builtin, HasListExpr expr builtin) => expr builtin -> Maybe [Int]
@@ -449,14 +461,14 @@ accessAtTensor =
     }
 
 accessForeachTensor ::
-  (HasTensorExpr expr builtin) =>
+  (HasBuiltinConstructor expr, BuiltinHasForeach builtin) =>
   Accessor (expr builtin) (GenericArg (expr builtin), GenericArg (expr builtin), GenericArg (expr builtin), expr builtin)
 accessForeachTensor =
   Access
     { getExpr = \case
-        (getBuiltin accessAtTensorBuiltin -> Just ((), [t, d, ds, fn])) -> Just (t, d, ds, argExpr fn)
+        (getBuiltin accessForeachTensorBuiltin -> Just ((), [t, d, ds, fn])) -> Just (t, d, ds, argExpr fn)
         _ -> Nothing,
-      mkExpr = \(t, d, ds, fn) -> mkBuiltin accessAtTensorBuiltin () [t, d, ds, explicit fn]
+      mkExpr = \(t, d, ds, fn) -> mkBuiltin accessForeachTensorBuiltin () [t, d, ds, explicit fn]
     }
 
 pattern IStackTensor :: (HasTensorExpr expr builtin) => GenericArg (expr builtin) -> GenericArg (expr builtin) -> GenericArg (expr builtin) -> [GenericArg (expr builtin)] -> expr builtin
@@ -468,13 +480,6 @@ pattern IConstTensor :: (HasTensorExpr expr builtin) => GenericArg (expr builtin
 pattern IConstTensor t v ds <- (getExpr accessConstTensor -> Just (t, v, ds))
   where
     IConstTensor t v ds = mkExpr accessConstTensor (t, v, ds)
-
-constantMatching :: (Eq a, HasTensorExpr expr builtin) => a -> Accessor (expr builtin) a -> Destruct (expr builtin) ()
-constantMatching value access e = case getExpr accessConstTensor e of
-  Just (_, b, _) -> case getExpr access b of
-    Just v | v == value -> Just ()
-    _ -> Nothing
-  _ -> Nothing
 
 {-
 pattern IBoolConstTensor :: (HasBoolLits expr) => expr -> expr -> expr

@@ -53,7 +53,7 @@ foreachIndex : forallT n . (Index n -> A) -> Vector A n
 foreachIndex n f = map f (indices n)
 -}
 existsIndex : forallT n . (Index n -> Bool) -> Bool
-existsIndex n f = reduceOr (foreach i . f i)
+existsIndex n f = reduceOr False (foreach i . f i)
 
 forallIndex : forallT n . (Index n -> Bool) -> Bool
-forallIndex n f = reduceAnd (foreach i . f i)
+forallIndex n f = reduceAnd True (foreach i . f i)

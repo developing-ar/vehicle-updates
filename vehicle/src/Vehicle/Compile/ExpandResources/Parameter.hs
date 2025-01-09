@@ -35,12 +35,12 @@ parseParameterValue parameterValues decl@(ident, _) parameterType = do
     VRatTensorType INil {} -> return parseRat
     -- TODO check that Index dimension is constant, or at least will be after
     -- implicit parameters are filled in (the tricky bit).
-    VIndexType size -> case size of
-      VFreeVar varIdent _
+    VIndexType size -> case toNatValue size of
+      VNatParameter varIdent
         | Map.member varIdent implicitParams ->
             throwError $ ParameterTypeInferableParameterIndex decl varIdent
-      INatLiteral n -> return (parseIndex n)
-      _ -> throwError $ ParameterTypeVariableSizeIndex decl parameterType
+      VNatLiteral n -> return (parseIndex n)
+      _ -> throwError $ ParameterTypeVariableSizeIndex decl parameterType size
     _ ->
       compilerDeveloperError $
         "Invalid parameter type"

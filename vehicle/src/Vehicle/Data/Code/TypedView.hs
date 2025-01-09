@@ -1,6 +1,7 @@
 module Vehicle.Data.Code.TypedView
   ( TypeValue (..),
     toTypeValue,
+    fromTypeValue,
     IndexValue (..),
     toIndexValue,
     NatValue (..),
@@ -49,9 +50,6 @@ pattern IIndexType size <- VBuiltin (BuiltinType IndexType) [argExpr -> size]
   where
     IIndexType size = VBuiltin (BuiltinType IndexType) [Arg mempty Explicit Irrelevant size]
 
-pattern INatType :: Value Builtin
-pattern INatType = INullaryTypeExpr NatType
-
 pattern ITensorType :: Value Builtin -> Value Builtin -> Value Builtin
 pattern ITensorType t dims <- VBuiltin (BuiltinType TensorType) [argExpr -> t, argExpr -> dims]
   where
@@ -98,6 +96,21 @@ toTypeValue t = case t of
   where
     err = developerError $ "ill-typed type" <+> prettyVerbose t
 
+fromTypeValue :: (HasCallStack) => TypeValue -> Value Builtin
+fromTypeValue t = case t of
+  VPiType binder value -> VPi binder value
+  VBoundTypeVar lv spine -> VBoundVar lv spine
+  VUnitType -> VBuiltin (BuiltinType UnitType) []
+  VBoolType -> VBuiltin (BuiltinType BoolType) []
+  VRatType -> VBuiltin (BuiltinType RatType) []
+  VIndexType n -> VBuiltin (BuiltinType IndexType) [explicitIrrelevant n]
+  VNatType -> VBuiltin (BuiltinType NatType) []
+  VListType tElem -> VBuiltin (BuiltinType ListType) [explicit tElem]
+  VBoolTensorType ds -> VBuiltin (BuiltinType TensorType) [explicit (fromTypeValue VBoolType), explicitIrrelevant ds]
+  VRatTensorType ds -> VBuiltin (BuiltinType TensorType) [explicit (fromTypeValue VRatType), explicitIrrelevant ds]
+  VNatTensorType ds -> VBuiltin (BuiltinType TensorType) [explicit (fromTypeValue VNatType), explicitIrrelevant ds]
+  VIndexTensorType n ds -> VBuiltin (BuiltinType TensorType) [explicit (fromTypeValue (VIndexType n)), explicitIrrelevant ds]
+
 -------------------------------------------------------------------------------
 -- Index
 
@@ -127,14 +140,14 @@ data NatValue
   | VNatParameter Identifier
 
 toNatValue :: (HasCallStack) => Value Builtin -> NatValue
-toNatValue = \case
+toNatValue expr = case expr of
   VBoundVar v spine -> VNatBoundVar v spine
   VFreeVar ident [] -> VNatParameter ident
   (getExpr accessNatLiteral -> Just i) -> VNatLiteral i
   (getExpr accessIf -> Just (argExpr -> INatType {}, c, x, y)) -> VNatIf c x y
   (getExpr accessAddNat -> Just (x, y)) -> VNatAdd x y
   (getExpr accessMulNat -> Just (x, y)) -> VNatMul x y
-  _ -> developerError "ill-typed Dimensions expression"
+  _ -> developerError $ "ill-typed Nat expression:" <+> prettyVerbose expr
 
 fromNatValue :: NatValue -> Value Builtin
 fromNatValue = \case
@@ -151,18 +164,18 @@ fromNatValue = \case
 -- | A view on all possible expressions that can have type `Tensor Bool`.
 data BoolTensorValue
   = VConstBoolTensor (Value Builtin) (Value Builtin)
-  | VAnd (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VOr (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VNot (VArg Builtin) (Value Builtin)
-  | VOrderIndex OrderOp (VArg Builtin) (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VOrderNat OrderOp (Value Builtin) (Value Builtin)
-  | VOrderRatTensor OrderOp (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VEqualsIndex EqualityOp (VArg Builtin) (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VEqualsNat EqualityOp (Value Builtin) (Value Builtin)
-  | VEqualsRatTensor EqualityOp (VArg Builtin) (Value Builtin) (Value Builtin)
+  | VNot (TensorOp1Args (Value Builtin))
+  | VAnd (TensorOp2Args (Value Builtin))
+  | VOr (TensorOp2Args (Value Builtin))
+  | VOrderIndex (OrderOp, IndexComparisonArgs (Value Builtin))
+  | VOrderNat (OrderOp, NatOp2Args (Value Builtin))
+  | VOrderRatTensor (OrderOp, TensorOp2Args (Value Builtin))
+  | VEqualsIndex (EqualityOp, IndexComparisonArgs (Value Builtin))
+  | VEqualsNat (EqualityOp, NatOp2Args (Value Builtin))
+  | VEqualsRatTensor (EqualityOp, TensorOp2Args (Value Builtin))
+  | VReduceAndTensor (TensorOp2Args (Value Builtin))
+  | VReduceOrTensor (TensorOp2Args (Value Builtin))
   | VQuantifyRatTensor Quantifier (VArg Builtin) (VBinder Builtin) (Closure Builtin)
-  | VReduceAndTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VReduceOrTensor (VArg Builtin) (Value Builtin) (Value Builtin)
   | VBoolIf (Value Builtin) (Value Builtin) (Value Builtin) (Value Builtin)
   | VBoolAt (VArg Builtin) (VArg Builtin) (Value Builtin) (Value Builtin)
   | VBoolTensorLiteral (Tensor Bool)
@@ -172,18 +185,18 @@ data BoolTensorValue
 toBoolValue :: (HasCallStack) => Value Builtin -> BoolTensorValue
 toBoolValue expr = case expr of
   (getExpr accessBoolTensorLiteral -> Just t) -> VBoolTensorLiteral t
-  (getExpr accessAndTensor -> Just (dims, x, y)) -> VAnd dims x y
-  (getExpr accessOrTensor -> Just (dims, x, y)) -> VOr dims x y
-  (getExpr accessNotTensor -> Just (dims, x)) -> VNot dims x
-  (getExpr accessOrderRatTensor -> Just (op, dims, x, y)) -> VOrderRatTensor op dims x y
-  (getExpr accessOrderNat -> Just (op, x, y)) -> VOrderNat op x y
-  (getExpr accessOrderIndex -> Just (op, n1, n2, x, y)) -> VOrderIndex op n1 n2 x y
-  (getExpr accessEqRatTensor -> Just (op, dims, x, y)) -> VEqualsRatTensor op dims x y
-  (getExpr accessEqNat -> Just (op, x, y)) -> VEqualsNat op x y
-  (getExpr accessEqIndex -> Just (op, n1, n2, x, y)) -> VEqualsIndex op n1 n2 x y
+  (getExpr accessAndTensor -> Just args) -> VAnd args
+  (getExpr accessOrTensor -> Just args) -> VOr args
+  (getExpr accessNotTensor -> Just args) -> VNot args
+  (getExpr accessOrderRatTensor -> Just args) -> VOrderRatTensor args
+  (getExpr accessOrderNat -> Just args) -> VOrderNat args
+  (getExpr accessOrderIndex -> Just args) -> VOrderIndex args
+  (getExpr accessEqRatTensor -> Just args) -> VEqualsRatTensor args
+  (getExpr accessEqNat -> Just args) -> VEqualsNat args
+  (getExpr accessEqIndex -> Just args) -> VEqualsIndex args
   (getExpr accessQuantifyRatTensor -> Just (op, dims, VLam binder closure)) -> VQuantifyRatTensor op dims binder closure
-  (getExpr accessReduceAnd -> Just (dims, e, x)) -> VReduceAndTensor dims e x
-  (getExpr accessReduceOr -> Just (dims, e, x)) -> VReduceOrTensor dims e x
+  (getExpr accessReduceAnd -> Just args) -> VReduceAndTensor args
+  (getExpr accessReduceOr -> Just args) -> VReduceOrTensor args
   (getExpr accessConstTensor -> Just (argExpr -> IBoolType, x, dims)) -> VConstBoolTensor x dims
   (getExpr accessStackTensor -> Just (d, ds, argExpr -> IBoolType, xs)) -> VBoolStackTensor d ds xs
   (getExpr accessAtTensor -> Just (argExpr -> IBoolType, d, ds, xs, i)) -> VBoolAt d ds xs i
@@ -194,18 +207,18 @@ toBoolValue expr = case expr of
 fromBoolValue :: BoolTensorValue -> Value Builtin
 fromBoolValue = \case
   VBoolTensorLiteral y -> mkExpr accessBoolTensorLiteral y
-  VAnd dims x y -> mkExpr accessAndTensor (dims, x, y)
-  VOr dims x y -> mkExpr accessOrTensor (dims, x, y)
-  VNot dims x -> mkExpr accessNotTensor (dims, x)
-  VOrderNat op x y -> mkExpr accessOrderNat (op, x, y)
-  VOrderIndex op n1 n2 x y -> mkExpr accessOrderIndex (op, n1, n2, x, y)
-  VOrderRatTensor op dims x y -> mkExpr accessOrderRatTensor (op, dims, x, y)
-  VEqualsNat op x y -> mkExpr accessEqNat (op, x, y)
-  VEqualsIndex op n1 n2 x y -> mkExpr accessEqIndex (op, n1, n2, x, y)
-  VEqualsRatTensor op dims x y -> mkExpr accessEqRatTensor (op, dims, x, y)
+  VAnd args -> mkExpr accessAndTensor args
+  VOr args -> mkExpr accessOrTensor args
+  VNot args -> mkExpr accessNotTensor args
+  VOrderNat args -> mkExpr accessOrderNat args
+  VOrderIndex args -> mkExpr accessOrderIndex args
+  VOrderRatTensor args -> mkExpr accessOrderRatTensor args
+  VEqualsNat args -> mkExpr accessEqNat args
+  VEqualsIndex args -> mkExpr accessEqIndex args
+  VEqualsRatTensor args -> mkExpr accessEqRatTensor args
   VQuantifyRatTensor q dims binder closure -> mkExpr accessQuantifyRatTensor (q, dims, VLam binder closure)
-  VReduceAndTensor dims e x -> mkExpr accessReduceAnd (dims, e, x)
-  VReduceOrTensor dims e x -> mkExpr accessReduceOr (dims, e, x)
+  VReduceAndTensor args -> mkExpr accessReduceAnd args
+  VReduceOrTensor args -> mkExpr accessReduceOr args
   VBoolIf dims c x y -> mkExpr accessIf (boolTensorType dims, c, x, y)
   VConstBoolTensor x dims -> mkExpr accessConstTensor (boolType, x, dims)
   VBoolStackTensor d ds xs -> mkExpr accessStackTensor (d, ds, boolType, xs)
@@ -221,17 +234,17 @@ fromBoolValue = \case
 -- | A view on all possible expressions that can have type `Tensor Rat`.
 data RatTensorValue
   = VRatTensorLiteral (Tensor Rational)
-  | VNegRatTensor (VArg Builtin) (Value Builtin)
-  | VAddRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VSubRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VMulRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VDivRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VMinRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VMaxRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VReduceAddRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VReduceMulRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VReduceMinRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
-  | VReduceMaxRatTensor (VArg Builtin) (Value Builtin) (Value Builtin)
+  | VNegRatTensor (TensorOp1Args (Value Builtin))
+  | VAddRatTensor (TensorOp2Args (Value Builtin))
+  | VSubRatTensor (TensorOp2Args (Value Builtin))
+  | VMulRatTensor (TensorOp2Args (Value Builtin))
+  | VDivRatTensor (TensorOp2Args (Value Builtin))
+  | VMinRatTensor (TensorOp2Args (Value Builtin))
+  | VMaxRatTensor (TensorOp2Args (Value Builtin))
+  | VReduceAddRatTensor (TensorOp2Args (Value Builtin))
+  | VReduceMulRatTensor (TensorOp2Args (Value Builtin))
+  | VReduceMinRatTensor (TensorOp2Args (Value Builtin))
+  | VReduceMaxRatTensor (TensorOp2Args (Value Builtin))
   | VIfRatTensor (Value Builtin) (Value Builtin) (Value Builtin) (Value Builtin)
   | VRatTensorVar Lv
   | VNetworkApp Identifier (Spine Builtin)
@@ -245,17 +258,17 @@ toRatTensorValue expr = case expr of
   VBoundVar lv [] -> VRatTensorVar lv
   VFreeVar n spine -> VNetworkApp n spine
   (getExpr accessRatTensorLiteral -> Just t) -> VRatTensorLiteral t
-  (getExpr accessNegRatTensor -> Just (dims, x)) -> VNegRatTensor dims x
-  (getExpr accessAddRatTensor -> Just (dims, x, y)) -> VAddRatTensor dims x y
-  (getExpr accessSubRatTensor -> Just (dims, x, y)) -> VSubRatTensor dims x y
-  (getExpr accessMulRatTensor -> Just (dims, x, y)) -> VMulRatTensor dims x y
-  (getExpr accessDivRatTensor -> Just (dims, x, y)) -> VDivRatTensor dims x y
-  (getExpr accessMinRatTensor -> Just (dims, x, y)) -> VMinRatTensor dims x y
-  (getExpr accessMaxRatTensor -> Just (dims, x, y)) -> VMaxRatTensor dims x y
-  (getExpr accessReduceAddRat -> Just (dims, e, x)) -> VReduceAddRatTensor dims e x
-  (getExpr accessReduceMulRat -> Just (dims, e, x)) -> VReduceMulRatTensor dims e x
-  (getExpr accessReduceMinRat -> Just (dims, e, x)) -> VReduceMinRatTensor dims e x
-  (getExpr accessReduceMaxRat -> Just (dims, e, x)) -> VReduceMaxRatTensor dims e x
+  (getExpr accessNegRatTensor -> Just args) -> VNegRatTensor args
+  (getExpr accessAddRatTensor -> Just args) -> VAddRatTensor args
+  (getExpr accessSubRatTensor -> Just args) -> VSubRatTensor args
+  (getExpr accessMulRatTensor -> Just args) -> VMulRatTensor args
+  (getExpr accessDivRatTensor -> Just args) -> VDivRatTensor args
+  (getExpr accessMinRatTensor -> Just args) -> VMinRatTensor args
+  (getExpr accessMaxRatTensor -> Just args) -> VMaxRatTensor args
+  (getExpr accessReduceAddRat -> Just args) -> VReduceAddRatTensor args
+  (getExpr accessReduceMulRat -> Just args) -> VReduceMulRatTensor args
+  (getExpr accessReduceMinRat -> Just args) -> VReduceMinRatTensor args
+  (getExpr accessReduceMaxRat -> Just args) -> VReduceMaxRatTensor args
   (getExpr accessIf -> Just (argExpr -> IRatTensorType dims, c, x, y)) -> VIfRatTensor dims c x y
   (getExpr accessConstTensor -> Just (argExpr -> IRatType, x, dims)) -> VRatConstTensor x dims
   (getExpr accessStackTensor -> Just (d, ds, argExpr -> IRatType, xs)) -> VRatStackTensor d ds xs
@@ -270,17 +283,17 @@ fromRatTensorValue = \case
   VRatTensorVar v -> VBoundVar v []
   VNetworkApp n xs -> VFreeVar n xs
   VRatTensorLiteral t -> mkExpr accessRatTensorLiteral t
-  VNegRatTensor dims x -> mkExpr accessNegRatTensor (dims, x)
-  VAddRatTensor dims x y -> mkExpr accessAddRatTensor (dims, x, y)
-  VSubRatTensor dims x y -> mkExpr accessSubRatTensor (dims, x, y)
-  VMulRatTensor dims x y -> mkExpr accessMulRatTensor (dims, x, y)
-  VDivRatTensor dims x y -> mkExpr accessDivRatTensor (dims, x, y)
-  VMinRatTensor dims x y -> mkExpr accessMinRatTensor (dims, x, y)
-  VMaxRatTensor dims x y -> mkExpr accessMaxRatTensor (dims, x, y)
-  VReduceAddRatTensor dims e x -> mkExpr accessReduceAddRat (dims, e, x)
-  VReduceMulRatTensor dims e x -> mkExpr accessReduceMulRat (dims, e, x)
-  VReduceMinRatTensor dims e x -> mkExpr accessReduceMinRat (dims, e, x)
-  VReduceMaxRatTensor dims e x -> mkExpr accessReduceMaxRat (dims, e, x)
+  VNegRatTensor args -> mkExpr accessNegRatTensor args
+  VAddRatTensor args -> mkExpr accessAddRatTensor args
+  VSubRatTensor args -> mkExpr accessSubRatTensor args
+  VMulRatTensor args -> mkExpr accessMulRatTensor args
+  VDivRatTensor args -> mkExpr accessDivRatTensor args
+  VMinRatTensor args -> mkExpr accessMinRatTensor args
+  VMaxRatTensor args -> mkExpr accessMaxRatTensor args
+  VReduceAddRatTensor args -> mkExpr accessReduceAddRat args
+  VReduceMulRatTensor args -> mkExpr accessReduceMulRat args
+  VReduceMinRatTensor args -> mkExpr accessReduceMinRat args
+  VReduceMaxRatTensor args -> mkExpr accessReduceMaxRat args
   VIfRatTensor dims c x y -> mkExpr accessIf (ratTensorType dims, c, x, y)
   VRatConstTensor x dims -> mkExpr accessConstTensor (ratElementType, x, dims)
   VRatStackTensor d ds xs -> mkExpr accessStackTensor (d, ds, ratElementType, xs)
@@ -304,6 +317,6 @@ toDimensionsValue :: Value Builtin -> DimensionsValue
 toDimensionsValue = \case
   VBoundVar lv spine -> VDimsBoundVar lv spine
   (getExpr accessNil -> Just (argExpr -> INatType)) -> VDimsNil
-  (getExpr accessCons -> Just (argExpr -> INatType, x, xs)) -> VDimsCons (argExpr x) (argExpr xs)
+  (getExpr accessCons -> Just (argExpr -> INatType, x, xs)) -> VDimsCons x xs
   (getExpr accessIf -> Just (argExpr -> INatType, c, x, y)) -> VDimsIf c x y
   _ -> developerError "ill-typed Dimensions expression"

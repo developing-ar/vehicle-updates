@@ -11,6 +11,15 @@ import Vehicle.Data.Builtin.Interface
 -----------------------------------------------------------------------------
 -- Classes
 
+typeAccessor :: BuiltinType -> Accessor Builtin ()
+typeAccessor b =
+  Access
+    { getExpr = \case
+        BuiltinType b1 | b == b1 -> Just ()
+        _ -> Nothing,
+      mkExpr = \() -> BuiltinType b
+    }
+
 functionAccessor :: BuiltinFunction -> Accessor Builtin ()
 functionAccessor b =
   Access
@@ -88,6 +97,8 @@ instance BuiltinHasIndexLiterals Builtin where
       }
 
 instance BuiltinHasNatLiterals Builtin where
+  accessNatTypeBuiltin = typeAccessor NatType
+
   accessNatLitBuiltin =
     Access
       { getExpr = \case
@@ -149,6 +160,8 @@ instance BuiltinHasTensors Builtin where
   accessConstTensorBuiltin = functionAccessor ConstTensor
   accessStackTensorBuiltin = functionAccessor StackTensor
   accessAtTensorBuiltin = functionAccessor At
+
+instance BuiltinHasForeach Builtin where
   accessForeachTensorBuiltin = functionAccessor Foreach
 
 instance BuiltinHasStandardTypeClasses Builtin where

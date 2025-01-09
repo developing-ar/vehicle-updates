@@ -18,9 +18,9 @@ import GHC.Generics (Generic)
 import Numeric (showFFloat)
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Standard ()
-import Vehicle.Data.Code.Interface (mkDims)
+import Vehicle.Data.Code.Interface (mkDims, pattern INatType)
 import Vehicle.Data.Code.LinearExpr (Variable)
-import Vehicle.Data.Code.TypedView (RatTensorValue (..), fromRatTensorValue, pattern INatType)
+import Vehicle.Data.Code.TypedView (RatTensorValue (..), fromRatTensorValue)
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DeBruijn
 import Vehicle.Data.Tensor
@@ -58,8 +58,8 @@ reduceTensorVariable lv varName shape = runSupply (go shape []) [lv ..]
         (elementVarNames, elementVars, elementExprs) <- unzip3 <$> traverse (\i -> go ds (i : indices)) allIndices
         let varsNames = concat elementVarNames
         let vars = stack ds elementVars
-        let dimsExpr = mkDims INatType ds
-        let varsExpr = fromRatTensorValue $ VRatStackTensor (implicit INatType) (implicit dimsExpr) (fmap explicit elementExprs)
+        let dimsArg = implicit $ mkDims ds
+        let varsExpr = fromRatTensorValue $ VRatStackTensor (implicit INatType) dimsArg (fmap explicit elementExprs)
         return (varsNames, vars, varsExpr)
 
 type TensorVariable = Variable

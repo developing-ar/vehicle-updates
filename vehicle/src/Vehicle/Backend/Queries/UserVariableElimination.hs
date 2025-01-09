@@ -33,7 +33,7 @@ import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.LinearExpr
-import Vehicle.Data.Code.TypedView (BooleanTensorValue (..), DimensionsValue (..), RatTensorValue (..), fromBoolValue, fromRatTensorValue, toBoolValue, toDimensionsValue, pattern INatType)
+import Vehicle.Data.Code.TypedView (BoolTensorValue (..), DimensionsValue (..), RatTensorValue (..), fromBoolValue, fromRatTensorValue, toBoolValue, toDimensionsValue)
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Tensor (RatTensor, Tensor, pattern ZeroDimTensor)
 import Vehicle.Verify.Core (NetworkContextInfo (..), QuerySetNegationStatus)
@@ -63,8 +63,8 @@ eliminateUserVariables expr = case toBoolValue expr of
   ---------------------
   -- Recursive cases --
   ---------------------
-  VAnd _dims e1 e2 -> andTrivial andBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
-  VOr _dims e1 e2 -> orTrivial orBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
+  VAnd (TensorOp2Args _dims e1 e2) -> andTrivial andBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
+  VOr (TensorOp2Args _dims e1 e2) -> orTrivial orBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
   VBoolIf _dims c x y -> eliminateUserVariables =<< unfoldIf c x y
   -------------------------
   -- Blocked expressions --
@@ -157,18 +157,18 @@ compileBoolExpr expr = case toBoolValue expr of
   ----------------
   VBoolTensorLiteral bs -> compileTrivial bs
   VOrderRatTensor {} -> purifyAndCompileAssertion expr
-  VEqualsRatTensor Eq _ _ _ -> purifyAndCompileAssertion expr
+  VEqualsRatTensor (Eq, _) -> purifyAndCompileAssertion expr
   VQuantifyRatTensor Forall _ _ _ -> throwError catchableUnsupportedAlternatingQuantifiersError
   ---------------------
   -- Recursive cases --
   ---------------------
-  VNot _dims e -> do
+  VNot (TensorOp1Args _ e) -> do
     lv <- boundCtxLv <$> getGlobalNamedBoundCtx
     compileBoolExpr =<< lowerNot lv unblockBoolExpr e
   VBoolIf _dims c x y -> compileBoolExpr =<< unfoldIf c x y
-  VEqualsRatTensor Neq dims xs ys -> compileBoolExpr =<< eliminateNotEqualRatTensor dims xs ys
-  VAnd _dims x y -> andTrivial andPartitions <$> compileBoolExpr x <*> compileBoolExpr y
-  VOr _dims x y -> orTrivial orPartitions <$> compileBoolExpr x <*> compileBoolExpr y
+  VEqualsRatTensor (Neq, args) -> compileBoolExpr =<< eliminateNotEqualRatTensor args
+  VAnd (TensorOp2Args _dims x y) -> andTrivial andPartitions <$> compileBoolExpr x <*> compileBoolExpr y
+  VOr (TensorOp2Args _dims x y) -> orTrivial orPartitions <$> compileBoolExpr x <*> compileBoolExpr y
   VQuantifyRatTensor Exists _ binder closure -> eliminateExists binder closure
   _ -> compileBoolExpr =<< unblockBoolExpr expr
   where
@@ -184,12 +184,12 @@ purifyAndCompileAssertion ::
 purifyAndCompileAssertion expr = do
   result <- Unblocking.tryPurifyAssertion unblockingActions expr
   case toBoolValue result of
-    VEqualsRatTensor Eq dims x y -> do
+    VEqualsRatTensor (Eq, args) -> do
       logDebug MaxDetail "Pure equality found"
-      compileAssertion eqToAssertion (Equals EqRatTensor Eq) dims x y
-    VOrderRatTensor op dims x y -> do
+      compileAssertion eqToAssertion (Equals EqRatTensor Eq) args
+    VOrderRatTensor (op, args) -> do
       logDebug MaxDetail "Pure inequality found"
-      compileAssertion (ordToAssertion op) (Order OrderRatTensor op) dims x y
+      compileAssertion (ordToAssertion op) (Order OrderRatTensor op) args
     _ -> do
       logDebug MaxDetail "Impure assertion found"
       compileBoolExpr result
@@ -250,8 +250,8 @@ unblockNetworkApplication unblockVector ident spine = do
 
             (inputVarExpr, outputVarExpr, newGlobalCtx) <- addNetworkApplicationToGlobalCtx networkApp networkInfo globalCtx
             let inputDims = dimensions (inputTensor (networkType networkInfo))
-            let inputDimsExpr = implicitIrrelevant $ mkDims INatType inputDims
-            let inputEquality = fromBoolValue $ VEqualsRatTensor Eq inputDimsExpr inputVarExpr input
+            let inputDimsExpr = implicitIrrelevant $ mkDims inputDims
+            let inputEquality = fromBoolValue $ VEqualsRatTensor (Eq, TensorOp2Args inputDimsExpr inputVarExpr input)
             put newGlobalCtx
             tell [inputEquality]
             unblockVector outputVarExpr
@@ -260,11 +260,9 @@ compileAssertion ::
   (MonadQuantifierBody m) =>
   (LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion) ->
   BuiltinFunction ->
-  VArg Builtin ->
-  Value Builtin ->
-  Value Builtin ->
+  TensorOp2Args (Value Builtin) ->
   m (MaybeTrivial Partitions)
-compileAssertion mkAssertion rel dims x y = do
+compileAssertion mkAssertion rel (TensorOp2Args dims x y) = do
   result <- compileTensorLinearRelation getTensorVariableShape x y
   case result of
     Right (e1, e2) -> return $ mkTrivialPartition (mkAssertion e1 e2)
@@ -281,18 +279,16 @@ compileAssertion mkAssertion rel dims x y = do
 
 eliminateNotEqualRatTensor ::
   (MonadQueryStructure m) =>
-  VArg Builtin ->
-  Value Builtin ->
-  Value Builtin ->
+  TensorOp2Args (Value Builtin) ->
   m (Value Builtin)
-eliminateNotEqualRatTensor dims xs ys = do
+eliminateNotEqualRatTensor args@(TensorOp2Args dims _ _) = do
   PropertyMetaData {..} <- ask
   if supportsStrictInequalities queryFormat
     then throwError $ UnsupportedInequality (queryFormatID queryFormat) propertyProvenance
     else do
-      let leq = fromBoolValue $ VOrderRatTensor Le dims xs ys
-      let geq = fromBoolValue $ VOrderRatTensor Ge dims xs ys
-      return $ fromBoolValue $ VOr dims leq geq
+      let leq = fromBoolValue $ VOrderRatTensor (Le, args)
+      let geq = fromBoolValue $ VOrderRatTensor (Ge, args)
+      return $ fromBoolValue $ VOr (TensorOp2Args dims leq geq)
 
 eliminateTensorAssertion ::
   (MonadQueryStructure m) =>

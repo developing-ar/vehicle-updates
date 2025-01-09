@@ -141,6 +141,7 @@ typeOfBuiltinFunction = \case
     OrderRatTensor {} -> forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
   -- Conversion functions
   FromNat dom -> case dom of
+    FromNatToNat -> typeOfFromNat tNat
     FromNatToIndex -> forAllIrrelevantNat "n" $ \s -> typeOfFromNat (tIndex s)
     FromNatToRat -> typeOfFromNat (tRatTensor dimNil)
   FromRat dom -> case dom of

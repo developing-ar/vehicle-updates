@@ -308,12 +308,15 @@ instance Hashable FromRatDomain
 instance Serialize FromRatDomain
 
 data FromNatDomain
-  = FromNatToIndex
+  = -- This is actually needed as it takes an empty type-class parameter (see typing module)
+    FromNatToNat
+  | FromNatToIndex
   | FromNatToRat
   deriving (Eq, Ord, Show, Generic)
 
 instance Pretty FromNatDomain where
   pretty = \case
+    FromNatToNat -> "Nat"
     FromNatToIndex -> "Index"
     FromNatToRat -> "Rat"
 

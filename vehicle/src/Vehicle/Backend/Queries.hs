@@ -22,7 +22,7 @@ import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print.Warning ()
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
-import Vehicle.Data.Code.TypedView (BooleanTensorValue (..), toBoolValue)
+import Vehicle.Data.Code.TypedView (BoolTensorValue (..), toBoolValue)
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Tensor (TensorIndices)
 import Vehicle.Prelude.Warning (CompileWarning (..))

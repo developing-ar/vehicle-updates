@@ -140,6 +140,15 @@ stack ds ts = do
         | otherwise -> Nothing
       _ -> Nothing
 
+unstack :: Tensor a -> [Tensor a]
+unstack (Tensor shape values) = case shape of
+  [] -> []
+  d : ds -> case values of
+    Constant v -> replicate d (Tensor ds $ Constant v)
+    Values vs -> do
+      let s = product ds
+      fmap (\i -> Tensor ds $ Values $ Vector.slice (i * s) ((i + 1) * s) vs) [0 .. d - 1]
+
 foldMapTensor :: forall a b. (a -> b) -> (TensorShape -> [b] -> b) -> Tensor a -> b
 foldMapTensor mkValue mkVec t =
   foldMapTensorLike mkValue mkVec (tensorShape t) (tensorToList t)

@@ -9,6 +9,7 @@ import Control.Applicative (Applicative (..))
 import Control.Monad.Except (ExceptT, MonadError (..), runExceptT)
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.LinearExpr (LinearExpr, addExprs, constantExpr, isConstant, scaleExpr, singletonVarExpr)
 import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
@@ -58,17 +59,17 @@ compile lookupVar expr = case toRatTensorValue expr of
   ---------------------
   -- Inductive cases --
   ---------------------
-  VNegRatTensor _ e -> scaleExpr (-1) <$> compile lookupVar e
-  VAddRatTensor _ e1 e2 -> addExprs 1 1 <$> compile lookupVar e1 <*> compile lookupVar e2
-  VSubRatTensor _ e1 e2 -> addExprs 1 (-1) <$> compile lookupVar e1 <*> compile lookupVar e2
-  VMulRatTensor _ e1 e2 -> do
+  VNegRatTensor (TensorOp1Args _ e) -> scaleExpr (-1) <$> compile lookupVar e
+  VAddRatTensor (TensorOp2Args _ e1 e2) -> addExprs 1 1 <$> compile lookupVar e1 <*> compile lookupVar e2
+  VSubRatTensor (TensorOp2Args _ e1 e2) -> addExprs 1 (-1) <$> compile lookupVar e1 <*> compile lookupVar e2
+  VMulRatTensor (TensorOp2Args _ e1 e2) -> do
     e1' <- compile lookupVar e1
     e2' <- compile lookupVar e2
     case (isConstant e1', isConstant e2') of
       (Just (ZeroDimTensor c1), _) -> return $ scaleExpr c1 e2'
       (_, Just (ZeroDimTensor c2)) -> return $ scaleExpr c2 e1'
       _ -> throwError NonLinearity
-  VDivRatTensor _ e1 e2 -> do
+  VDivRatTensor (TensorOp2Args _ e1 e2) -> do
     e1' <- compile lookupVar e1
     e2' <- compile lookupVar e2
     case isConstant e2' of

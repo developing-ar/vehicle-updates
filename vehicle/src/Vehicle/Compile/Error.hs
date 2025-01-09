@@ -114,7 +114,7 @@ data CompileError
   | DatasetInvalidIndex DeclProvenance FilePath Int Int
   | DatasetInvalidNat DeclProvenance FilePath Int
   | -- Unsupported parameters
-    ParameterTypeVariableSizeIndex DeclProvenance (GluedType Builtin)
+    ParameterTypeVariableSizeIndex DeclProvenance (GluedType Builtin) (Value Builtin)
   | ParameterTypeInferableParameterIndex DeclProvenance Identifier
   | ParameterValueUnparsable DeclProvenance String BuiltinType
   | ParameterValueInvalidIndex DeclProvenance Int Int

@@ -22,7 +22,6 @@ import Vehicle.Compile.Context.Free.Class (MonadFreeContext (..), getFreeEnv)
 import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, getBinderContext)
 import Vehicle.Compile.Normalise.Builtin
   ( NormalisableBuiltin (..),
-    filterOutIrrelevantArgs,
     findInstanceArg,
   )
 import Vehicle.Compile.Normalise.Quote (Quote (..))
@@ -185,11 +184,8 @@ evalBuiltin freeEnv b args = do
     then do
       (inst, remainingArgs) <- findInstanceArg b args
       evalApp freeEnv inst remainingArgs
-    else do
-      let relArgs = filterOutIrrelevantArgs args
-      -- when (length relArgs /= length (spine <> args)) $ do
-      --   compilerDeveloperError $ "Bang" <> line <> prettyVerbose relArgs <> line <> prettyVerbose fun <> line <> prettyVerbose args <> line <> "Boom"
-      evalBuiltinApp (evalApp freeEnv) freeEnv (VBuiltin b args) b relArgs
+    else
+      evalBuiltinApp (evalApp freeEnv) freeEnv (VBuiltin b args) b args
 
 lookupIxValueInEnv :: BoundEnv builtin -> Ix -> Value builtin
 lookupIxValueInEnv boundEnv ix = do
@@ -201,13 +197,14 @@ lookupIxValueInEnv boundEnv ix = do
 currentPass :: Doc ()
 currentPass = "normalisation by evaluation"
 
+{-
 showEntry :: (MonadNorm builtin m) => BoundEnv builtin -> Expr builtin -> m ()
 showEntry _ _ = return ()
 
 showExit :: (MonadNorm builtin m) => BoundEnv builtin -> Value builtin -> m ()
 showExit _ _ = return ()
+-}
 
-{-
 showEntry :: (MonadNorm builtin m) => BoundEnv builtin -> Expr builtin -> m ()
 showEntry _boundEnv expr = do
   -- logDebug MidDetail $ "nbe-entry" <+> prettyFriendly (WithContext expr (fmap fst boundEnv)) <+> "   { boundEnv=" <+> hang 0 (prettyVerbose boundEnv) <+> "}"
@@ -221,7 +218,7 @@ showExit _boundEnv result = do
   logDebug MidDetail $ "nbe-exit" <+> prettyVerbose result
   -- logDebug MidDetail $ "nbe-exit" <+> prettyFriendly (WithContext result (fmap fst boundEnv))
   return ()
--}
+
 showApp :: (MonadNorm builtin m) => Value builtin -> Spine builtin -> m ()
 showApp _ _ = return ()
 

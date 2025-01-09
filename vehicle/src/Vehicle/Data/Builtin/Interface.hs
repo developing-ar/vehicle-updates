@@ -63,6 +63,8 @@ class BuiltinHasIndexLiterals builtin where
 -- HasNat
 
 class BuiltinHasNatLiterals builtin where
+  accessNatTypeBuiltin :: Accessor builtin ()
+
   accessNatLitBuiltin :: Accessor builtin Int
   accessNatTensorLitBuiltin :: Accessor builtin (Tensor Int)
 
@@ -83,6 +85,8 @@ class BuiltinHasTensors builtin where
   accessStackTensorBuiltin :: Accessor builtin ()
   accessConstTensorBuiltin :: Accessor builtin ()
   accessAtTensorBuiltin :: Accessor builtin ()
+
+class BuiltinHasForeach builtin where
   accessForeachTensorBuiltin :: Accessor builtin ()
 
 --------------------------------------------------------------------------------

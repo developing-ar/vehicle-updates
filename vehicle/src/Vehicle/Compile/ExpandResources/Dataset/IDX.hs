@@ -89,10 +89,10 @@ parseContainer ::
   m (Value Builtin)
 parseContainer ctx topLevel actualDims elems expectedType = case toTypeValue expectedType of
   VListType expectedElemType -> parseList ctx expectedElemType actualDims elems
-  VBoolTensorType expectedDims -> parseTensor ctx actualDims elems IBoolType expectedDims
-  VRatTensorType expectedDims -> parseTensor ctx actualDims elems IRatType expectedDims
-  VNatTensorType expectedDims -> parseTensor ctx actualDims elems INatType expectedDims
-  VIndexTensorType n expectedDims -> parseTensor ctx actualDims elems (IIndexType n) expectedDims
+  VBoolTensorType expectedDims -> parseTensor ctx actualDims elems (fromTypeValue VBoolType) expectedDims
+  VRatTensorType expectedDims -> parseTensor ctx actualDims elems (fromTypeValue VRatType) expectedDims
+  VNatTensorType expectedDims -> parseTensor ctx actualDims elems (fromTypeValue VNatType) expectedDims
+  VIndexTensorType n expectedDims -> parseTensor ctx actualDims elems (fromTypeValue $ VIndexType n) expectedDims
   _ ->
     if topLevel
       then typingError ctx
