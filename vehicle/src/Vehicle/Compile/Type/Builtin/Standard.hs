@@ -290,9 +290,9 @@ typeOfVectorLiteral =
 
 typeOfStackTensor :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfStackTensor =
-  forAllDim Relevant $ \d ->
-    forAllDims $ \ds ->
-      forAllTypes $ \t ->
+  forAllTypes $ \t ->
+    forAllDim Relevant $ \d ->
+      forAllDims $ \ds ->
         typeOfVecLiteralCast (tTensor t (dimCons d ds)) (tTensor t ds) d
 
 typeOfFromVectorToList :: (HasStandardBuiltins builtin) => DSLExpr builtin

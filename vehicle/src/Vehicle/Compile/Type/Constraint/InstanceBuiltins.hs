@@ -184,22 +184,22 @@ allInstances =
           ----------------
           -- HasVecLits --
           ----------------
-          ( forAllDim Irrelevant $ \d ->
-              forAllDims $ \ds ->
-                forAllTypes $ \t ->
+          ( forAllTypes $ \t ->
+              forAllDim Irrelevant $ \d ->
+                forAllDims $ \ds ->
                   hasVecLits (tTensor t (dimCons d ds)) (tTensor t ds) d,
-            lamDim $ \d ->
-              lamDims $ \ds ->
-                implLam "t" type0 $ \t ->
-                  builtinFunction StackTensor @@@ [d] .@@@ [ds] @@@ [t],
+            implLam "t" type0 $ \t ->
+              lamDim $ \d ->
+                lamDims $ \ds ->
+                  builtinFunction StackTensor @@@ [t] @@@ [d] .@@@ [ds],
             False
           ),
-          ( forAllDim Irrelevant $ \d ->
-              forAllTypes $ \t ->
+          ( forAllTypes $ \t ->
+              forAllDim Irrelevant $ \d ->
                 hasVecLits (tList t) t d,
-            lamDim $ \d ->
-              implLam "t" type0 $ \t ->
-                builtinFunction FromVectorToList @@@ [d, t],
+            implLam "t" type0 $ \t ->
+              lamDim $ \d ->
+                builtinFunction FromVectorToList @@@ [t, d],
             False
           ),
           ------------------
