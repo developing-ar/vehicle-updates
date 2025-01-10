@@ -125,15 +125,21 @@ instance Pretty PolarityBuiltin where
     PolarityRelation c -> pretty c
 
 instance BuiltinHasStandardData PolarityBuiltin where
-  mkBuiltinFunction = PolarityFunction
-  getBuiltinFunction = \case
-    PolarityFunction c -> Just c
-    _ -> Nothing
+  accessBuiltinFunction =
+    Access
+      { mkExpr = PolarityFunction,
+        getExpr = \case
+          PolarityFunction c -> Just c
+          _ -> Nothing
+      }
 
-  mkBuiltinConstructor = PolarityConstructor
-  getBuiltinConstructor = \case
-    PolarityConstructor c -> Just c
-    _ -> Nothing
+  accessBuiltinConstructor =
+    Access
+      { mkExpr = PolarityConstructor,
+        getExpr = \case
+          PolarityConstructor c -> Just c
+          _ -> Nothing
+      }
 
 {-
 instance BuiltinHasBoolLiterals PolarityBuiltin where

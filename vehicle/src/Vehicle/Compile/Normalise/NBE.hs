@@ -1,6 +1,7 @@
 module Vehicle.Compile.Normalise.NBE
   ( MonadNorm,
     FreeEnv,
+    NormalisableBuiltin,
     normalise,
     normaliseInEnv,
     normaliseInEmptyEnv,
@@ -12,6 +13,7 @@ module Vehicle.Compile.Normalise.NBE
     evalClosure,
     traverseClosure,
     traverseClosureGeneric,
+    findInstanceArg,
   )
 where
 
@@ -22,7 +24,7 @@ import Vehicle.Compile.Context.Free.Class (MonadFreeContext (..), getFreeEnv)
 import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, getBinderContext)
 import Vehicle.Compile.Normalise.Builtin
   ( NormalisableBuiltin (..),
-    findInstanceArg,
+    evaluateBuiltin,
   )
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
@@ -179,13 +181,17 @@ evalBuiltin ::
   builtin ->
   Spine builtin ->
   m (Value builtin)
-evalBuiltin freeEnv b args = do
-  if isTypeClassOp b
-    then do
+evalBuiltin freeEnv b args
+  | not (isTypeClassOp b) = evaluateBuiltin (evalApp freeEnv) b args
+  | otherwise = do
       (inst, remainingArgs) <- findInstanceArg b args
       evalApp freeEnv inst remainingArgs
-    else
-      evalBuiltinApp (evalApp freeEnv) freeEnv (VBuiltin b args) b args
+
+findInstanceArg :: (MonadLogger m, Show op) => op -> [GenericArg a] -> m (a, [GenericArg a])
+findInstanceArg op = \case
+  (InstanceArg _ _ inst : xs) -> return (inst, xs)
+  (_ : xs) -> findInstanceArg op xs
+  [] -> developerError $ "Malformed type class operation:" <+> pretty (show op)
 
 lookupIxValueInEnv :: BoundEnv builtin -> Ix -> Value builtin
 lookupIxValueInEnv boundEnv ix = do

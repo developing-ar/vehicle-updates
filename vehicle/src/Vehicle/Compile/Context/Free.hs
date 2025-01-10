@@ -8,7 +8,6 @@ where
 import Vehicle.Compile.Context.Free.Class as X
 import Vehicle.Compile.Context.Free.Core as X
 import Vehicle.Compile.Context.Free.Instance as X
-import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 

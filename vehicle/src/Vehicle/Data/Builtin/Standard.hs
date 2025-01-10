@@ -134,6 +134,7 @@ instance BuiltinHasRatLiterals Builtin where
   accessDivRatTensorBuiltin = functionAccessor $ Div DivRatTensor
   accessMinRatTensorBuiltin = functionAccessor $ Min MinRatTensor
   accessMaxRatTensorBuiltin = functionAccessor $ Max MaxRatTensor
+  accessPowRatTensorBuiltin = functionAccessor PowRat
   accessReduceAddRatBuiltin = functionAccessor ReduceAddRatTensor
   accessReduceMulRatBuiltin = functionAccessor ReduceMulRatTensor
   accessReduceMinRatBuiltin = functionAccessor ReduceMinRatTensor
@@ -156,6 +157,9 @@ instance BuiltinHasListLiterals Builtin where
         mkExpr = \() -> BuiltinConstructor Cons
       }
 
+  accessMapListBuiltin = functionAccessor MapList
+  accessFoldListBuiltin = functionAccessor FoldList
+
 instance BuiltinHasTensors Builtin where
   accessConstTensorBuiltin = functionAccessor ConstTensor
   accessStackTensorBuiltin = functionAccessor StackTensor
@@ -168,20 +172,29 @@ instance BuiltinHasStandardTypeClasses Builtin where
   mkBuiltinTypeClass = TypeClass
 
 instance BuiltinHasStandardTypes Builtin where
-  mkBuiltinType = BuiltinType
-  getBuiltinType = \case
-    BuiltinType c -> Just c
-    _ -> Nothing
+  accessBuiltinType =
+    Access
+      { mkExpr = BuiltinType,
+        getExpr = \case
+          BuiltinType c -> Just c
+          _ -> Nothing
+      }
 
   mkNatInDomainConstraint = NatInDomainConstraint
 
 instance BuiltinHasStandardData Builtin where
-  mkBuiltinFunction = BuiltinFunction
-  getBuiltinFunction = \case
-    BuiltinFunction c -> Just c
-    _ -> Nothing
+  accessBuiltinFunction =
+    Access
+      { mkExpr = BuiltinFunction,
+        getExpr = \case
+          BuiltinFunction c -> Just c
+          _ -> Nothing
+      }
 
-  mkBuiltinConstructor = BuiltinConstructor
-  getBuiltinConstructor = \case
-    BuiltinConstructor c -> Just c
-    _ -> Nothing
+  accessBuiltinConstructor =
+    Access
+      { mkExpr = BuiltinConstructor,
+        getExpr = \case
+          BuiltinConstructor c -> Just c
+          _ -> Nothing
+      }

@@ -122,7 +122,7 @@ solveDefaultIndexConstraint (WithContext constraint ctx) = do
     (VBuiltin NatInDomainConstraint [n, argExpr -> toTypeValue -> VIndexType size]) -> do
       let succN = fromNatValue $ case argExpr n of
             INatLiteral x -> VNatLiteral (x + 1)
-            n' -> VNatAdd n' (INatLiteral 1)
+            n' -> VNatAdd (Op2Args n' (INatLiteral 1))
 
       let constraintInfo = (ctx, instanceOrigin constraint)
       newSizeConstraint <- createInstanceUnification constraintInfo size succN

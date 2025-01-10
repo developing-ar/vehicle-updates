@@ -78,6 +78,9 @@ class BuiltinHasListLiterals builtin where
   accessNilBuiltin :: Accessor builtin ()
   accessConsBuiltin :: Accessor builtin ()
 
+  accessMapListBuiltin :: Accessor builtin ()
+  accessFoldListBuiltin :: Accessor builtin ()
+
 --------------------------------------------------------------------------------
 -- HasTensors
 
@@ -102,6 +105,7 @@ class (BuiltinHasTensors builtin) => BuiltinHasRatLiterals builtin where
   accessDivRatTensorBuiltin :: Accessor builtin ()
   accessMinRatTensorBuiltin :: Accessor builtin ()
   accessMaxRatTensorBuiltin :: Accessor builtin ()
+  accessPowRatTensorBuiltin :: Accessor builtin ()
   accessReduceAddRatBuiltin :: Accessor builtin ()
   accessReduceMulRatBuiltin :: Accessor builtin ()
   accessReduceMinRatBuiltin :: Accessor builtin ()
@@ -113,21 +117,23 @@ class (BuiltinHasTensors builtin) => BuiltinHasRatLiterals builtin where
 -- | Indicates that this set of builtins has the standard builtin constructors
 -- and functions.
 class BuiltinHasStandardData builtin where
-  mkBuiltinConstructor :: BuiltinConstructor -> builtin
-  getBuiltinConstructor :: builtin -> Maybe BuiltinConstructor
+  accessBuiltinConstructor :: Accessor builtin BuiltinConstructor
+  accessBuiltinFunction :: Accessor builtin BuiltinFunction
 
-  mkBuiltinFunction :: BuiltinFunction -> builtin
-  getBuiltinFunction :: builtin -> Maybe BuiltinFunction
+class BuiltinHasCasts builtin where
+  accessFromNatToIndexBuiltin :: Accessor builtin ()
+  accessFromVectorToListBuiltin :: Accessor builtin ()
 
 --------------------------------------------------------------------------------
 -- BuiltinHasStandardTypes
 
 -- | Indicates that this set of builtins has the standard set of types.
 class BuiltinHasStandardTypes builtin where
-  mkBuiltinType :: BuiltinType -> builtin
-  getBuiltinType :: builtin -> Maybe BuiltinType
-
+  accessBuiltinType :: Accessor builtin BuiltinType
   mkNatInDomainConstraint :: builtin
+
+class BuiltinHasIterate builtin where
+  accessIterateBuiltin :: Accessor builtin ()
 
 --------------------------------------------------------------------------------
 -- HasStandardBuiltins

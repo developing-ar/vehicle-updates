@@ -297,8 +297,8 @@ typeOfStackTensor =
 
 typeOfFromVectorToList :: (HasStandardBuiltins builtin) => DSLExpr builtin
 typeOfFromVectorToList =
-  forAllDim Relevant $ \d ->
-    forAllTypes $ \t ->
+  forAllTypes $ \t ->
+    forAllDim Relevant $ \d ->
       typeOfVecLiteralCast (tList t) t d
 
 typeOfNatInDomainConstraint :: (HasStandardBuiltins builtin) => DSLExpr builtin

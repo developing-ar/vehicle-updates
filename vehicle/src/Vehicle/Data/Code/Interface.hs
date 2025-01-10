@@ -11,7 +11,7 @@ import Vehicle.Syntax.Builtin.BasicOperations
 --------------------------------------------------------------------------------
 
 class HasBuiltinConstructor expr where
-  accessBuiltinConstructor :: Accessor (expr builtin) (builtin, [GenericArg (expr builtin)])
+  accessBuiltinC :: Accessor (expr builtin) (builtin, [GenericArg (expr builtin)])
 
 mkBuiltin ::
   (HasBuiltinConstructor expr) =>
@@ -19,14 +19,14 @@ mkBuiltin ::
   a ->
   [GenericArg (expr builtin)] ->
   expr builtin
-mkBuiltin accessBuiltin v args = mkExpr accessBuiltinConstructor (mkExpr accessBuiltin v, args)
+mkBuiltin accessBuiltin v args = mkExpr accessBuiltinC (mkExpr accessBuiltin v, args)
 
 getBuiltin ::
   (HasBuiltinConstructor expr) =>
   Accessor builtin a ->
   expr builtin ->
   Maybe (a, [GenericArg (expr builtin)])
-getBuiltin accessBuiltin e = case getExpr accessBuiltinConstructor e of
+getBuiltin accessBuiltin e = case getExpr accessBuiltinC e of
   Just (b, args) -> case getExpr accessBuiltin b of
     Just v -> Just (v, args)
     _ -> Nothing
@@ -44,10 +44,24 @@ getBuiltin accessBuiltin e = case getExpr accessBuiltinConstructor e of
 class IsArgs args where
   accessSpine :: Accessor [GenericArg expr] (args expr)
 
--- | Arguments for comparisons (==, <= etc.)
+-- | Arguments for simple unary operations (fromRatToRat etc.)
+newtype Op1Args expr = Op1Args
+  { op1Arg :: expr
+  }
+
+instance IsArgs Op1Args where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [x] -> Just $ Op1Args (argExpr x)
+          _ -> Nothing,
+        mkExpr = \(Op1Args x) -> explicit <$> [x]
+      }
+
+-- | Arguments for simple binary operations (==, <= etc.)
 data Op2Args expr = Op2Args
-  { natOp2Arg1 :: expr,
-    natOp2Arg2 :: expr
+  { op2Arg1 :: expr,
+    op2Arg2 :: expr
   }
 
 instance IsArgs Op2Args where
@@ -158,21 +172,137 @@ instance IsArgs ConstTensorArgs where
         mkExpr = \(ConstTensorArgs t v ds) -> [t, explicit v, explicit ds]
       }
 
+mapConstTensorValue :: (expr -> expr) -> ConstTensorArgs expr -> ConstTensorArgs expr
+mapConstTensorValue f ConstTensorArgs {..} = ConstTensorArgs {constValue = f constValue, ..}
+
+traverseConstTensorValue :: (Monad m) => (expr -> m expr) -> ConstTensorArgs expr -> m (ConstTensorArgs expr)
+traverseConstTensorValue f ConstTensorArgs {..} = do
+  constValue' <- f constValue
+  return $ ConstTensorArgs {constValue = constValue', ..}
+
 -- | Arguments for `StackTensor`
 data StackTensorArgs expr = StackTensorArgs
   { stackType :: GenericArg expr,
-    stackFirstDim :: GenericArg expr,
+    stackFirstDim :: expr,
     stackRemainingDims :: GenericArg expr,
-    stackElements :: [GenericArg expr]
+    stackElements :: [expr]
   }
 
 instance IsArgs StackTensorArgs where
   accessSpine =
     Access
       { getExpr = \case
-          t : d : ds : xs -> Just $ StackTensorArgs t d ds xs
+          t : d : ds : xs -> Just $ StackTensorArgs t (argExpr d) ds (fmap argExpr xs)
           _ -> Nothing,
-        mkExpr = \(StackTensorArgs t d ds xs) -> t : d : ds : xs
+        mkExpr = \(StackTensorArgs t d ds xs) -> t : implicit d : ds : fmap explicit xs
+      }
+
+mapStackTensorElements :: (expr -> expr) -> StackTensorArgs expr -> StackTensorArgs expr
+mapStackTensorElements f StackTensorArgs {..} = StackTensorArgs {stackElements = fmap f stackElements, ..}
+
+traverseStackTensorElements :: (Monad m) => (expr -> m expr) -> StackTensorArgs expr -> m (StackTensorArgs expr)
+traverseStackTensorElements f StackTensorArgs {..} = do
+  stackElements' <- traverse f stackElements
+  return $ StackTensorArgs {stackElements = stackElements', ..}
+
+-- | Arguments for `Forfach`
+data ForeachArgs expr = ForeachArgs
+  { foreachType :: GenericArg expr,
+    foreachFirstDim :: expr,
+    foreachRemainingDims :: GenericArg expr,
+    foreachFn :: expr
+  }
+
+instance IsArgs ForeachArgs where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [t, d, ds, fn] -> Just $ ForeachArgs t (argExpr d) ds (argExpr fn)
+          _ -> Nothing,
+        mkExpr = \(ForeachArgs t d ds fn) -> [t, implicit d, ds, explicit fn]
+      }
+
+-- | Arguments for `FromNat`
+data FromNatArgs expr = FromNatArgs
+  { fromNatArg :: expr,
+    fromNatInDomain :: GenericArg expr
+  }
+
+instance IsArgs FromNatArgs where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [x, d] -> Just $ FromNatArgs (argExpr x) d
+          _ -> Nothing,
+        mkExpr = \(FromNatArgs x d) -> [explicit x, d]
+      }
+
+-- | Arguments for `MapList`
+data MapListArgs expr = MapListArgs
+  { mapListInputType :: GenericArg expr,
+    mapListOutputType :: GenericArg expr,
+    mapListFun :: expr,
+    mapListList :: expr
+  }
+
+instance IsArgs MapListArgs where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [t1, t2, fn, xs] -> Just $ MapListArgs t1 t2 (argExpr fn) (argExpr xs)
+          _ -> Nothing,
+        mkExpr = \(MapListArgs t1 t2 fn xs) -> [t1, t2, explicit fn, explicit xs]
+      }
+
+-- | Arguments for `MapList`
+data FoldListArgs expr = FoldListArgs
+  { foldListInputType :: GenericArg expr,
+    foldListOutputType :: GenericArg expr,
+    foldListFun :: expr,
+    foldListDefault :: expr,
+    foldListList :: expr
+  }
+
+instance IsArgs FoldListArgs where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [t1, t2, fn, e, xs] -> Just $ FoldListArgs t1 t2 (argExpr fn) (argExpr e) (argExpr xs)
+          _ -> Nothing,
+        mkExpr = \(FoldListArgs t1 t2 fn e xs) -> [t1, t2, explicit fn, explicit e, explicit xs]
+      }
+
+-- | Arguments for `VectorToList`
+data VectorToListArgs expr = VectorToListArgs
+  { vectorToListElementType :: GenericArg expr,
+    vectorToListSize :: GenericArg expr,
+    vectorToListArgs :: [expr]
+  }
+
+instance IsArgs VectorToListArgs where
+  accessSpine =
+    Access
+      { getExpr = \case
+          t : n : xs -> Just $ VectorToListArgs t n (fmap argExpr xs)
+          _ -> Nothing,
+        mkExpr = \(VectorToListArgs t n xs) -> t : n : fmap explicit xs
+      }
+
+-- | Arguments for `Iterate`
+data IterateArgs expr = IterateArgs
+  { iterateElementType :: GenericArg expr,
+    iterateFn :: expr,
+    iterateTimes :: expr,
+    iterateStart :: expr
+  }
+
+instance IsArgs IterateArgs where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [t, fn, n, e] -> Just $ IterateArgs t (argExpr fn) (argExpr n) (argExpr e)
+          _ -> Nothing,
+        mkExpr = \(IterateArgs t fn n e) -> [t, explicit fn, explicit n, explicit e]
       }
 
 type TensorReductionArgs = TensorOp2Args
@@ -233,7 +363,12 @@ accessOpAndArgs accessOp =
 -- Boolean operations
 --------------------------------------------------------------------------------
 
-type HasBoolExpr expr builtin = (HasBuiltinConstructor expr, BuiltinHasBoolLiterals builtin)
+type HasBoolExpr expr builtin =
+  ( HasBuiltinConstructor expr,
+    BuiltinHasBoolLiterals builtin,
+    BuiltinHasTensors builtin
+    -- , PrintableBuiltin builtin
+  )
 
 accessBoolTensorLiteral :: (HasBoolExpr expr builtin) => Accessor (expr builtin) BoolTensor
 accessBoolTensorLiteral = accessNoArgs accessBoolTensorLitBuiltin
@@ -353,7 +488,11 @@ pattern INatTensor n <- (getExpr accessNatTensorLiteral -> Just n)
 --------------------------------------------------------------------------------
 -- Rationals
 
-type HasRatExpr expr builtin = (HasBuiltinConstructor expr, BuiltinHasRatLiterals builtin)
+type HasRatExpr expr builtin =
+  ( HasBuiltinConstructor expr,
+    BuiltinHasRatLiterals builtin,
+    BuiltinHasTensors builtin
+  )
 
 accessRatTensorLiteral :: (HasRatExpr expr builtin) => Accessor (expr builtin) RatTensor
 accessRatTensorLiteral = accessNoArgs accessRatTensorLitBuiltin
@@ -378,6 +517,9 @@ accessMinRatTensor = accessArgs accessMinRatTensorBuiltin
 
 accessMaxRatTensor :: (HasRatExpr expr builtin) => TensorOp2Accessor (expr builtin)
 accessMaxRatTensor = accessArgs accessMaxRatTensorBuiltin
+
+accessPowRatTensor :: (HasRatExpr expr builtin) => TensorOp2Accessor (expr builtin)
+accessPowRatTensor = accessArgs accessPowRatTensorBuiltin
 
 accessReduceAddRat :: (HasRatExpr expr builtin) => TensorReductionAccessor (expr builtin)
 accessReduceAddRat = accessArgs accessReduceAddRatBuiltin
@@ -425,6 +567,12 @@ accessCons =
         _ -> Nothing,
       mkExpr = \(t, x, xs) -> mkBuiltin accessConsBuiltin () [t, explicit x, explicit xs]
     }
+
+accessMapList :: (HasListExpr expr builtin) => Accessor (expr builtin) (MapListArgs (expr builtin))
+accessMapList = accessArgs accessMapListBuiltin
+
+accessFoldList :: (HasListExpr expr builtin) => Accessor (expr builtin) (FoldListArgs (expr builtin))
+accessFoldList = accessArgs accessFoldListBuiltin
 
 pattern INil ::
   (HasListExpr expr builtin) =>
@@ -489,11 +637,23 @@ accessAtTensor = accessArgs accessAtTensorBuiltin
 
 accessForeachTensor ::
   (HasBuiltinConstructor expr, BuiltinHasForeach builtin) =>
-  Accessor (expr builtin) (GenericArg (expr builtin), GenericArg (expr builtin), GenericArg (expr builtin), expr builtin)
-accessForeachTensor =
-  Access
-    { getExpr = \case
-        (getBuiltin accessForeachTensorBuiltin -> Just ((), [t, d, ds, fn])) -> Just (t, d, ds, argExpr fn)
-        _ -> Nothing,
-      mkExpr = \(t, d, ds, fn) -> mkBuiltin accessForeachTensorBuiltin () [t, d, ds, explicit fn]
-    }
+  Accessor (expr builtin) (ForeachArgs (expr builtin))
+accessForeachTensor = accessArgs accessForeachTensorBuiltin
+
+accessIterate ::
+  (HasBuiltinConstructor expr, BuiltinHasIterate builtin) =>
+  Accessor (expr builtin) (IterateArgs (expr builtin))
+accessIterate = accessArgs accessIterateBuiltin
+
+--------------------------------------------------------------------------------
+-- Casts
+
+accessFromNatToIndex ::
+  (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>
+  Accessor (expr builtin) (FromNatArgs (expr builtin))
+accessFromNatToIndex = accessArgs accessFromNatToIndexBuiltin
+
+accessFromVectorToList ::
+  (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>
+  Accessor (expr builtin) (VectorToListArgs (expr builtin))
+accessFromVectorToList = accessArgs accessFromVectorToListBuiltin

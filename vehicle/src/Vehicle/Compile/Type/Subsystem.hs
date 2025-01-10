@@ -8,7 +8,7 @@ import Control.Monad.Except (runExceptT)
 import Data.List.NonEmpty qualified as NonEmpty
 import Vehicle.Compile.Error
 import Vehicle.Compile.Monomorphisation (monomorphise)
-import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin, findInstanceArg)
+import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin, findInstanceArg)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal)
 import Vehicle.Compile.Print.Builtin (PrintableBuiltin (..))

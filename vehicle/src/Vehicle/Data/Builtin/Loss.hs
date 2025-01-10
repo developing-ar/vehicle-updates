@@ -83,6 +83,8 @@ data LossBuiltinFunction
   | StackTensor
   | ConstTensor
   | SearchRatTensor
+  | MapList
+  | FoldList
   deriving (Eq, Ord, Show, Generic)
 
 -- TODO all the show instances should really be obtainable from the grammar
@@ -105,6 +107,8 @@ instance Pretty LossBuiltinFunction where
     StackTensor {} -> "stack"
     ConstTensor -> "const"
     SearchRatTensor -> "search"
+    MapList -> "mapList"
+    FoldList -> "foldList"
 
 --------------------------------------------------------------------------------
 -- Builtin datatype
@@ -194,6 +198,9 @@ instance BuiltinHasListLiterals LossBuiltin where
         mkExpr = \() -> LossBuiltinConstructor Cons
       }
 
+  accessMapListBuiltin = functionAccessor MapList
+  accessFoldListBuiltin = functionAccessor FoldList
+
 instance BuiltinHasTensors LossBuiltin where
   accessConstTensorBuiltin = functionAccessor ConstTensor
   accessStackTensorBuiltin = functionAccessor StackTensor
@@ -215,6 +222,7 @@ instance BuiltinHasRatLiterals LossBuiltin where
   accessDivRatTensorBuiltin = functionAccessor $ Div DivRatTensor
   accessMinRatTensorBuiltin = functionAccessor $ Min MinRatTensor
   accessMaxRatTensorBuiltin = functionAccessor $ Max MaxRatTensor
+  accessPowRatTensorBuiltin = functionAccessor PowRat
   accessReduceAddRatBuiltin = functionAccessor ReduceAddRatTensor
   accessReduceMulRatBuiltin = functionAccessor ReduceMulRatTensor
   accessReduceMinRatBuiltin = functionAccessor ReduceMinRatTensor

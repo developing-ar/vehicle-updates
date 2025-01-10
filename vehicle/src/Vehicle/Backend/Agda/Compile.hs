@@ -24,7 +24,7 @@ import Vehicle.Compile.Context.Bound (getNamedBoundCtx)
 import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, ixToProperName, runFreshNameContextT)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Monomorphisation
-import Vehicle.Compile.Normalise.Builtin (findInstanceArg)
+import Vehicle.Compile.Normalise.NBE (findInstanceArg)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
 import Vehicle.Data.Builtin.Standard (BuiltinType (..))

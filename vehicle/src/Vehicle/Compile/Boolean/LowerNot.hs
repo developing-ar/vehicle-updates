@@ -54,11 +54,11 @@ lowerNot lv onBlocked e = do
     ---------------------
     -- Inductive cases --
     ---------------------
-    VConstBoolTensor v dims -> fromBoolValue <$> (VConstBoolTensor <$> go v <*> pure dims)
-    VBoolStackTensor n dims xs -> fromBoolValue . VBoolStackTensor n dims <$> traverseSpine go xs
+    VConstBoolTensor args -> fromBoolValue . VConstBoolTensor <$> traverseConstTensorValue go args
+    VBoolStackTensor args -> fromBoolValue . VBoolStackTensor <$> traverseStackTensorElements go args
     VOr args -> fromBoolValue . VAnd <$> traverse go args
     VAnd args -> fromBoolValue . VOr <$> traverse go args
-    VBoolIf dims c x y -> fromBoolValue <$> (VBoolIf dims c <$> go x <*> go y)
+    VBoolIf (IfArgs dims c x y) -> fromBoolValue . VBoolIf <$> (IfArgs dims c <$> go x <*> go y)
     -------------------
     -- Blocked cases --
     -------------------

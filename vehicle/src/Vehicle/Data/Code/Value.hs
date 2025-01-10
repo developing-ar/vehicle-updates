@@ -155,7 +155,7 @@ traverseUnnormalised f (Glued u n) = Glued <$> f u <*> pure n
 -- Instances
 
 instance (HasBuiltinConstructor Value) where
-  accessBuiltinConstructor =
+  accessBuiltinC =
     Access
       { getExpr = \case
           VBuiltin b spine -> Just (b, spine)

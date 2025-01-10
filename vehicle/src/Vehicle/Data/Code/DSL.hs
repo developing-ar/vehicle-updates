@@ -12,7 +12,7 @@ import Prelude hiding (pi)
 -- Standard types DSL
 
 builtinType :: (BuiltinHasStandardTypes builtin) => BuiltinType -> DSLExpr builtin
-builtinType = builtin . mkBuiltinType
+builtinType = builtin . mkExpr accessBuiltinType
 
 tUnit :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
 tUnit = builtinType UnitType
@@ -66,7 +66,7 @@ natInDomainConstraint n t = builtin mkNatInDomainConstraint @@ [n, t]
 -- Constructors DSL
 
 builtinConstructor :: (BuiltinHasStandardData builtin) => BuiltinConstructor -> DSLExpr builtin
-builtinConstructor = builtin . mkBuiltinConstructor
+builtinConstructor = builtin . mkExpr accessBuiltinConstructor
 
 nil :: (BuiltinHasStandardData builtin) => DSLExpr builtin -> DSLExpr builtin
 nil tElem = builtinConstructor Nil @@@ [tElem]
@@ -94,7 +94,7 @@ shapeOf t = foldr (\x xs -> cons tNat (natLit x) xs) (nil tNat) (tensorShape t)
 -- Functions DSL
 
 builtinFunction :: (BuiltinHasStandardData builtin) => BuiltinFunction -> DSLExpr builtin
-builtinFunction = builtin . mkBuiltinFunction
+builtinFunction = builtin . mkExpr accessBuiltinFunction
 
 addNat :: (BuiltinHasStandardData builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
 addNat x y = builtinFunction (Add AddNat) @@ [x, y]

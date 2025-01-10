@@ -145,15 +145,21 @@ instance Pretty LinearityBuiltin where
     LinearityRelation tc -> pretty tc
 
 instance BuiltinHasStandardData LinearityBuiltin where
-  mkBuiltinFunction = LinearityFunction
-  getBuiltinFunction = \case
-    LinearityFunction c -> Just c
-    _ -> Nothing
+  accessBuiltinFunction =
+    Access
+      { mkExpr = LinearityFunction,
+        getExpr = \case
+          LinearityFunction c -> Just c
+          _ -> Nothing
+      }
 
-  mkBuiltinConstructor = LinearityConstructor
-  getBuiltinConstructor = \case
-    LinearityConstructor c -> Just c
-    _ -> Nothing
+  accessBuiltinConstructor =
+    Access
+      { mkExpr = LinearityConstructor,
+        getExpr = \case
+          LinearityConstructor c -> Just c
+          _ -> Nothing
+      }
 
 {-
 instance BuiltinHasBoolLiterals LinearityBuiltin where
