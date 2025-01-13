@@ -198,3 +198,11 @@ instance BuiltinHasStandardData Builtin where
           BuiltinConstructor c -> Just c
           _ -> Nothing
       }
+
+instance BuiltinHasCasts Builtin where
+  accessFromNatToRatBuiltin = functionAccessor (FromNat FromNatToRat)
+  accessFromNatToIndexBuiltin = functionAccessor (FromNat FromNatToIndex)
+  accessFromVectorToListBuiltin = functionAccessor FromVectorToList
+
+instance BuiltinHasIterate Builtin where
+  accessIterateBuiltin = functionAccessor Iterate

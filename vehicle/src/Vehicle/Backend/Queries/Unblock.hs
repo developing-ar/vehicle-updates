@@ -10,11 +10,12 @@ import Vehicle.Backend.Queries.UserVariableElimination.Core
 import Vehicle.Compile.Boolean.LiftIf
 import Vehicle.Compile.Context.Free (MonadFreeContext, getFreeEnv)
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Builtin hiding (evalOp2)
+import Vehicle.Compile.Normalise.Builtin
 import Vehicle.Compile.Normalise.NBE (evalApp)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
 import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
 
@@ -27,14 +28,8 @@ type MonadUnblock m = (MonadCompile m, MonadFreeContext Builtin m)
 type MonadPurify m = MonadQueryStructure m
 
 data UnblockingActions m = UnblockingActions
-  { unblockRatTensorBoundVar ::
-      Lv ->
-      m (Value Builtin),
-    unblockNetworkApp ::
-      UnblockingFunction m ->
-      Identifier ->
-      Spine Builtin ->
-      m (Value Builtin)
+  { unblockRatTensorBoundVar :: Lv -> m (Value Builtin),
+    unblockNetworkApp :: UnblockingFunction m -> NetworkApplication -> m (Value Builtin)
   }
 
 -- | Lifts all `if`s in the provided expression `e` to the top-level, while
@@ -71,8 +66,8 @@ tryPurifyAssertion actions assertion = do
 
   let unblock = unblockRatTensorValue preCtx actions
   unblockedExpr <- case toBoolValue assertion of
-    VEqualsRatTensor (Eq, args) -> unblockOp2 (Equals EqRatTensor Eq) (evalEqualityRatTensor Eq) unblock unblock [dims] x y
-    VOrderRatTensor (op, args) -> unblockOp2 (Order OrderRatTensor op) (evalOrderRatTensor op) unblock unblock [dims] x y
+    VEqualsRatTensor (Eq, args) -> unblockTensorOp2 unblock (evalEqualsRatTensor Eq) args
+    VOrderRatTensor (op, args) -> unblockTensorOp2 unblock (evalOrderRatTensor op) args
     _ -> unexpectedExprError "purifying assertion" (prettyVerbose assertion)
 
   logDebugM MaxDetail $ do
@@ -102,16 +97,16 @@ unblockBoolTensorValue ctx expr = do
     VEqualsRatTensor {} -> return expr
     VQuantifyRatTensor {} -> return expr
     -- Recursively unblock
-    VReduceAndTensor args -> unblockOp1 ReduceAndTensor evalReduceAndTensor unblock [dims, explicit e] xs
-    VReduceOrTensor args -> unblockOp1 ReduceOrTensor evalReduceOrTensor unblock [dims, explicit e] xs
-    VOrderIndex (op, args) -> unblockIndexOp2 (Order OrderIndex op) (evalOrderIndex op) n1 n2 x y
-    VEqualsIndex (op, args) -> unblockIndexOp2 (Equals EqIndex op) (evalEqualsIndex op) n1 n2 x y
-    VOrderNat (op, args) -> unblockNatOp2 (Order OrderNat op) (evalOrderNat op) x y
-    VEqualsNat (op, args) -> unblockNatOp2 (Equals EqNat op) (evalEqualsNat op) x y
-    VConstBoolTensor v dims -> unblockConstTensor VBoolType v dims
-    VBoolStackTensor d ds xss -> unblockStackTensor unblock VBoolType d ds xss
-    VBoolAt d ds xs s -> unblockAtTensor unblock VBoolType d ds xs s
-    VBoolForeach d ds f -> unblockForeachTensor VBoolType d ds f
+    VReduceAndTensor args -> unblockReduceTensor unblock evalReduceAndTensor args
+    VReduceOrTensor args -> unblockReduceTensor unblock evalReduceOrTensor args
+    VOrderIndex (op, args) -> unblockIndexOp2 (evalOrderIndex op) args
+    VEqualsIndex (op, args) -> unblockIndexOp2 (evalEqualsIndex op) args
+    VOrderNat (op, args) -> unblockOp2 unblock (evalOrderNat op) args
+    VEqualsNat (op, args) -> unblockOp2 unblock (evalEqualsNat op) args
+    VConstBoolTensor args -> unblockConstTensor args
+    VBoolStackTensor args -> unblockStackTensor unblock args
+    VBoolAt args -> unblockAtTensor unblock args
+    VBoolForeach args -> unblockForeachTensor args
   where
     unblock = unblockBoolTensorValue ctx
 
@@ -123,23 +118,23 @@ unblockRatTensorValue ctx actions@UnblockingActions {..} expr = do
     VRatTensorLiteral {} -> return expr
     VIfRatTensor {} -> return expr
     -- Recursively purify
-    VNegRatTensor args -> unblockOp1 (Neg NegRatTensor) evalNegRatTensor unblock [dims] x
-    VAddRatTensor args -> unblockOp2 (Add AddRatTensor) evalAddRatTensor unblock unblock [dims] x y
-    VSubRatTensor args -> unblockOp2 (Sub SubRatTensor) evalSubRatTensor unblock unblock [dims] x y
-    VMulRatTensor args -> unblockOp2 (Mul MulRatTensor) evalMulRatTensor unblock unblock [dims] x y
-    VDivRatTensor args -> unblockOp2 (Div DivRatTensor) evalDivRatTensor unblock unblock [dims] x y
-    VMinRatTensor args -> unblockOp2 (Min MinRatTensor) evalMinRatTensor unblock unblock [dims] x y
-    VMaxRatTensor args -> unblockOp2 (Max MaxRatTensor) evalMaxRatTensor unblock unblock [dims] x y
-    VReduceAddRatTensor args -> unblockOp1 ReduceAddRatTensor evalReduceAddRatTensor unblock [dims, explicit e] xs
-    VReduceMulRatTensor args -> unblockOp1 ReduceMulRatTensor evalReduceMulRatTensor unblock [dims, explicit e] xs
-    VReduceMinRatTensor args -> unblockOp1 ReduceMinRatTensor evalReduceMinRatTensor unblock [dims, explicit e] xs
-    VReduceMaxRatTensor args -> unblockOp1 ReduceMaxRatTensor evalReduceMaxRatTensor unblock [dims, explicit e] xs
+    VNegRatTensor args -> unblockTensorOp1 unblock evalNegRatTensor args
+    VAddRatTensor args -> unblockTensorOp2 unblock evalAddRatTensor args
+    VSubRatTensor args -> unblockTensorOp2 unblock evalSubRatTensor args
+    VMulRatTensor args -> unblockTensorOp2 unblock evalMulRatTensor args
+    VDivRatTensor args -> unblockTensorOp2 unblock evalDivRatTensor args
+    VMinRatTensor args -> unblockTensorOp2 unblock evalMinRatTensor args
+    VMaxRatTensor args -> unblockTensorOp2 unblock evalMaxRatTensor args
+    VReduceAddRatTensor args -> unblockReduceTensor unblock evalReduceAddRatTensor args
+    VReduceMulRatTensor args -> unblockReduceTensor unblock evalReduceMulRatTensor args
+    VReduceMinRatTensor args -> unblockReduceTensor unblock evalReduceMinRatTensor args
+    VReduceMaxRatTensor args -> unblockReduceTensor unblock evalReduceMaxRatTensor args
     VRatTensorVar v -> unblockRatTensorBoundVar v
-    VNetworkApp n spine -> unblockNetworkApp unblock n spine
-    VRatConstTensor v dims -> unblockConstTensor VRatType v dims
-    VRatStackTensor n ds xss -> unblockStackTensor unblock VRatType n ds xss
-    VRatAt d ds xs i -> unblockAtTensor unblock VRatType d ds xs i
-    VRatForeach d ds fn -> unblockForeachTensor VRatType d ds fn
+    VNetworkApp n args -> unblockNetworkApp unblock (nameOf n, args)
+    VRatConstTensor args -> unblockConstTensor args
+    VRatStackTensor args -> unblockStackTensor unblock args
+    VRatAt args -> unblockAtTensor unblock args
+    VRatForeach args -> unblockForeachTensor args
   where
     unblock = unblockRatTensorValue ctx actions
 
@@ -160,121 +155,116 @@ unblockNatValue :: UnblockingFunction m
 unblockNatValue expr = case toNatValue expr of
   VNatLiteral {} -> return expr
   VNatIf {} -> return expr
-  VNatAdd x y -> unblockNatOp2 (Add AddNat) evalAddNat x y
-  VNatMul x y -> unblockNatOp2 (Mul MulNat) evalMulNat x y
+  VNatAdd args -> unblockOp2 unblockNatValue evalAddNat args
+  VNatMul args -> unblockOp2 unblockNatValue evalMulNat args
   VNatBoundVar {} -> unexpectedExprError currentPass (prettyVerbose expr)
   VNatParameter {} -> unexpectedExprError currentPass (prettyVerbose expr)
 
 --------------------------------------------------------------------------------
 -- Unblocking individual operations
 
-unblockOp1 ::
-  (MonadUnblock m) =>
-  BuiltinFunction ->
-  EvalSimpleBuiltin Builtin ->
-  UnblockingFunction m ->
-  [VArg Builtin] ->
-  Value Builtin ->
-  m (Value Builtin)
-unblockOp1 fn evalFn unblock1 implicitArgs x = do
-  x' <- unblock1 x
-  liftIf x' $ \x'' -> do
-    let args = implicitArgs <> [explicit x'']
-    return $ evalFn (VBuiltin (BuiltinFunction fn) args) args
-
 unblockOp2 ::
   (MonadUnblock m) =>
-  BuiltinFunction ->
-  EvalSimpleBuiltin Builtin ->
   UnblockingFunction m ->
-  UnblockingFunction m ->
-  [VArg Builtin] ->
-  Value Builtin ->
-  Value Builtin ->
+  EvalSimple Op2Args Builtin ->
+  Op2Args (Value Builtin) ->
   m (Value Builtin)
-unblockOp2 fn evalFn unblock1 unblock2 implicitArgs x y = do
-  x' <- unblock1 x
-  y' <- unblock2 y
+unblockOp2 unblock evalFn (Op2Args x y) = do
+  x' <- unblock x
+  y' <- unblock y
   liftIf x' $ \x'' ->
     liftIf y' $ \y'' -> do
-      let args = implicitArgs <> [explicit x'', explicit y'']
-      return $ evalFn (VBuiltin (BuiltinFunction fn) args) args
-
-unblockNatOp2 ::
-  (MonadUnblock m) =>
-  BuiltinFunction ->
-  EvalSimpleBuiltin Builtin ->
-  Value Builtin ->
-  Value Builtin ->
-  m (Value Builtin)
-unblockNatOp2 fn evalFn =
-  unblockOp2 fn evalFn unblockNatValue unblockNatValue []
+      return $ evalFn $ Op2Args x'' y''
 
 unblockIndexOp2 ::
   (MonadUnblock m) =>
-  BuiltinFunction ->
-  EvalSimpleBuiltin Builtin ->
-  VArg Builtin ->
-  VArg Builtin ->
-  Value Builtin ->
-  Value Builtin ->
+  EvalSimple IndexComparisonArgs Builtin ->
+  IndexComparisonArgs (Value Builtin) ->
   m (Value Builtin)
-unblockIndexOp2 fn evalFn n1 n2 =
-  unblockOp2 fn evalFn unblockIndexValue unblockIndexValue [n1, n2]
+unblockIndexOp2 evalFn (IndexCompArgs n1 n2 x y) = do
+  x' <- unblockIndexValue x
+  y' <- unblockIndexValue y
+  liftIf x' $ \x'' ->
+    liftIf y' $ \y'' -> do
+      return $ evalFn $ IndexCompArgs n1 n2 x'' y''
+
+unblockTensorOp1 ::
+  (MonadUnblock m) =>
+  UnblockingFunction m ->
+  EvalSimple TensorOp1Args Builtin ->
+  TensorOp1Args (Value Builtin) ->
+  m (Value Builtin)
+unblockTensorOp1 unblock evalFn (TensorOp1Args ds xs) = do
+  xs' <- unblock xs
+  liftIf xs' $ \xs'' -> do
+    return $ evalFn (TensorOp1Args ds xs'')
+
+unblockTensorOp2 ::
+  (MonadUnblock m) =>
+  UnblockingFunction m ->
+  EvalSimple TensorOp2Args Builtin ->
+  TensorOp2Args (Value Builtin) ->
+  m (Value Builtin)
+unblockTensorOp2 unblock evalFn (TensorOp2Args ds xs ys) = do
+  xs' <- unblock xs
+  ys' <- unblock ys
+  liftIf xs' $ \xs'' ->
+    liftIf ys' $ \ys'' -> do
+      return $ evalFn $ TensorOp2Args ds xs'' ys''
+
+unblockReduceTensor ::
+  (MonadUnblock m) =>
+  UnblockingFunction m ->
+  EvalSimple TensorReductionArgs Builtin ->
+  TensorReductionArgs (Value Builtin) ->
+  m (Value Builtin)
+unblockReduceTensor unblock evalFn (TensorOp2Args ds e xs) = do
+  xs' <- unblock xs
+  liftIf xs' $ \xs'' ->
+    return $ evalFn $ TensorOp2Args ds e xs''
 
 unblockConstTensor ::
   (MonadUnblock m) =>
-  TypeValue ->
-  Value Builtin ->
-  Value Builtin ->
+  ConstTensorArgs (Value Builtin) ->
   m (Value Builtin)
-unblockConstTensor tElem value dims = do
+unblockConstTensor (ConstTensorArgs tElem value dims) = do
   dims' <- unblockDimensionsValue dims
   liftIf dims' $ \dims'' -> do
-    let args = [implicit $ fromTypeValue tElem, explicit value, explicit dims'']
-    return $ evalConstTensor (VBuiltin (BuiltinFunction ConstTensor) args) args
+    return $ evalConstTensor $ ConstTensorArgs tElem value dims''
 
 unblockStackTensor ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  TypeValue ->
-  VArg Builtin ->
-  VArg Builtin ->
-  Spine Builtin ->
+  StackTensorArgs (Value Builtin) ->
   m (Value Builtin)
-unblockStackTensor unblock tElem d ds xss = do
-  d' <- traverse unblockNatValue d
-  xss' <- traverseSpine unblock xss
-  liftIfArg d' $ \d'' ->
-    liftIfSpine xss' $ \xss'' -> do
-      let args = [d'', ds, implicit $ fromTypeValue tElem] <> xss''
-      return $ evalStackTensor (VBuiltin (BuiltinFunction StackTensor) args) args
+unblockStackTensor unblock (StackTensorArgs tElem d ds xss) = do
+  d' <- unblockNatValue d
+  xss' <- traverse unblock xss
+  liftIf d' $ \d'' ->
+    liftIfValues xss' $ \xss'' ->
+      return $ evalStackTensor $ StackTensorArgs tElem d'' ds xss''
 
 unblockAtTensor ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  TypeValue ->
-  VArg Builtin ->
-  VArg Builtin ->
-  Value Builtin ->
-  Value Builtin ->
+  AtArgs (Value Builtin) ->
   m (Value Builtin)
-unblockAtTensor unblock tElem d ds =
-  unblockOp2 At evalAt unblock unblockIndexValue [implicit $ fromTypeValue tElem, d, ds]
+unblockAtTensor unblock (AtArgs tElem d ds xs i) = do
+  xs' <- unblock xs
+  i' <- unblockDimensionsValue i
+  liftIf xs' $ \xs'' ->
+    liftIf i' $ \i'' -> do
+      return $ evalAt $ AtArgs tElem d ds xs'' i''
 
 unblockForeachTensor ::
   (MonadUnblock m) =>
-  TypeValue ->
-  VArg Builtin ->
-  VArg Builtin ->
-  Value Builtin ->
+  ForeachArgs (Value Builtin) ->
   m (Value Builtin)
-unblockForeachTensor tElem d ds fn = do
-  d' <- unblockNatValue (argExpr d)
+unblockForeachTensor (ForeachArgs tElem d ds fn) = do
+  d' <- unblockNatValue d
   liftIf d' $ \d'' -> do
-    let args = [implicit $ fromTypeValue tElem, implicit d'', ds, explicit fn]
     freeEnv <- getFreeEnv
-    evalForeach (evalApp freeEnv) (VBuiltin (BuiltinFunction Foreach) args) args
+    evalForeach (evalApp freeEnv) $ ForeachArgs tElem d'' ds fn
 
 --------------------------------------------------------------------------------
 -- Unblocking operations

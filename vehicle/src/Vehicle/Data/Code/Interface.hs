@@ -1,6 +1,9 @@
 module Vehicle.Data.Code.Interface where
 
 import Control.Monad.Except (MonadError (..))
+import Data.Hashable (Hashable)
+import GHC.Generics (Generic)
+import Vehicle.Compile.Print.Builtin (PrintableBuiltin)
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Tensor
 import Vehicle.Prelude
@@ -121,6 +124,9 @@ instance IsArgs TensorOp2Args where
         mkExpr = \(TensorOp2Args ds x y) -> [ds, explicit x, explicit y]
       }
 
+traverseTensorOp2Args :: (Applicative f) => (t -> f t) -> TensorOp2Args t -> f (TensorOp2Args t)
+traverseTensorOp2Args f (TensorOp2Args ds xs ys) = TensorOp2Args ds <$> f xs <*> f ys
+
 -- | Arguments for if
 data IfArgs expr = IfArgs
   { ifType :: GenericArg expr,
@@ -137,6 +143,9 @@ instance IsArgs IfArgs where
           _ -> Nothing,
         mkExpr = \(IfArgs t c x y) -> [t, explicit c, explicit x, explicit y]
       }
+
+traverseIfArgBranches :: (Applicative f) => (t -> f t) -> IfArgs t -> f (IfArgs t)
+traverseIfArgBranches f (IfArgs t c x y) = IfArgs t c <$> f x <*> f y
 
 -- | Arguments for `!`
 data AtArgs expr = AtArgs
@@ -305,6 +314,23 @@ instance IsArgs IterateArgs where
         mkExpr = \(IterateArgs t fn n e) -> [t, explicit fn, explicit n, explicit e]
       }
 
+-- | Arguments for binary tensor operations (e.g. +, -)
+newtype NetworkAppArgs expr = NetworkAppArgs
+  { networkAppArg :: expr
+  }
+  deriving (Generic, Eq)
+
+instance (Hashable expr) => Hashable (NetworkAppArgs expr)
+
+instance IsArgs NetworkAppArgs where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [xs] -> Just $ NetworkAppArgs $ argExpr xs
+          _ -> Nothing,
+        mkExpr = \(NetworkAppArgs xs) -> [explicit xs]
+      }
+
 type TensorReductionArgs = TensorOp2Args
 
 type NatComparisonAccessor expr op = Accessor expr (op, Op2Args expr)
@@ -364,10 +390,8 @@ accessOpAndArgs accessOp =
 --------------------------------------------------------------------------------
 
 type HasBoolExpr expr builtin =
-  ( HasBuiltinConstructor expr,
-    BuiltinHasBoolLiterals builtin,
-    BuiltinHasTensors builtin
-    -- , PrintableBuiltin builtin
+  ( HasTensorExpr expr builtin,
+    BuiltinHasBoolLiterals builtin
   )
 
 accessBoolTensorLiteral :: (HasBoolExpr expr builtin) => Accessor (expr builtin) BoolTensor
@@ -489,9 +513,8 @@ pattern INatTensor n <- (getExpr accessNatTensorLiteral -> Just n)
 -- Rationals
 
 type HasRatExpr expr builtin =
-  ( HasBuiltinConstructor expr,
-    BuiltinHasRatLiterals builtin,
-    BuiltinHasTensors builtin
+  ( HasTensorExpr expr builtin,
+    BuiltinHasRatLiterals builtin
   )
 
 accessRatTensorLiteral :: (HasRatExpr expr builtin) => Accessor (expr builtin) RatTensor
@@ -624,7 +647,13 @@ getDims v = case getDimsExprs v of
 --------------------------------------------------------------------------------
 -- Tensors
 
-type HasTensorExpr expr builtin = (HasBuiltinConstructor expr, BuiltinHasTensors builtin)
+type HasTensorExpr expr builtin =
+  ( HasBuiltinConstructor expr,
+    BuiltinHasTensors builtin,
+    BuiltinHasListLiterals builtin,
+    BuiltinHasNatLiterals builtin,
+    PrintableBuiltin builtin
+  )
 
 accessStackTensor :: (HasTensorExpr expr builtin) => Accessor (expr builtin) (StackTensorArgs (expr builtin))
 accessStackTensor = accessArgs accessStackTensorBuiltin
@@ -652,6 +681,11 @@ accessFromNatToIndex ::
   (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>
   Accessor (expr builtin) (FromNatArgs (expr builtin))
 accessFromNatToIndex = accessArgs accessFromNatToIndexBuiltin
+
+accessFromNatToRat ::
+  (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>
+  Accessor (expr builtin) (FromNatArgs (expr builtin))
+accessFromNatToRat = accessArgs accessFromNatToRatBuiltin
 
 accessFromVectorToList ::
   (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>

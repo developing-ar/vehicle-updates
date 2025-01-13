@@ -223,8 +223,6 @@ convertBuiltin b spine = case b of
     L.Div L.DivRatTensor -> convertBinaryOp b DivRatTensor spine
     L.Min L.MinRatTensor -> convertBinaryOp b MinRatTensor spine
     L.Max L.MaxRatTensor -> convertBinaryOp b MaxRatTensor spine
-    L.Add {} -> unsupported
-    L.Mul {} -> unsupported
     L.PowRat -> unsupported
     L.ReduceAddRatTensor -> convertUnaryOp b ReduceAddRatTensor spine
     L.ReduceMulRatTensor -> convertUnaryOp b ReduceMulRatTensor spine
@@ -234,6 +232,11 @@ convertBuiltin b spine = case b of
     L.StackTensor -> convertStackTensor spine
     L.ConstTensor -> convertBinaryOp b ConstTensor spine
     L.SearchRatTensor -> convertSearch spine
+    -- Dimension operations, not yet converted
+    L.Add L.AddNat -> unsupported
+    L.Mul L.MulNat -> unsupported
+    L.MapList -> unsupported
+    L.FoldList -> unsupported
   where
     unsupported = developerError $ "Conversion of" <+> pretty b <+> "is not yet implemented"
 

@@ -34,7 +34,7 @@ diagnoseNonLinearity queryFormat prog propertyProv@(propertyIdentifier, _) = do
   -- Extract and diagnose the type.
   propertyType <- findDeclType propertyIdentifier subTypedProg
   case propertyType of
-    LinearityExpr _ (NonLinear source) -> do
+    Builtin _ (Linearity (NonLinear source)) -> do
       throwError $ UnsupportedNonLinearConstraint queryFormat propertyProv (Right source)
     _ -> handleUnexpectedError (DevError $ "Unexpected linearity type for property" <+> quotePretty propertyIdentifier)
   where
@@ -61,7 +61,7 @@ diagnoseAlternatingQuantifiers queryFormat prog propertyProv@(propertyIdentifier
   -- Extract and diagnose the type.
   propertyType <- findDeclType propertyIdentifier subTypedProg
   case propertyType of
-    PolarityExpr _ (MixedSequential q p pp2) -> do
+    Builtin _ (Polarity (MixedSequential q p pp2)) -> do
       throwError $ UnsupportedAlternatingQuantifiers queryFormat propertyProv (Right (q, p, pp2))
     _ -> compilerDeveloperError $ "Unexpected polarity type for property" <+> quotePretty propertyIdentifier <> ":" <+> prettyVerbose propertyType
   where

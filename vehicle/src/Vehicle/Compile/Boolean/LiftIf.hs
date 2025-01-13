@@ -1,7 +1,7 @@
 module Vehicle.Compile.Boolean.LiftIf
   ( liftIf,
     liftIfArg,
-    liftIfSpine,
+    liftIfValues,
     unfoldIf,
   )
 where
@@ -10,6 +10,7 @@ import Vehicle.Compile.Context.Free (MonadFreeContext)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.Value
 
 --------------------------------------------------------------------------------
@@ -35,21 +36,19 @@ liftIfArg ::
   m (Value Builtin)
 liftIfArg (Arg p v r e) k = liftIf e (k . Arg p v r)
 
-liftIfSpine ::
+liftIfValues ::
   (Monad m) =>
-  Spine Builtin ->
-  (Spine Builtin -> m (Value Builtin)) ->
+  [Value Builtin] ->
+  ([Value Builtin] -> m (Value Builtin)) ->
   m (Value Builtin)
-liftIfSpine [] k = k []
-liftIfSpine (x : xs) k = liftIfArg x (\a -> liftIfSpine xs (\as -> k (a : as)))
+liftIfValues [] k = k []
+liftIfValues (x : xs) k = liftIf x (\a -> liftIfValues xs (\as -> k (a : as)))
 
 unfoldIf ::
   (Monad m, MonadFreeContext Builtin m) =>
-  Value Builtin ->
-  Value Builtin ->
-  Value Builtin ->
+  IfArgs (Value Builtin) ->
   m (Value Builtin)
-unfoldIf c x y = do
+unfoldIf (IfArgs _ c x y) = do
   let mkArgs = fmap (Arg mempty Explicit Relevant)
   cAndX <- normaliseBuiltin (BuiltinFunction And) (mkArgs [c, x])
   notC <- normaliseBuiltin (BuiltinFunction Not) (mkArgs [c])

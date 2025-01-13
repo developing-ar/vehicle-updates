@@ -23,6 +23,7 @@ import Vehicle.Compile.Resource (NetworkType (..), dimensions)
 import Vehicle.Data.Assertion
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Code.BooleanExpr
+import Vehicle.Data.Code.Interface (NetworkAppArgs)
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Hashing ()
@@ -36,7 +37,7 @@ import Vehicle.Verify.QueryFormat.Interface
 -- Network applications
 
 -- | A single application of a neural network to a set of arguments.
-type NetworkApplication = (Name, Spine Builtin)
+type NetworkApplication = (Name, NetworkAppArgs (Value Builtin))
 
 -- | Bookkeeping information associated with an application that describes
 -- the variables and corresponding expressions that replace a given

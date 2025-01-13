@@ -82,6 +82,8 @@ instance ConvertableBuiltin LossBuiltinFunction Builtin where
     L.StackTensor -> convertBuiltin p StackTensor
     L.ConstTensor -> convertBuiltin p ConstTensor
     L.SearchRatTensor -> cheatConvertBuiltin p $ pretty b
+    L.MapList -> convertBuiltin p MapList
+    L.FoldList -> convertBuiltin p FoldList
 
 instance ConvertableBuiltin PolarityBuiltin Builtin where
   convertBuiltin p = \case

@@ -61,14 +61,18 @@ type EvalBuiltin args builtin m =
   args (Value builtin) ->
   m (Maybe (Value builtin))
 
-type EvalSimpleBuiltin args builtin =
+type EvalSimple args builtin =
+  args (Value builtin) ->
+  Value builtin
+
+type EvalSimplePartial args builtin =
   args (Value builtin) ->
   Maybe (Value builtin)
 
 evalSimple ::
   (IsArgs args) =>
   builtin ->
-  EvalSimpleBuiltin args builtin ->
+  EvalSimplePartial args builtin ->
   args (Value builtin) ->
   Value builtin
 evalSimple b eval args = case eval args of
@@ -76,7 +80,7 @@ evalSimple b eval args = case eval args of
   Nothing -> VBuiltin b (mkExpr accessSpine args)
 
 evalNonSimple ::
-  (Monad m, IsArgs args) =>
+  (MonadLogger m, IsArgs args) =>
   EvalApp builtin m ->
   Accessor builtin () ->
   EvalBuiltin args builtin m ->
@@ -98,7 +102,7 @@ evalTensorOp1 ::
   Value builtin
 evalTensorOp1 accessBuiltinOp accessLit op = evalSimple (mkExpr accessBuiltinOp ()) eval
   where
-    eval :: EvalSimpleBuiltin TensorOp1Args builtin
+    eval :: EvalSimplePartial TensorOp1Args builtin
     eval = \case
       TensorOp1Args _ds (getExpr accessLit -> Just t) ->
         Just $ mkExpr accessLit $ fmap op t
@@ -113,7 +117,7 @@ evalTensorOp1 accessBuiltinOp accessLit op = evalSimple (mkExpr accessBuiltinOp 
 
 evalTensorOp2 ::
   forall builtin a.
-  (HasTensorExpr Value builtin, PrintableBuiltin builtin, Eq a) =>
+  (HasTensorExpr Value builtin, Eq a) =>
   Accessor builtin () ->
   Accessor (Value builtin) (Tensor a) ->
   (a -> a -> a) ->
@@ -126,7 +130,7 @@ evalTensorOp2 accessBuiltin accessLit =
 
 evalHeteroTensorOp2 ::
   forall builtin a b.
-  (HasTensorExpr Value builtin, PrintableBuiltin builtin, Eq a) =>
+  (HasTensorExpr Value builtin, Eq a, Eq b) =>
   builtin ->
   Accessor (Value builtin) (Tensor a) ->
   Accessor (Value builtin) (Tensor b) ->
@@ -137,44 +141,44 @@ evalHeteroTensorOp2 ::
   Value builtin
 evalHeteroTensorOp2 b inputLit outputLit op leftUnit rightUnit = evalSimple b eval
   where
-    eval :: EvalSimpleBuiltin TensorOp2Args builtin
+    eval :: EvalSimplePartial TensorOp2Args builtin
     eval = \case
       TensorOp2Args _ds (getExpr inputLit -> Just xs) (getExpr inputLit -> Just ys) ->
         Just $ mkExpr outputLit $ zipWithTensor op xs ys
       TensorOp2Args (argExpr -> ICons _ _ ds) (getExpr accessConstTensor -> Just xs) (getExpr accessConstTensor -> Just ys) ->
         Just $
-          evalConstTensor $
+          mkExpr accessConstTensor $
             xs
               { constValue = evalFull ds (constValue xs) (constValue ys)
               }
+      -- Unlike const tensors, we need to eval stack tensors as after being combined with constants, short-circuiting of
+      -- operations may allow for further reduction.
       TensorOp2Args (argExpr -> ICons _ _ ds) (getExpr inputLit -> Just xs) (getExpr accessStackTensor -> Just ys) ->
         Just $
-          evalStackTensor $
+          evalStackTensorWithPrimitives [Wrapper outputLit] $
             ys
               { stackElements = zipWith (evalFull ds) (unstackExpr xs) (stackElements ys)
               }
       TensorOp2Args (argExpr -> ICons _ _ ds) (getExpr accessStackTensor -> Just xs) (getExpr inputLit -> Just ys) ->
         Just $
-          evalStackTensor $
+          evalStackTensorWithPrimitives [Wrapper outputLit] $
             xs
               { stackElements = zipWith (evalFull ds) (stackElements xs) (unstackExpr ys)
               }
       TensorOp2Args (argExpr -> ICons _ _ ds) (getExpr accessStackTensor -> Just xs) (getExpr accessStackTensor -> Just ys) ->
         Just $
-          evalStackTensor $
+          evalStackTensorWithPrimitives [Wrapper outputLit] $
             xs
               { stackElements = zipWith (evalFull ds) (stackElements xs) (stackElements ys)
               }
-      TensorOp2Args ds (getExpr accessConstTensor -> Just _) ys ->
-        Just _
+      TensorOp2Args _ds (getExpr accessConstTensor -> Just xs) ys -> case (leftUnit, getExpr inputLit (constValue xs)) of
+        (Just lunit, Just (ZeroDimTensor v)) | v == lunit -> Just ys
+        _ -> Nothing
+      TensorOp2Args _ds xs (getExpr accessConstTensor -> Just ys) -> case (rightUnit, getExpr inputLit (constValue ys)) of
+        (Just runit, Just (ZeroDimTensor v)) | v == runit -> Just xs
+        _ -> Nothing
       _ -> Nothing
 
-    {-
-    let lUnitAction = flip fmap leftUnit $
-          \u -> Action2 (constantMatching u (singleElement accessLit)) Just id (\() e -> e)
-    let rUnitAction = flip fmap rightUnit $
-          \u -> Action2 Just (constantMatching u (singleElement accessLit)) id (\e () -> e)
-    -}
     evalFull :: Value builtin -> Value builtin -> Value builtin -> Value builtin
     evalFull d x y = evalSimple b eval (TensorOp2Args (implicitIrrelevant d) x y)
 
@@ -193,12 +197,12 @@ evalReduceTensor ::
 evalReduceTensor accessReductionOp accessLit evalOp2 op2 =
   evalSimple (mkExpr accessReductionOp ()) eval
   where
-    eval :: EvalSimpleBuiltin TensorReductionArgs builtin
+    eval :: EvalSimplePartial TensorReductionArgs builtin
     eval = \case
       TensorOp2Args _ (getExpr accessLit -> Just e) (getExpr accessLit -> Just xs) ->
         Just $ mkExpr accessLit $ foldTensor op2 e xs
       TensorOp2Args (argExpr -> ICons _ _ ds) e (getExpr accessStackTensor -> Just xs) ->
-        Just $ foldr (foldFn e (implicitIrrelevant ds)) e xs
+        Just $ foldr (foldFn e (implicitIrrelevant ds)) e (stackElements xs)
       _ -> Nothing
 
     evalFull :: VArg builtin -> Value builtin -> Value builtin -> Value builtin
@@ -226,7 +230,7 @@ evalOr = evalTensorOp2 accessOrBuiltin accessBoolTensorLiteral (||) (Just False)
 evalImplies :: (HasBoolExpr Value builtin) => TensorOp2Args (Value builtin) -> Value builtin
 evalImplies (TensorOp2Args ds xs ys) = evalOr (TensorOp2Args ds (evalNot (TensorOp1Args ds xs)) ys)
 
-evalReduceAndTensor :: (HasBoolExpr Value Builtin) => TensorReductionArgs (Value builtin) -> Value builtin
+evalReduceAndTensor :: (HasBoolExpr Value builtin) => TensorReductionArgs (Value builtin) -> Value builtin
 evalReduceAndTensor = evalReduceTensor accessReduceAndBuiltin accessBoolTensorLiteral evalAnd (&&)
 
 evalReduceOrTensor :: (HasBoolExpr Value builtin) => TensorReductionArgs (Value builtin) -> Value builtin
@@ -305,10 +309,12 @@ evalFromNatToIndex = \case
 -- Rat
 
 evalFromNatToRat ::
-  (HasRatExpr Value builtin, BuiltinHasNatLiterals builtin) =>
+  (HasRatExpr Value builtin, BuiltinHasNatLiterals builtin, BuiltinHasCasts builtin) =>
   FromNatArgs (Value builtin) ->
   Value builtin
-evalFromNatToRat (FromNatArgs v _) = IRatLiteral $ fromIntegral v
+evalFromNatToRat = \case
+  FromNatArgs (INatLiteral n) _ -> IRatLiteral $ fromIntegral n
+  args -> mkExpr accessFromNatToRat args
 
 evalFromRatToRat :: Op1Args (Value builtin) -> Value builtin
 evalFromRatToRat (Op1Args x) = x
@@ -326,7 +332,7 @@ evalVectorToList args@(VectorToListArgs t d xs) = case argExpr d of
 
 evalMapList ::
   forall builtin m.
-  (BuiltinHasListLiterals builtin) =>
+  (MonadLogger m, BuiltinHasListLiterals builtin) =>
   EvalApp builtin m ->
   MapListArgs (Value builtin) ->
   m (Value builtin)
@@ -346,7 +352,7 @@ evalMapList evalApp (MapListArgs a b f xs) = eval xs
 
 evalFoldList ::
   forall m builtin.
-  (BuiltinHasListLiterals builtin) =>
+  (MonadLogger m, BuiltinHasListLiterals builtin) =>
   EvalApp builtin m ->
   FoldListArgs (Value builtin) ->
   m (Value builtin)
@@ -514,8 +520,8 @@ evalAt args@(AtArgs t d ds tensor index) = do
         IIndexLiteral i ->
           goLiterals i tensorLiterals
             <|> case tensor of
-              _ -> _ -- IStackTensor _ _ _ xs -> argExpr $ xs !! i
-              _ -> _ -- IConstTensor t v (ICons _ _ ds) -> IConstTensor t v ds
+              (getExpr accessStackTensor -> Just stackArgs) -> Just $ stackElements stackArgs !! i
+              (getExpr accessConstTensor -> Just constArgs) -> Just $ mkExpr accessConstTensor $ constArgs {constDims = argExpr ds}
               _ -> Nothing
         _ -> Nothing
   where
@@ -544,14 +550,21 @@ evalAt args@(AtArgs t d ds tensor index) = do
       _ -> Nothing
 
 evalStackTensor ::
-  (HasPrimitives builtin, BuiltinHasNatLiterals builtin, BuiltinHasListLiterals builtin) =>
+  (HasPrimitives builtin, BuiltinHasNatLiterals builtin, HasTensorExpr Value builtin) =>
   StackTensorArgs (Value builtin) ->
   Value builtin
-evalStackTensor args@(StackTensorArgs _t d ds xs) = fromMaybe (mkExpr accessStackTensor args) $
+evalStackTensor = evalStackTensorWithPrimitives tensorLiterals
+
+evalStackTensorWithPrimitives ::
+  (BuiltinHasNatLiterals builtin, HasTensorExpr Value builtin) =>
+  [TensorLiteralAccessor builtin] ->
+  StackTensorArgs (Value builtin) ->
+  Value builtin
+evalStackTensorWithPrimitives tensorLits args@(StackTensorArgs _t d ds xs) = fromMaybe (mkExpr accessStackTensor args) $
   -- If we know that all the tensors being stacked are concrete tensors, then
   -- we must know the dimensions as well.
   case (d, getDims (argExpr ds)) of
-    (INatLiteral n, Just ns) | length xs == n -> go ns xs tensorLiterals
+    (INatLiteral n, Just ns) | length xs == n -> go ns xs tensorLits
     _ -> Nothing
   where
     go :: [Int] -> [Value builtin] -> [TensorLiteralAccessor builtin] -> Maybe (Value builtin)
@@ -563,7 +576,7 @@ evalStackTensor args@(StackTensorArgs _t d ds xs) = fromMaybe (mkExpr accessStac
 
 evalConstTensor ::
   forall builtin.
-  (HasPrimitives builtin, BuiltinHasNatLiterals builtin, BuiltinHasListLiterals builtin) =>
+  (HasPrimitives builtin, BuiltinHasNatLiterals builtin, HasTensorExpr Value builtin) =>
   ConstTensorArgs (Value builtin) ->
   Value builtin
 evalConstTensor args@(ConstTensorArgs _t xs ds) =
@@ -585,7 +598,7 @@ evalConstTensor args@(ConstTensorArgs _t xs ds) =
         Nothing -> go dims prims
 
 evalForeach ::
-  (Monad m, BuiltinHasNatLiterals builtin, BuiltinHasIndexLiterals builtin, BuiltinHasTensors builtin) =>
+  (MonadLogger m, HasPrimitives builtin, HasTensorExpr Value builtin, BuiltinHasNatLiterals builtin, BuiltinHasIndexLiterals builtin, BuiltinHasForeach builtin) =>
   EvalApp builtin m ->
   ForeachArgs (Value builtin) ->
   m (Value builtin)
@@ -596,7 +609,7 @@ evalForeach evalApp args@(ForeachArgs t d ds f) = case d of
   _ -> return $ mkExpr accessForeachTensor args
 
 evalIterate ::
-  (BuiltinHasNatLiterals builtin) =>
+  (MonadLogger m, BuiltinHasNatLiterals builtin, BuiltinHasIterate builtin) =>
   EvalApp builtin m ->
   IterateArgs (Value builtin) ->
   m (Value builtin)
@@ -723,7 +736,7 @@ class (PrintableBuiltin builtin) => NormalisableBuiltin builtin where
   blockingArgs :: builtin -> BlockingArgs
 
 evaluateBuiltin ::
-  (NormalisableBuiltin builtin) =>
+  (MonadLogger m, NormalisableBuiltin builtin) =>
   EvalApp builtin m ->
   builtin ->
   Spine builtin ->

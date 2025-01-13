@@ -6,7 +6,6 @@ where
 
 import Data.List.NonEmpty (NonEmpty)
 import Vehicle.Compile.Context.Free
-import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Core

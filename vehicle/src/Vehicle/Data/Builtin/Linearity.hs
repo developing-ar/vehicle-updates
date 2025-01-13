@@ -9,7 +9,6 @@ import GHC.Generics (Generic)
 import Vehicle.Data.Builtin.Core hiding (Builtin (BuiltinConstructor, BuiltinFunction))
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Code.Expr
-import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
 import Vehicle.Prelude
 
@@ -192,17 +191,6 @@ instance BuiltinHasConstTensor LinearityBuiltin where
     _ -> False
   mkConstTensorBuiltin = LinearityFunction ConstTensor
 -}
------------------------------------------------------------------------------
--- Patterns
-
-pattern LinearityExpr :: Provenance -> Linearity -> Expr LinearityBuiltin
-pattern LinearityExpr p lin = Builtin p (Linearity lin)
-
-pattern VLinearityExpr :: Linearity -> Value LinearityBuiltin
-pattern VLinearityExpr l <- VBuiltin (Linearity l) []
-  where
-    VLinearityExpr l = VBuiltin (Linearity l) []
-
 --------------------------------------------------------------------------------
 -- DSL
 

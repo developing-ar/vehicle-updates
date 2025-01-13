@@ -19,9 +19,10 @@ import Vehicle.Backend.Queries.Unblock (UnblockingActions (..))
 import Vehicle.Backend.Queries.Unblock qualified as Unblocking
 import Vehicle.Backend.Queries.UserVariableElimination.Core
 import Vehicle.Backend.Queries.UserVariableElimination.EliminateExists (solveExists)
-import Vehicle.Compile.Boolean.LiftIf (liftIfSpine, unfoldIf)
+import Vehicle.Compile.Boolean.LiftIf (liftIf, unfoldIf)
 import Vehicle.Compile.Boolean.LowerNot (lowerNot, notClosure)
 import Vehicle.Compile.Error
+import Vehicle.Compile.Normalise.Builtin (EvalSimple, evalAt, evalEqualsRatTensor, evalOrderRatTensor, evalStackTensor)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyFriendlyEmptyCtx, prettyVerbose)
@@ -29,11 +30,12 @@ import Vehicle.Compile.Rational.LinearExpr (LinearityError (..), compileTensorLi
 import Vehicle.Compile.Resource (NetworkTensorType (..), NetworkType (..))
 import Vehicle.Compile.Variable (createUserVar)
 import Vehicle.Data.Assertion
+import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.LinearExpr
-import Vehicle.Data.Code.TypedView (BoolTensorValue (..), DimensionsValue (..), RatTensorValue (..), fromBoolValue, fromRatTensorValue, toBoolValue, toDimensionsValue)
+import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Tensor (RatTensor, Tensor, pattern ZeroDimTensor)
 import Vehicle.Verify.Core (NetworkContextInfo (..), QuerySetNegationStatus)
@@ -65,7 +67,7 @@ eliminateUserVariables expr = case toBoolValue expr of
   ---------------------
   VAnd (TensorOp2Args _dims e1 e2) -> andTrivial andBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
   VOr (TensorOp2Args _dims e1 e2) -> orTrivial orBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
-  VBoolIf _dims c x y -> eliminateUserVariables =<< unfoldIf c x y
+  VBoolIf args -> eliminateUserVariables =<< unfoldIf args
   -------------------------
   -- Blocked expressions --
   -------------------------
@@ -165,7 +167,7 @@ compileBoolExpr expr = case toBoolValue expr of
   VNot (TensorOp1Args _ e) -> do
     lv <- boundCtxLv <$> getGlobalNamedBoundCtx
     compileBoolExpr =<< lowerNot lv unblockBoolExpr e
-  VBoolIf _dims c x y -> compileBoolExpr =<< unfoldIf c x y
+  VBoolIf args -> compileBoolExpr =<< unfoldIf args
   VEqualsRatTensor (Neq, args) -> compileBoolExpr =<< eliminateNotEqualRatTensor args
   VAnd (TensorOp2Args _dims x y) -> andTrivial andPartitions <$> compileBoolExpr x <*> compileBoolExpr y
   VOr (TensorOp2Args _dims x y) -> orTrivial orPartitions <$> compileBoolExpr x <*> compileBoolExpr y
@@ -186,10 +188,10 @@ purifyAndCompileAssertion expr = do
   case toBoolValue result of
     VEqualsRatTensor (Eq, args) -> do
       logDebug MaxDetail "Pure equality found"
-      compileAssertion eqToAssertion (Equals EqRatTensor Eq) args
+      compileAssertion eqToAssertion (evalEqualsRatTensor Eq) args
     VOrderRatTensor (op, args) -> do
       logDebug MaxDetail "Pure inequality found"
-      compileAssertion (ordToAssertion op) (Order OrderRatTensor op) args
+      compileAssertion (ordToAssertion op) (evalOrderRatTensor op) args
     _ -> do
       logDebug MaxDetail "Impure assertion found"
       compileBoolExpr result
@@ -218,61 +220,48 @@ unblockQuantifiedBoundVar lv = do
 unblockNetworkApplication ::
   (MonadQuantifierBody m) =>
   (Value Builtin -> m (Value Builtin)) ->
-  Identifier ->
-  Spine Builtin ->
+  NetworkApplication ->
   m (Value Builtin)
-unblockNetworkApplication unblockVector ident spine = do
-  let networkName = nameOf ident
+unblockNetworkApplication unblockRatVector (networkName, NetworkAppArgs arg) = do
   networkContext <- asks networkCtx
   networkInfo <- case Map.lookup networkName networkContext of
-    Nothing -> compilerDeveloperError $ "Expecting" <+> quotePretty ident <+> "to be a @network"
+    Nothing -> compilerDeveloperError $ "Expecting" <+> quotePretty networkName <+> "to be a @network"
     Just info -> return info
 
-  unblockedSpine <- traverse (traverse unblockVector) spine
-  liftIfSpine unblockedSpine $ \unblockedSpine' ->
-    if unblockedSpine' /= unblockedSpine
-      then return $ VFreeVar ident unblockedSpine'
+  unblockedArg <- unblockRatVector arg
+  liftIf unblockedArg $ \unblockedArg' ->
+    if unblockedArg' /= unblockedArg
+      then do
+        let ident = Identifier (ModulePath [User]) networkName
+        return $ VFreeVar ident (mkExpr accessSpine (NetworkAppArgs unblockedArg'))
       else do
-        let networkApp = (networkName, unblockedSpine')
+        let networkApp = (networkName, NetworkAppArgs unblockedArg')
         globalCtx <- get
 
         case LinkedHashMap.lookup networkApp (networkApplications globalCtx) of
           Just existingAppInfo -> return $ outputVarExpr existingAppInfo
           Nothing -> do
-            input <- case spine of
-              [inputArg] -> return $ argExpr inputArg
-              _ -> do
-                exprDoc <- prettyFriendlyInCtx (VFreeVar ident spine)
-                compilerDeveloperError $
-                  "Found network application with multiple arguments:"
-                    <> line
-                    <> indent 2 exprDoc
-
             (inputVarExpr, outputVarExpr, newGlobalCtx) <- addNetworkApplicationToGlobalCtx networkApp networkInfo globalCtx
             let inputDims = dimensions (inputTensor (networkType networkInfo))
             let inputDimsExpr = implicitIrrelevant $ mkDims inputDims
-            let inputEquality = fromBoolValue $ VEqualsRatTensor (Eq, TensorOp2Args inputDimsExpr inputVarExpr input)
+            let inputEquality = fromBoolValue $ VEqualsRatTensor (Eq, TensorOp2Args inputDimsExpr inputVarExpr unblockedArg)
             put newGlobalCtx
             tell [inputEquality]
-            unblockVector outputVarExpr
+            unblockRatVector outputVarExpr
 
 compileAssertion ::
   (MonadQuantifierBody m) =>
   (LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion) ->
-  BuiltinFunction ->
+  EvalSimple TensorOp2Args Builtin ->
   TensorOp2Args (Value Builtin) ->
   m (MaybeTrivial Partitions)
-compileAssertion mkAssertion rel (TensorOp2Args dims x y) = do
-  result <- compileTensorLinearRelation getTensorVariableShape x y
+compileAssertion mkAssertion evalRel args@(TensorOp2Args _ xs ys) = do
+  result <- compileTensorLinearRelation getTensorVariableShape xs ys
   case result of
     Right (e1, e2) -> return $ mkTrivialPartition (mkAssertion e1 e2)
     Left NonLinearity -> throwError catchableUnsupportedNonLinearConstraint
     Left (UnexpectedExpr e) -> compilerDeveloperError ("unexpected expression" <+> prettyVerbose e)
-    Left (UnreducedExpr e) -> case toDimensionsValue (argExpr dims) of
-      VDimsCons (INatLiteral dim) elemDims -> compileBoolExpr =<< eliminateTensorAssertion rel dim elemDims x y
-      _ -> do
-        logDebug MaxDetail $ prettyVerbose e
-        compilerDeveloperError ("unexpected dimensions" <+> prettyVerbose dims)
+    Left (UnreducedExpr _e) -> compileBoolExpr =<< eliminateTensorAssertion evalRel args
 
 --------------------------------------------------------------------------------
 -- Elimination operations
@@ -292,18 +281,20 @@ eliminateNotEqualRatTensor args@(TensorOp2Args dims _ _) = do
 
 eliminateTensorAssertion ::
   (MonadQueryStructure m) =>
-  BuiltinFunction ->
-  Int ->
-  Value Builtin ->
-  Value Builtin ->
-  Value Builtin ->
+  EvalSimple TensorOp2Args Builtin ->
+  TensorOp2Args (Value Builtin) ->
   m (Value Builtin)
-eliminateTensorAssertion fn dim elemDims xs ys = do
-  let dimArg = implicitIrrelevant (INatLiteral dim)
-  let mkAt vs i = explicit $ fromRatTensorValue $ VRatAt dimArg (implicitIrrelevant elemDims) vs (IIndexLiteral i)
-  let mkRel i = VBuiltin (BuiltinFunction fn) [implicitIrrelevant elemDims, mkAt xs i, mkAt ys i]
-  let xss = fmap (explicit . mkRel) [0 .. dim - 1]
-  return $ fromBoolValue $ VBoolStackTensor dimArg (implicit elemDims) xss
+eliminateTensorAssertion evalFn (TensorOp2Args dims xs ys) =
+  case argExpr dims of
+    ICons _ d@(INatLiteral n) ds -> do
+      let tElem = implicit $ fromTypeValue VRatType
+      let dsArg = implicitIrrelevant ds
+      let mkAt vs i = evalAt (AtArgs tElem (implicitIrrelevant d) dsArg vs (IIndexLiteral i))
+      let stackElements vs = fmap (mkAt vs) [0 .. (n - 1)]
+      let stackExpr vs = evalStackTensor (StackTensorArgs tElem d dsArg (stackElements vs))
+      return $ evalFn (TensorOp2Args dims (stackExpr xs) (stackExpr ys))
+    _ -> do
+      compilerDeveloperError ("unexpected dimensions" <+> prettyVerbose dims)
 
 eliminateExists ::
   (MonadQueryStructure m) =>

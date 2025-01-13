@@ -35,6 +35,11 @@ solvePolarityConstraint (WithContext constraint ctx) = do
 --------------------------------------------------------------------------------
 -- Constraint solving
 
+pattern VPolarityExpr :: Polarity -> Value PolarityBuiltin
+pattern VPolarityExpr l <- VBuiltin (Polarity l) []
+  where
+    VPolarityExpr l = VBuiltin (Polarity l) []
+
 type MonadPolaritySolver m = MonadTypeChecker PolarityBuiltin m
 
 type PolaritySolver =

@@ -122,6 +122,7 @@ class BuiltinHasStandardData builtin where
 
 class BuiltinHasCasts builtin where
   accessFromNatToIndexBuiltin :: Accessor builtin ()
+  accessFromNatToRatBuiltin :: Accessor builtin ()
   accessFromVectorToListBuiltin :: Accessor builtin ()
 
 --------------------------------------------------------------------------------

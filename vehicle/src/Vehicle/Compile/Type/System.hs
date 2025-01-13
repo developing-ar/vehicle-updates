@@ -126,6 +126,9 @@ instance HasTypeSystem LinearityBuiltin where
   addAuxiliaryInputOutputConstraints = addFunctionAuxiliaryInputOutputConstraints (LinearityRelation . FunctionLinearity)
   generateDefaultAuxiliaryConstraint _ = return False
 
+pattern LinearityExpr :: Provenance -> Linearity -> Expr LinearityBuiltin
+pattern LinearityExpr p lin = Builtin p (Linearity lin)
+
 freshLinearityMeta :: (MonadTypeChecker LinearityBuiltin m) => Provenance -> m (Expr LinearityBuiltin)
 freshLinearityMeta p = unnormalised <$> freshMetaExpr p (TypeUniverse p 0) mempty
 
@@ -211,6 +214,9 @@ instance HasTypeSystem PolarityBuiltin where
   solveAuxiliaryInstanceConstraint = solvePolarityConstraint
   addAuxiliaryInputOutputConstraints = addFunctionAuxiliaryInputOutputConstraints (PolarityRelation . FunctionPolarity)
   generateDefaultAuxiliaryConstraint _ = return False
+
+pattern PolarityExpr :: Provenance -> Polarity -> Expr PolarityBuiltin
+pattern PolarityExpr p pol = Builtin p (Polarity pol)
 
 freshPolarityMeta :: (MonadTypeChecker PolarityBuiltin m) => Provenance -> m (Expr PolarityBuiltin)
 freshPolarityMeta p = unnormalised <$> freshMetaExpr p (TypeUniverse p 0) mempty

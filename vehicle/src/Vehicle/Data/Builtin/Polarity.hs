@@ -7,8 +7,6 @@ import Data.Serialize (Serialize)
 import GHC.Generics (Generic)
 import Vehicle.Data.Builtin.Core hiding (Builtin (BuiltinConstructor, BuiltinFunction))
 import Vehicle.Data.Builtin.Interface
-import Vehicle.Data.Code.Expr
-import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
 import Vehicle.Prelude
 
@@ -172,16 +170,6 @@ instance BuiltinHasConstTensor PolarityBuiltin where
     _ -> False
   mkConstTensorBuiltin = PolarityFunction ConstTensor
 -}
------------------------------------------------------------------------------
--- Type synonyms
-
-pattern PolarityExpr :: Provenance -> Polarity -> Expr PolarityBuiltin
-pattern PolarityExpr p pol = Builtin p (Polarity pol)
-
-pattern VPolarityExpr :: Polarity -> Value PolarityBuiltin
-pattern VPolarityExpr l <- VBuiltin (Polarity l) []
-  where
-    VPolarityExpr l = VBuiltin (Polarity l) []
 
 -----------------------------------------------------------------------------
 -- DSL

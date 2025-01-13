@@ -34,6 +34,11 @@ solveLinearityConstraint (WithContext constraint ctx) = do
 --------------------------------------------------------------------------------
 -- Constraint solving
 
+pattern VLinearityExpr :: Linearity -> Value LinearityBuiltin
+pattern VLinearityExpr l <- VBuiltin (Linearity l) []
+  where
+    VLinearityExpr l = VBuiltin (Linearity l) []
+
 type MonadLinearitySolver m =
   ( MonadTypeChecker LinearityBuiltin m
   )

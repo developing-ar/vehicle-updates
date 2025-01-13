@@ -31,20 +31,6 @@ import Vehicle.Prelude
 -------------------------------------------------------------------------------
 -- Types
 
--- Private type synonyms. These should only be used in this file.
--- Use `toValueType` instead outside of this file.
-
-pattern INullaryTypeExpr :: BuiltinType -> Value Builtin
-pattern INullaryTypeExpr t <- VBuiltin (BuiltinType t) []
-  where
-    INullaryTypeExpr t = VBuiltin (BuiltinType t) []
-
-pattern IRatType :: Value Builtin
-pattern IRatType = INullaryTypeExpr RatType
-
-pattern IBoolType :: Value Builtin
-pattern IBoolType = INullaryTypeExpr BoolType
-
 -- | A view on all possible expressions that can have type `List Int`.
 data TypeValue
   = VUnitType
@@ -164,7 +150,7 @@ data BoolTensorValue
   | VConstBoolTensor (ConstTensorArgs (Value Builtin))
   | VBoolStackTensor (StackTensorArgs (Value Builtin))
   | VBoolAt (AtArgs (Value Builtin))
-  | VBoolForeach (VArg Builtin) (VArg Builtin) (Value Builtin)
+  | VBoolForeach (ForeachArgs (Value Builtin))
 
 toBoolValue :: (HasCallStack) => Value Builtin -> BoolTensorValue
 toBoolValue expr = case expr of
@@ -184,7 +170,7 @@ toBoolValue expr = case expr of
   (getExpr accessConstTensor -> Just args) -> VConstBoolTensor args
   (getExpr accessStackTensor -> Just args) -> VBoolStackTensor args
   (getExpr accessAtTensor -> Just args) -> VBoolAt args
-  (getExpr accessForeachTensor -> Just (argExpr -> IBoolType, d, ds, fn)) -> VBoolForeach d ds fn
+  (getExpr accessForeachTensor -> Just args) -> VBoolForeach args
   (getExpr accessIf -> Just args) -> VBoolIf args
   _ -> developerError $ "ill-typed RatTensor expression:" <+> prettyVerbose expr
 
@@ -207,9 +193,7 @@ fromBoolValue = \case
   VConstBoolTensor args -> mkExpr accessConstTensor args
   VBoolStackTensor args -> mkExpr accessStackTensor args
   VBoolAt args -> mkExpr accessAtTensor args
-  VBoolForeach d ds fn -> mkExpr accessForeachTensor (boolType, d, ds, fn)
-  where
-    boolType = implicit IBoolType
+  VBoolForeach args -> mkExpr accessForeachTensor args
 
 -------------------------------------------------------------------------------
 -- Tensor Rat
@@ -230,16 +214,16 @@ data RatTensorValue
   | VReduceMaxRatTensor (TensorOp2Args (Value Builtin))
   | VIfRatTensor (IfArgs (Value Builtin))
   | VRatTensorVar Lv
-  | VNetworkApp Identifier (Spine Builtin)
+  | VNetworkApp Identifier (NetworkAppArgs (Value Builtin))
   | VRatConstTensor (ConstTensorArgs (Value Builtin))
   | VRatStackTensor (StackTensorArgs (Value Builtin))
   | VRatAt (AtArgs (Value Builtin))
-  | VRatForeach (VArg Builtin) (VArg Builtin) (Value Builtin)
+  | VRatForeach (ForeachArgs (Value Builtin))
 
 toRatTensorValue :: (HasCallStack) => Value Builtin -> RatTensorValue
 toRatTensorValue expr = case expr of
   VBoundVar lv [] -> VRatTensorVar lv
-  VFreeVar n spine -> VNetworkApp n spine
+  VFreeVar n (getExpr accessSpine -> Just args) -> VNetworkApp n args
   (getExpr accessRatTensorLiteral -> Just t) -> VRatTensorLiteral t
   (getExpr accessNegRatTensor -> Just args) -> VNegRatTensor args
   (getExpr accessAddRatTensor -> Just args) -> VAddRatTensor args
@@ -256,7 +240,7 @@ toRatTensorValue expr = case expr of
   (getExpr accessConstTensor -> Just args) -> VRatConstTensor args
   (getExpr accessStackTensor -> Just args) -> VRatStackTensor args
   (getExpr accessAtTensor -> Just args) -> VRatAt args
-  (getExpr accessForeachTensor -> Just (argExpr -> IRatType, d, ds, fn)) -> VRatForeach d ds fn
+  (getExpr accessForeachTensor -> Just args) -> VRatForeach args
   _ -> illTyped
   where
     illTyped = developerError $ "ill-typed RatTensor expression:" <+> prettyVerbose expr
@@ -264,7 +248,7 @@ toRatTensorValue expr = case expr of
 fromRatTensorValue :: RatTensorValue -> Value Builtin
 fromRatTensorValue = \case
   VRatTensorVar v -> VBoundVar v []
-  VNetworkApp n xs -> VFreeVar n xs
+  VNetworkApp name args -> VFreeVar name $ mkExpr accessSpine args
   VRatTensorLiteral t -> mkExpr accessRatTensorLiteral t
   VNegRatTensor args -> mkExpr accessNegRatTensor args
   VAddRatTensor args -> mkExpr accessAddRatTensor args
@@ -281,9 +265,7 @@ fromRatTensorValue = \case
   VRatConstTensor args -> mkExpr accessConstTensor args
   VRatStackTensor args -> mkExpr accessStackTensor args
   VRatAt args -> mkExpr accessAtTensor args
-  VRatForeach d ds fn -> mkExpr accessForeachTensor (ratElementType, d, ds, fn)
-  where
-    ratElementType = implicit IRatType
+  VRatForeach args -> mkExpr accessForeachTensor args
 
 -------------------------------------------------------------------------------
 -- Dim

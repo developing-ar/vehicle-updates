@@ -56,9 +56,9 @@ lowerNot lv onBlocked e = do
     ---------------------
     VConstBoolTensor args -> fromBoolValue . VConstBoolTensor <$> traverseConstTensorValue go args
     VBoolStackTensor args -> fromBoolValue . VBoolStackTensor <$> traverseStackTensorElements go args
-    VOr args -> fromBoolValue . VAnd <$> traverse go args
-    VAnd args -> fromBoolValue . VOr <$> traverse go args
-    VBoolIf (IfArgs dims c x y) -> fromBoolValue . VBoolIf <$> (IfArgs dims c <$> go x <*> go y)
+    VOr args -> fromBoolValue . VAnd <$> traverseTensorOp2Args go args
+    VAnd args -> fromBoolValue . VOr <$> traverseTensorOp2Args go args
+    VBoolIf args -> fromBoolValue . VBoolIf <$> traverseIfArgBranches go args
     -------------------
     -- Blocked cases --
     -------------------
