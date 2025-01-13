@@ -182,7 +182,12 @@ evalBuiltin ::
   Spine builtin ->
   m (Value builtin)
 evalBuiltin freeEnv b args
-  | not (isTypeClassOp b) = evaluateBuiltin (evalApp freeEnv) b args
+  | not (isTypeClassOp b) = do
+      logDebug MaxDetail $ pretty b
+      logDebug MaxDetail $ prettyVerbose args
+      result <- evaluateBuiltin (evalApp freeEnv) b args
+      logDebug MaxDetail $ prettyVerbose result
+      return result
   | otherwise = do
       (inst, remainingArgs) <- findInstanceArg b args
       evalApp freeEnv inst remainingArgs
@@ -203,14 +208,13 @@ lookupIxValueInEnv boundEnv ix = do
 currentPass :: Doc ()
 currentPass = "normalisation by evaluation"
 
-{-
 showEntry :: (MonadNorm builtin m) => BoundEnv builtin -> Expr builtin -> m ()
 showEntry _ _ = return ()
 
 showExit :: (MonadNorm builtin m) => BoundEnv builtin -> Value builtin -> m ()
 showExit _ _ = return ()
--}
 
+{-
 showEntry :: (MonadNorm builtin m) => BoundEnv builtin -> Expr builtin -> m ()
 showEntry _boundEnv expr = do
   -- logDebug MidDetail $ "nbe-entry" <+> prettyFriendly (WithContext expr (fmap fst boundEnv)) <+> "   { boundEnv=" <+> hang 0 (prettyVerbose boundEnv) <+> "}"
@@ -224,7 +228,7 @@ showExit _boundEnv result = do
   logDebug MidDetail $ "nbe-exit" <+> prettyVerbose result
   -- logDebug MidDetail $ "nbe-exit" <+> prettyFriendly (WithContext result (fmap fst boundEnv))
   return ()
-
+-}
 showApp :: (MonadNorm builtin m) => Value builtin -> Spine builtin -> m ()
 showApp _ _ = return ()
 

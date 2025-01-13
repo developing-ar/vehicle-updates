@@ -252,7 +252,7 @@ unblockNetworkApplication unblockRatVector (networkName, NetworkAppArgs arg) = d
 compileAssertion ::
   (MonadQuantifierBody m) =>
   (LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion) ->
-  EvalSimple TensorOp2Args Builtin ->
+  EvalSimple TensorOp2Args Builtin m ->
   TensorOp2Args (Value Builtin) ->
   m (MaybeTrivial Partitions)
 compileAssertion mkAssertion evalRel args@(TensorOp2Args _ xs ys) = do
@@ -280,8 +280,9 @@ eliminateNotEqualRatTensor args@(TensorOp2Args dims _ _) = do
       return $ fromBoolValue $ VOr (TensorOp2Args dims leq geq)
 
 eliminateTensorAssertion ::
+  forall m.
   (MonadQueryStructure m) =>
-  EvalSimple TensorOp2Args Builtin ->
+  EvalSimple TensorOp2Args Builtin m ->
   TensorOp2Args (Value Builtin) ->
   m (Value Builtin)
 eliminateTensorAssertion evalFn (TensorOp2Args dims xs ys) =
@@ -290,9 +291,11 @@ eliminateTensorAssertion evalFn (TensorOp2Args dims xs ys) =
       let tElem = implicit $ fromTypeValue VRatType
       let dsArg = implicitIrrelevant ds
       let mkAt vs i = evalAt (AtArgs tElem (implicitIrrelevant d) dsArg vs (IIndexLiteral i))
-      let stackElements vs = fmap (mkAt vs) [0 .. (n - 1)]
-      let stackExpr vs = evalStackTensor (StackTensorArgs tElem d dsArg (stackElements vs))
-      return $ evalFn (TensorOp2Args dims (stackExpr xs) (stackExpr ys))
+      let stackElements vs = (traverse (mkAt vs) [0 .. (n - 1)] :: m [Value Builtin])
+      let stackArgs vs = StackTensorArgs tElem d dsArg <$> stackElements vs
+      let stackExpr vs = evalStackTensor =<< stackArgs vs
+      relArgs <- TensorOp2Args dims <$> stackExpr xs <*> stackExpr ys
+      evalFn relArgs
     _ -> do
       compilerDeveloperError ("unexpected dimensions" <+> prettyVerbose dims)
 

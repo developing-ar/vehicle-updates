@@ -166,7 +166,7 @@ unblockNatValue expr = case toNatValue expr of
 unblockOp2 ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  EvalSimple Op2Args Builtin ->
+  EvalSimple Op2Args Builtin m ->
   Op2Args (Value Builtin) ->
   m (Value Builtin)
 unblockOp2 unblock evalFn (Op2Args x y) = do
@@ -174,11 +174,11 @@ unblockOp2 unblock evalFn (Op2Args x y) = do
   y' <- unblock y
   liftIf x' $ \x'' ->
     liftIf y' $ \y'' -> do
-      return $ evalFn $ Op2Args x'' y''
+      evalFn $ Op2Args x'' y''
 
 unblockIndexOp2 ::
   (MonadUnblock m) =>
-  EvalSimple IndexComparisonArgs Builtin ->
+  EvalSimple IndexComparisonArgs Builtin m ->
   IndexComparisonArgs (Value Builtin) ->
   m (Value Builtin)
 unblockIndexOp2 evalFn (IndexCompArgs n1 n2 x y) = do
@@ -186,23 +186,23 @@ unblockIndexOp2 evalFn (IndexCompArgs n1 n2 x y) = do
   y' <- unblockIndexValue y
   liftIf x' $ \x'' ->
     liftIf y' $ \y'' -> do
-      return $ evalFn $ IndexCompArgs n1 n2 x'' y''
+      evalFn $ IndexCompArgs n1 n2 x'' y''
 
 unblockTensorOp1 ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  EvalSimple TensorOp1Args Builtin ->
+  EvalSimple TensorOp1Args Builtin m ->
   TensorOp1Args (Value Builtin) ->
   m (Value Builtin)
 unblockTensorOp1 unblock evalFn (TensorOp1Args ds xs) = do
   xs' <- unblock xs
   liftIf xs' $ \xs'' -> do
-    return $ evalFn (TensorOp1Args ds xs'')
+    evalFn (TensorOp1Args ds xs'')
 
 unblockTensorOp2 ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  EvalSimple TensorOp2Args Builtin ->
+  EvalSimple TensorOp2Args Builtin m ->
   TensorOp2Args (Value Builtin) ->
   m (Value Builtin)
 unblockTensorOp2 unblock evalFn (TensorOp2Args ds xs ys) = do
@@ -210,18 +210,18 @@ unblockTensorOp2 unblock evalFn (TensorOp2Args ds xs ys) = do
   ys' <- unblock ys
   liftIf xs' $ \xs'' ->
     liftIf ys' $ \ys'' -> do
-      return $ evalFn $ TensorOp2Args ds xs'' ys''
+      evalFn $ TensorOp2Args ds xs'' ys''
 
 unblockReduceTensor ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  EvalSimple TensorReductionArgs Builtin ->
+  EvalSimple TensorReductionArgs Builtin m ->
   TensorReductionArgs (Value Builtin) ->
   m (Value Builtin)
 unblockReduceTensor unblock evalFn (TensorOp2Args ds e xs) = do
   xs' <- unblock xs
   liftIf xs' $ \xs'' ->
-    return $ evalFn $ TensorOp2Args ds e xs''
+    evalFn $ TensorOp2Args ds e xs''
 
 unblockConstTensor ::
   (MonadUnblock m) =>
@@ -230,7 +230,7 @@ unblockConstTensor ::
 unblockConstTensor (ConstTensorArgs tElem value dims) = do
   dims' <- unblockDimensionsValue dims
   liftIf dims' $ \dims'' -> do
-    return $ evalConstTensor $ ConstTensorArgs tElem value dims''
+    evalConstTensor $ ConstTensorArgs tElem value dims''
 
 unblockStackTensor ::
   (MonadUnblock m) =>
@@ -242,7 +242,7 @@ unblockStackTensor unblock (StackTensorArgs tElem d ds xss) = do
   xss' <- traverse unblock xss
   liftIf d' $ \d'' ->
     liftIfValues xss' $ \xss'' ->
-      return $ evalStackTensor $ StackTensorArgs tElem d'' ds xss''
+      evalStackTensor $ StackTensorArgs tElem d'' ds xss''
 
 unblockAtTensor ::
   (MonadUnblock m) =>
@@ -254,7 +254,7 @@ unblockAtTensor unblock (AtArgs tElem d ds xs i) = do
   i' <- unblockDimensionsValue i
   liftIf xs' $ \xs'' ->
     liftIf i' $ \i'' -> do
-      return $ evalAt $ AtArgs tElem d ds xs'' i''
+      evalAt $ AtArgs tElem d ds xs'' i''
 
 unblockForeachTensor ::
   (MonadUnblock m) =>
