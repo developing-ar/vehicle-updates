@@ -36,11 +36,8 @@ instance ConvertableBuiltin BuiltinConstructor Builtin where
 instance ConvertableBuiltin BuiltinFunction Builtin where
   convertBuiltin p = Builtin p . BuiltinFunction
 
-instance ConvertableBuiltin OrderOp Builtin where
-  convertBuiltin p = convertBuiltin p . OrderTC
-
-instance ConvertableBuiltin EqualityOp Builtin where
-  convertBuiltin p = convertBuiltin p . EqualsTC
+instance ConvertableBuiltin ComparisonOp Builtin where
+  convertBuiltin p = convertBuiltin p . CompareTC
 
 instance ConvertableBuiltin LossBuiltinType Builtin where
   convertBuiltin p =

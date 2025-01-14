@@ -3,7 +3,6 @@ module Vehicle.Verify.QueryFormat.VNNLib where
 import Control.Monad (forM)
 import Data.List.NonEmpty qualified as NonEmpty
 import Vehicle.Compile.Prelude
-import Vehicle.Data.Builtin.Core
 import Vehicle.Data.QuantifiedVariable (prettyRationalAsFloat)
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core
@@ -58,11 +57,11 @@ compileAssertion QueryAssertion {..} = do
 
 compileRel :: QueryRelation -> Doc a
 compileRel = \case
-  EqualRel -> "=="
-  OrderRel Le -> "<="
-  OrderRel Ge -> ">="
-  OrderRel Lt -> "<"
-  OrderRel Gt -> ">"
+  EqRel -> "=="
+  LeRel -> "<="
+  GeRel -> ">="
+  LtRel -> "<"
+  GtRel -> ">"
 
 compileCoefVar :: Doc a -> (Coefficient, QueryVariable) -> Doc a
 compileCoefVar r (coef, var)

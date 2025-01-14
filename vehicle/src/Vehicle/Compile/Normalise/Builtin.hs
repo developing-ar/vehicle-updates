@@ -241,21 +241,13 @@ evalIf args@(IfArgs _t c e1 e2) = return $ case c of
 -----------------------------------------------------------------------------
 -- Index
 
-evalOrderIndex ::
+evalCompareIndex ::
   (MonadNormBuiltin m, HasBoolExpr Value builtin, BuiltinHasIndexLiterals builtin) =>
-  OrderOp ->
+  ComparisonOp ->
   EvalSimple IndexComparisonArgs builtin m
-evalOrderIndex op = \case
-  IndexCompArgs _ _ (IIndexLiteral x) (IIndexLiteral y) -> return $ IBoolLiteral (orderOp op x y)
-  args -> return $ mkExpr accessOrderIndex (op, args)
-
-evalEqualsIndex ::
-  (MonadNormBuiltin m, HasBoolExpr Value builtin, BuiltinHasIndexLiterals builtin) =>
-  EqualityOp ->
-  EvalSimple IndexComparisonArgs builtin m
-evalEqualsIndex op = \case
-  IndexCompArgs _ _ (IIndexLiteral x) (IIndexLiteral y) -> return $ IBoolLiteral (equalityOp op x y)
-  args -> return $ mkExpr accessEqIndex (op, args)
+evalCompareIndex op = \case
+  IndexCompArgs _ _ (IIndexLiteral x) (IIndexLiteral y) -> return $ IBoolLiteral (comparisonOp op x y)
+  args -> return $ mkExpr accessCompareIndex (op, args)
 
 -----------------------------------------------------------------------------
 -- Nat
@@ -274,21 +266,13 @@ evalMulNat = \case
   Op2Args (INatLiteral x) (INatLiteral y) -> return $ INatLiteral (x * y)
   args -> return $ mkExpr accessMulNat args
 
-evalOrderNat ::
+evalCompareNat ::
   (MonadNormBuiltin m, HasBoolExpr Value builtin, BuiltinHasNatLiterals builtin) =>
-  OrderOp ->
+  ComparisonOp ->
   EvalSimple Op2Args builtin m
-evalOrderNat op = \case
-  Op2Args (INatLiteral x) (INatLiteral y) -> return $ IBoolLiteral (orderOp op x y)
-  args -> return $ mkExpr accessOrderNat (op, args)
-
-evalEqualsNat ::
-  (MonadNormBuiltin m, HasBoolExpr Value builtin, BuiltinHasNatLiterals builtin) =>
-  EqualityOp ->
-  EvalSimple Op2Args builtin m
-evalEqualsNat op = \case
-  Op2Args (INatLiteral x) (INatLiteral y) -> return $ IBoolLiteral (equalityOp op x y)
-  args -> return $ mkExpr accessEqNat (op, args)
+evalCompareNat op = \case
+  Op2Args (INatLiteral x) (INatLiteral y) -> return $ IBoolLiteral (comparisonOp op x y)
+  args -> return $ mkExpr accessCompareNat (op, args)
 
 evalFromNatToNat ::
   (MonadNormBuiltin m, BuiltinHasNatLiterals builtin) =>
@@ -411,29 +395,16 @@ evalReduceMinRatTensor = evalReduceTensor accessReduceMinRatBuiltin accessRatTen
 evalReduceMaxRatTensor :: (MonadNormBuiltin m, HasRatExpr Value builtin) => EvalSimple TensorReductionArgs builtin m
 evalReduceMaxRatTensor = evalReduceTensor accessReduceMaxRatBuiltin accessRatTensorLiteral evalMaxRatTensor max
 
-evalEqualsRatTensor ::
+evalCompareRatTensor ::
   (MonadNormBuiltin m, HasBoolExpr Value builtin, HasRatExpr Value builtin, PrintableBuiltin builtin) =>
-  EqualityOp ->
+  ComparisonOp ->
   EvalSimple TensorOp2Args builtin m
-evalEqualsRatTensor op =
+evalCompareRatTensor op =
   evalHeteroTensorOp2
-    (mkExpr accessEqRatTensorBuiltin op)
+    (mkExpr accessCompareRatTensorBuiltin op)
     accessRatTensorLiteral
     accessBoolTensorLiteral
-    (equalityOp op)
-    Nothing
-    Nothing
-
-evalOrderRatTensor ::
-  (MonadNormBuiltin m, HasBoolExpr Value builtin, HasRatExpr Value builtin, PrintableBuiltin builtin) =>
-  OrderOp ->
-  EvalSimple TensorOp2Args builtin m
-evalOrderRatTensor op =
-  evalHeteroTensorOp2
-    (mkExpr accessOrderRatTensorBuiltin op)
-    accessRatTensorLiteral
-    accessBoolTensorLiteral
-    (orderOp op)
+    (comparisonOp op)
     Nothing
     Nothing
 
@@ -667,17 +638,11 @@ blockingArgsMax :: MaxDomain -> BlockingArgs
 blockingArgsMax = \case
   MaxRatTensor -> Known [1, 2]
 
-blockingArgsEquals :: EqualityDomain -> BlockingArgs
-blockingArgsEquals = \case
-  EqIndex -> Known [2, 3]
-  EqNat -> Known [0, 1]
-  EqRatTensor -> Known [1, 2]
-
-blockingArgsOrder :: OrderDomain -> BlockingArgs
-blockingArgsOrder = \case
-  OrderIndex -> Known [2, 3]
-  OrderNat -> Known [0, 1]
-  OrderRatTensor -> Known [1, 2]
+blockingArgsCompare :: ComparisonDomain -> BlockingArgs
+blockingArgsCompare = \case
+  CompareIndex -> Known [2, 3]
+  CompareNat -> Known [0, 1]
+  CompareRatTensor -> Known [1, 2]
 
 functionBlockingArgs :: BuiltinFunction -> BlockingArgs
 functionBlockingArgs = \case
@@ -693,8 +658,7 @@ functionBlockingArgs = \case
   Min dom -> blockingArgsMin dom
   Max dom -> blockingArgsMax dom
   PowRat -> Known [0, 1]
-  Equals dom _op -> blockingArgsEquals dom
-  Order dom _op -> blockingArgsOrder dom
+  Compare dom _op -> blockingArgsCompare dom
   FromNat FromNatToIndex -> Known [1]
   FromNat FromNatToNat -> Known [0]
   FromNat FromNatToRat -> Known [0]
@@ -747,12 +711,9 @@ evaluateBuiltin evalApp b spine = case evalScheme b of
 instance NormalisableBuiltin Builtin where
   evalScheme = \case
     BuiltinFunction f -> case f of
-      Equals EqNat op -> Simple (evalEqualsNat op)
-      Equals EqIndex op -> Simple (evalEqualsIndex op)
-      Equals EqRatTensor op -> Simple (evalEqualsRatTensor op)
-      Order OrderNat op -> Simple (evalOrderNat op)
-      Order OrderIndex op -> Simple (evalOrderIndex op)
-      Order OrderRatTensor op -> Simple (evalOrderRatTensor op)
+      Compare CompareNat op -> Simple (evalCompareNat op)
+      Compare CompareIndex op -> Simple (evalCompareIndex op)
+      Compare CompareRatTensor op -> Simple (evalCompareRatTensor op)
       Not -> Simple evalNot
       And -> Simple evalAnd
       Or -> Simple evalOr

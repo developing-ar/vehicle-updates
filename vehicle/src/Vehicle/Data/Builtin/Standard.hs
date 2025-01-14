@@ -29,22 +29,13 @@ functionAccessor b =
       mkExpr = \() -> BuiltinFunction b
     }
 
-orderAccessor :: OrderDomain -> Accessor Builtin OrderOp
-orderAccessor dom =
+compareAccessor :: ComparisonDomain -> Accessor Builtin ComparisonOp
+compareAccessor dom =
   Access
     { getExpr = \case
-        BuiltinFunction (Order d op) | d == dom -> Just op
+        BuiltinFunction (Compare d op) | d == dom -> Just op
         _ -> Nothing,
-      mkExpr = \op -> BuiltinFunction (Order dom op)
-    }
-
-equalityAccessor :: EqualityDomain -> Accessor Builtin EqualityOp
-equalityAccessor dom =
-  Access
-    { getExpr = \case
-        BuiltinFunction (Equals d op) | d == dom -> Just op
-        _ -> Nothing,
-      mkExpr = \op -> BuiltinFunction (Equals dom op)
+      mkExpr = \op -> BuiltinFunction (Compare dom op)
     }
 
 instance BuiltinHasBoolLiterals Builtin where
@@ -64,12 +55,9 @@ instance BuiltinHasBoolLiterals Builtin where
   accessReduceOrBuiltin = functionAccessor ReduceOrTensor
   accessIfBuiltin = functionAccessor If
 
-  accessOrderIndexBuiltin = orderAccessor OrderIndex
-  accessOrderNatBuiltin = orderAccessor OrderNat
-  accessOrderRatTensorBuiltin = orderAccessor OrderRatTensor
-  accessEqIndexBuiltin = equalityAccessor EqIndex
-  accessEqNatBuiltin = equalityAccessor EqNat
-  accessEqRatTensorBuiltin = equalityAccessor EqRatTensor
+  accessCompareIndexBuiltin = compareAccessor CompareIndex
+  accessCompareNatBuiltin = compareAccessor CompareNat
+  accessCompareRatTensorBuiltin = compareAccessor CompareRatTensor
 
   accessQuantifyRatTensorBuiltin =
     Access

@@ -100,8 +100,7 @@ data BuiltinFunction
   | Implies
   | QuantifyRatTensor Quantifier
   | If
-  | Equals EqualityDomain EqualityOp
-  | Order OrderDomain OrderOp
+  | Compare ComparisonDomain ComparisonOp
   | ReduceAndTensor
   | ReduceOrTensor
   | -- Rat operations
@@ -165,8 +164,7 @@ instance Pretty BuiltinFunction where
     FromNat dom -> "fromNatTo" <> pretty dom
     FromRat dom -> "fromRatTo" <> pretty dom
     FromVectorToList -> "fromVectorToList"
-    Equals dom op -> equalityOpName op <> pretty dom
-    Order dom op -> orderOpName op <> pretty dom
+    Compare dom op -> comparisonOpName op <> pretty dom
     FoldList -> "foldList"
     MapList -> "mapList"
     Foreach -> "foreach"
@@ -217,12 +215,10 @@ symbolFromBuiltin builtin = renderStrict . layoutPretty defaultLayoutOptions $ p
 class Negatable a where
   neg :: a -> a
 
-instance Negatable EqualityOp where
-  neg Eq = Neq
-  neg Neq = Eq
-
-instance Negatable OrderOp where
+instance Negatable ComparisonOp where
   neg = \case
+    Eq -> Ne
+    Ne -> Eq
     Le -> Gt
     Lt -> Ge
     Ge -> Lt

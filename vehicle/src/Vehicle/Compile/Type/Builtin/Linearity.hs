@@ -56,8 +56,7 @@ typeOfBuiltinFunction = \case
   ReduceMinRatTensor -> typeOfOp1
   ReduceMaxRatTensor -> typeOfOp1
   -- Comparisons
-  Equals {} -> typeOfOp2 maxLinearity
-  Order {} -> typeOfOp2 maxLinearity
+  Compare {} -> typeOfOp2 maxLinearity
   -- Conversion functions
   FromNat {} -> constant ~> constant
   FromRat {} -> constant ~> constant

@@ -91,7 +91,7 @@ tokNot = mkToken B.TokNot "not"
 
 tokEq = mkToken B.TokEq "=="
 
-tokNeq = mkToken B.TokNeq "!="
+tokNe = mkToken B.TokNe "!="
 
 tokLe = mkToken B.TokLe "<="
 

@@ -494,8 +494,7 @@ agdaNatToFin = annotateInfixOp1 [DataFin] 10 Nothing "#"
 compileBuiltin :: (MonadAgdaCompile m) => Provenance -> Builtin -> [Arg Builtin] -> m Code
 compileBuiltin _p b args = case b of
   TypeClass c -> case c of
-    HasEq {} -> annotateApp [] "HasEq" <$> compileArgs args
-    HasOrd {} -> annotateApp [] "HasOrd" <$> compileArgs args
+    HasCompare {} -> annotateApp [] "HasCompare" <$> compileArgs args
     HasAdd -> annotateApp [] "HasAdd" <$> compileArgs args
     HasSub -> annotateApp [] "HasSub" <$> compileArgs args
     HasMul -> annotateApp [] "HasMul" <$> compileArgs args
@@ -520,8 +519,7 @@ compileBuiltin _p b args = case b of
     QuantifierTC q -> case reverse args of
       (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
       _ -> unsupportedArgsError
-    OrderTC {} -> resolveInstance b args
-    EqualsTC {} -> resolveInstance b args
+    CompareTC {} -> resolveInstance b args
     FromNatTC {} -> resolveInstance b args
     FromRatTC {} -> resolveInstance b args
     VecLiteralTC {} -> resolveInstance b args
@@ -566,9 +564,7 @@ compileBuiltin _p b args = case b of
     Min dom -> compileMin dom <$> compileArgs args
     Max dom -> compileMax dom <$> compileArgs args
     PowRat -> unsupportedError
-    Equals dom Eq -> compileEquality (equalityDomDependencies dom) =<< compileArgs args
-    Equals dom Neq -> compileInequality (equalityDomDependencies dom) =<< compileArgs args
-    Order dom ord -> compileOrder ord dom =<< compileArgs args
+    Compare dom ord -> compileComparison ord dom =<< compileArgs args
     FoldList -> annotateApp [DataList] (listQualifier <> ".foldr") <$> compileArgs args
     MapList -> annotateApp [DataList] (listQualifier <> ".map") <$> compileArgs args
     ReduceAndTensor -> annotateApp [DataTensor] "reduceAnd" <$> compileArgs args
@@ -813,15 +809,14 @@ compileMax :: MaxDomain -> [Code] -> Code
 compileMax dom args = case dom of
   MaxRatTensor -> annotateInfixOp2 [DataTensor] 7 id (Just ratQualifier) "⊔" args
 
-compileOrder :: (MonadAgdaCompile m) => OrderOp -> OrderDomain -> [Code] -> m Code
-compileOrder order dom args = do
+compileComparison :: (MonadAgdaCompile m) => ComparisonOp -> ComparisonDomain -> [Code] -> m Code
+compileComparison order dom args = do
   boolLevel <- getBoolLevel
 
   (qualifier, elemDep) <- return $ case dom of
-    OrderIndex -> (finQualifier, DataFin)
-    OrderNat -> (natQualifier, DataNat)
-    -- OrderRat -> (ratQualifier, DataRat)
-    OrderRatTensor -> (tensorQualifier, DataTensor)
+    CompareIndex -> (finQualifier, DataFin)
+    CompareNat -> (natQualifier, DataNat)
+    CompareRatTensor -> (tensorQualifier, DataTensor)
 
   let (boolDecDoc, boolDeps, opBraces) = case boolLevel of
         BoolLevel -> ("?", [RelNullary], boolBraces)
@@ -832,20 +827,12 @@ compileOrder order dom args = do
         Lt -> "<"
         Ge -> "≥"
         Gt -> ">"
+        Eq -> "≡"
+        Ne -> "≟"
 
   let dependencies = [elemDep] <> boolDeps
   let opDoc = orderDoc <> boolDecDoc
   return $ annotateInfixOp2 dependencies 4 opBraces (Just qualifier) opDoc args
-
-compileEquality :: (MonadAgdaCompile m) => [Dependency] -> [Code] -> m Code
-compileEquality dependencies args = do
-  boolLevel <- getBoolLevel
-  case boolLevel of
-    TypeLevel -> return $ annotateInfixOp2 [PropEquality] 4 id Nothing "≡" args
-    BoolLevel -> do
-      -- Boolean function equality is more complicated as we need an actual decision procedure.
-      -- We handle this using instance arguments
-      return $ annotateInfixOp2 ([RelNullary] <> dependencies) 4 boolBraces Nothing "≟" args
 
 compileListElements :: (MonadAgdaCompile m) => [Arg Builtin] -> m Code
 compileListElements = \case
@@ -854,15 +841,6 @@ compileListElements = \case
     x' <- compileExpr $ argExpr x
     xs' <- compileListElements xs
     return $ compileCons [x', xs']
-
-compileInequality :: (MonadAgdaCompile m) => [Dependency] -> [Code] -> m Code
-compileInequality deps args = do
-  boolLevel <- getBoolLevel
-  case boolLevel of
-    TypeLevel -> return $ annotateInfixOp2 [PropEquality] 4 id Nothing "≢" args
-    BoolLevel -> do
-      eq <- compileEquality deps args
-      compileNot [eq]
 
 compileFunDef :: Code -> Code -> [Code] -> Code -> Code
 compileFunDef n t ns e =
@@ -902,12 +880,6 @@ compileProperty propertyName propertyBody = do
                   <> line
                   <> "}"
               )
-
-equalityDomDependencies :: EqualityDomain -> [Dependency]
-equalityDomDependencies = \case
-  EqIndex -> [DataFin]
-  EqNat -> [DataNat]
-  EqRatTensor -> [DataTensor]
 
 currentPhase :: Doc ()
 currentPhase = "compilation to Agda"

@@ -22,7 +22,6 @@ import Vehicle.Backend.Queries.UserVariableElimination.Core
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Assertion
-import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.QuantifiedVariable
@@ -119,17 +118,12 @@ convertToNetworkRatVarAssertions globalCtx = go
       Conjunct xs -> Conjunct <$> traverse go xs
 
     convert :: Assertion -> m (BooleanExpr (QueryAssertion NetworkElementVariable))
-    convert = \case
-      EqualityAssertion (Equality expr)
-        | null (tensorShape (constantValue expr)) -> do
-            let rationalEqualities = reduceTensorExpr globalCtx expr
-            let assertions = fmap (Query . EqualityAssertion . Equality) rationalEqualities
-            go $ Conjunct $ ConjunctAll (NonEmpty.fromList assertions)
-        | otherwise -> do
-            Query <$> makeQueryAssertion Equal expr
-      InequalityAssertion (Inequality strict expr) -> do
-        let rel = if strict == Strict then LessThan else LessThanOrEqual
-        Query <$> makeQueryAssertion rel expr
+    convert NormalisedRelation {..} = case relation of
+      OEq | null (tensorShape (constantValue linearExpr)) -> do
+        let rationalEqualities = reduceTensorExpr globalCtx linearExpr
+        let assertions = fmap (Query . NormalisedRelation OEq) rationalEqualities
+        go $ Conjunct $ ConjunctAll (NonEmpty.fromList assertions)
+      _ -> Query <$> makeQueryAssertion relation linearExpr
 
 makeQueryAssertion ::
   (MonadCompile m) =>
@@ -137,11 +131,7 @@ makeQueryAssertion ::
   LinearExpr RatTensor ->
   m (QueryAssertion NetworkElementVariable)
 makeQueryAssertion relation (Sparse coefficients constant) = do
-  let finalRelation = case relation of
-        Equal -> EqualRel
-        LessThan -> OrderRel Lt
-        LessThanOrEqual -> OrderRel Le
-
+  let finalRelation = relationToQueryRelation relation
   let rationalVarCoefs = swap <$> Map.toList coefficients
   finalLHS <- case rationalVarCoefs of
     (c : cs) -> return $ c :| cs
@@ -262,9 +252,9 @@ variableConstraintStatus variables constraints = do
     updateStatuses assertion statuses = case lhs assertion of
       (c, v) :| [] | v `Map.member` statuses -> do
         let status = case rel assertion of
-              EqualRel -> Constant
-              OrderRel op
-                | (c >= 0) `xor` (op == Le || op == Lt) -> UnderConstrained BoundedBelow
+              EqRel -> Constant
+              op
+                | (c >= 0) `xor` (op == LeRel || op == LtRel) -> UnderConstrained BoundedBelow
                 | otherwise -> UnderConstrained BoundedAbove
         Map.insertWith (<>) v status statuses
       _ -> statuses

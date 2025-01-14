@@ -9,7 +9,6 @@ import Control.Monad.Except (MonadError (..))
 import Data.List.NonEmpty (NonEmpty (..))
 import Vehicle.Compile.Error (CompileError (..))
 import Vehicle.Compile.Prelude
-import Vehicle.Data.Builtin.Core
 import Vehicle.Data.QuantifiedVariable (prettyRationalAsFloat)
 import Vehicle.Prelude.Warning
 import Vehicle.Verify.Core
@@ -74,15 +73,15 @@ compileAssertion address QueryAssertion {..} = do
 
 compileRel :: (MonadLogger m, MonadError CompileError m) => QueryAddress -> QueryRelation -> m (Doc a)
 compileRel address = \case
-  EqualRel -> return "="
-  OrderRel Le -> return "<="
-  OrderRel Ge -> return ">="
+  EqRel -> return "="
+  LeRel -> return "<="
+  GeRel -> return ">="
   -- Suboptimal. Marabou doesn't currently support strict inequalities.
   -- See https://github.com/vehicle-lang/vehicle/issues/74 for details.
-  OrderRel Lt -> do
+  LtRel -> do
     logWarning (UnsoundStrictOrderConversion MarabouQueries address)
     return "<="
-  OrderRel Gt -> do
+  GtRel -> do
     logWarning (UnsoundStrictOrderConversion MarabouQueries address)
     return ">="
 

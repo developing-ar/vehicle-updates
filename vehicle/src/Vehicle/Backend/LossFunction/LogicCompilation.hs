@@ -31,13 +31,12 @@ import Vehicle.Syntax.Builtin
     Builtin (..),
     BuiltinConstructor (..),
     BuiltinFunction (..),
+    ComparisonDomain (..),
     DivDomain (..),
-    EqualityDomain (..),
     MaxDomain (..),
     MinDomain (..),
     MulDomain (..),
     NegDomain (..),
-    OrderDomain (..),
     SubDomain (..),
   )
 
@@ -220,8 +219,7 @@ isLiftableOp = \case
   Div DivRatTensor -> True
   Min MinRatTensor -> True
   Max MaxRatTensor -> True
-  Equals EqRatTensor _ -> True
-  Order OrderRatTensor _ -> True
+  Compare CompareRatTensor _ -> True
   Implies -> False
   QuantifyRatTensor {} -> False
   If -> False
@@ -231,8 +229,7 @@ isLiftableOp = \case
   Add {} -> False
   Mul {} -> False
   PowRat -> False
-  Equals {} -> False
-  Order {} -> False
+  Compare {} -> False
   At -> False
   FoldList -> False
   MapList -> False
@@ -256,8 +253,7 @@ reduceOp = \case
   Min MinRatTensor -> Just ReduceMinRatTensor
   Max MaxRatTensor -> Just ReduceMaxRatTensor
   Not -> Nothing
-  Equals {} -> Nothing
-  Order {} -> Nothing
+  Compare {} -> Nothing
   Neg NegRatTensor -> Nothing
   Sub SubRatTensor -> Nothing
   Div DivRatTensor -> Nothing

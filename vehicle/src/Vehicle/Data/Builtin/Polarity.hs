@@ -18,7 +18,6 @@ data PolarityProvenance
   = QuantifierProvenance Provenance
   | NegateProvenance Provenance PolarityProvenance
   | LHSImpliesProvenance Provenance PolarityProvenance
-  | EqProvenance Provenance PolarityProvenance EqualityOp
   | PolFunctionProvenance Provenance PolarityProvenance FunctionPosition
   deriving (Generic)
 
@@ -79,7 +78,6 @@ data PolarityRelation
   = NegPolarity
   | QuantifierPolarity Quantifier
   | AddPolarity Quantifier
-  | EqPolarity EqualityOp
   | ImpliesPolarity
   | IfPolarity
   | MaxPolarity
@@ -97,7 +95,6 @@ instance Pretty PolarityRelation where
     NegPolarity -> "NegPolarity"
     AddPolarity q -> "AddPolarity" <+> pretty q
     QuantifierPolarity q -> "QuantifierPolarity" <+> pretty q
-    EqPolarity eq -> "EqPolarity" <+> pretty eq
     ImpliesPolarity -> "ImpliesPolarity"
     MaxPolarity -> "MaxPolarity"
     IfPolarity -> "IfPolarity"
@@ -206,9 +203,6 @@ maxPolarity l1 l2 l3 = polarityTypeClass MaxPolarity [l1, l2, l3]
 
 ifPolarity :: PolarityDSLExpr -> PolarityDSLExpr -> PolarityDSLExpr -> PolarityDSLExpr -> PolarityDSLExpr
 ifPolarity l1 l2 l3 l4 = polarityTypeClass IfPolarity [l1, l2, l3, l4]
-
-eqPolarity :: EqualityOp -> PolarityDSLExpr -> PolarityDSLExpr -> PolarityDSLExpr -> PolarityDSLExpr
-eqPolarity eq p1 p2 p3 = polarityTypeClass (EqPolarity eq) [p1, p2, p3]
 
 impliesPolarity :: PolarityDSLExpr -> PolarityDSLExpr -> PolarityDSLExpr -> PolarityDSLExpr
 impliesPolarity l1 l2 l3 = polarityTypeClass ImpliesPolarity [l1, l2, l3]

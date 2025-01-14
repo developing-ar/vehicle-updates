@@ -23,7 +23,7 @@ import Vehicle.Compile.Boolean.LiftIf (liftIf, unfoldIf)
 import Vehicle.Compile.Boolean.LowerNot (lowerNot, notClosure)
 import Vehicle.Compile.Context.Name (runFreshNameContextT)
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Builtin (EvalSimple, evalAt, evalEqualsRatTensor, evalOrderRatTensor, evalStackTensor)
+import Vehicle.Compile.Normalise.Builtin (EvalSimple, evalAt, evalCompareRatTensor, evalStackTensor)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyFriendlyEmptyCtx, prettyVerbose)
@@ -78,10 +78,8 @@ eliminateUserVariables expr = case toBoolValue expr of
   VBoolStackTensor {} -> eliminateUserVariables =<< unblock expr
   VConstBoolTensor {} -> eliminateUserVariables =<< unblock expr
   VBoolForeach {} -> eliminateUserVariables =<< unblock expr
-  VEqualsIndex {} -> eliminateUserVariables =<< unblock expr
-  VEqualsNat {} -> eliminateUserVariables =<< unblock expr
-  VOrderIndex {} -> eliminateUserVariables =<< unblock expr
-  VOrderNat {} -> eliminateUserVariables =<< unblock expr
+  VCompareIndex {} -> eliminateUserVariables =<< unblock expr
+  VCompareNat {} -> eliminateUserVariables =<< unblock expr
   VNot {} -> eliminateUserVariables =<< lowerNot 0 unblock expr
   -----------------
   -- Mixed cases --
@@ -93,8 +91,7 @@ eliminateUserVariables expr = case toBoolValue expr of
   --
   -- When we have the ability to evaluate networks then this case can be turned to a
   -- call to purify.
-  VEqualsRatTensor {} -> compileUnquantifiedQuerySet expr
-  VOrderRatTensor {} -> compileUnquantifiedQuerySet expr
+  VCompareRatTensor {} -> compileUnquantifiedQuerySet expr
   where
     unblock e = runFreshNameContextT (Unblocking.unblockBoolExpr e)
 
@@ -159,8 +156,7 @@ compileBoolExpr expr = case toBoolValue expr of
   -- Base cases --
   ----------------
   VBoolTensorLiteral bs -> compileTrivial bs
-  VOrderRatTensor {} -> purifyAndCompileAssertion expr
-  VEqualsRatTensor (Eq, _) -> purifyAndCompileAssertion expr
+  VCompareRatTensor (op, args) -> purifyAndCompileAssertion op args
   VQuantifyRatTensor Forall _ _ _ -> throwError catchableUnsupportedAlternatingQuantifiersError
   ---------------------
   -- Recursive cases --
@@ -169,7 +165,6 @@ compileBoolExpr expr = case toBoolValue expr of
     lv <- boundCtxLv <$> getGlobalNamedBoundCtx
     compileBoolExpr =<< lowerNot lv Unblocking.unblockBoolExpr e
   VBoolIf args -> compileBoolExpr =<< unfoldIf args
-  VEqualsRatTensor (Neq, args) -> compileBoolExpr =<< eliminateNotEqualRatTensor args
   VAnd (TensorOp2Args _dims x y) -> andTrivial andPartitions <$> compileBoolExpr x <*> compileBoolExpr y
   VOr (TensorOp2Args _dims x y) -> orTrivial orPartitions <$> compileBoolExpr x <*> compileBoolExpr y
   VQuantifyRatTensor Exists _ binder closure -> eliminateExists binder closure
@@ -177,20 +172,20 @@ compileBoolExpr expr = case toBoolValue expr of
 
 purifyAndCompileAssertion ::
   (MonadQuantifierBody m) =>
-  Value Builtin ->
+  ComparisonOp ->
+  TensorOp2Args (Value Builtin) ->
   m (MaybeTrivial Partitions)
-purifyAndCompileAssertion expr = do
-  result <- Unblocking.tryPurifyAssertion unblockingActions expr
-  case toBoolValue result of
-    VEqualsRatTensor (Eq, args) -> do
-      logDebug MaxDetail "Pure equality found"
-      compileAssertion eqToAssertion (evalEqualsRatTensor Eq) args
-    VOrderRatTensor (op, args) -> do
-      logDebug MaxDetail "Pure inequality found"
-      compileAssertion (ordToAssertion op) (evalOrderRatTensor op) args
-    _ -> do
-      logDebug MaxDetail "Impure assertion found"
-      compileBoolExpr result
+purifyAndCompileAssertion op args = case op of
+  Ne -> compileBoolExpr =<< eliminateNotEqualRatTensor args
+  _ -> do
+    result <- Unblocking.tryPurifyAssertion unblockingActions op args
+    case toBoolValue result of
+      VCompareRatTensor (op', args') -> do
+        logDebug MaxDetail "Pure assertion found"
+        compileAssertion (comparisonToAssertion op) (evalCompareRatTensor op') args'
+      _ -> do
+        logDebug MaxDetail "Impure assertion found"
+        compileBoolExpr result
 
 --------------------------------------------------------------------------------
 -- Unblocking
@@ -239,7 +234,7 @@ unblockNetworkApplication (networkName, NetworkAppArgs arg) = do
             (inputVarExpr, outputVarExpr, newGlobalCtx) <- addNetworkApplicationToGlobalCtx networkApp networkInfo globalCtx
             let inputDims = dimensions (inputTensor (networkType networkInfo))
             let inputDimsExpr = implicitIrrelevant $ mkDims inputDims
-            let inputEquality = fromBoolValue $ VEqualsRatTensor (Eq, TensorOp2Args inputDimsExpr inputVarExpr unblockedArg)
+            let inputEquality = fromBoolValue $ VCompareRatTensor (Eq, TensorOp2Args inputDimsExpr inputVarExpr unblockedArg)
             put newGlobalCtx
             tell [inputEquality]
             Unblocking.unblockRatTensorValue unblockingActions outputVarExpr
@@ -270,8 +265,8 @@ eliminateNotEqualRatTensor args@(TensorOp2Args dims _ _) = do
   if supportsStrictInequalities queryFormat
     then throwError $ UnsupportedInequality (queryFormatID queryFormat) propertyProvenance
     else do
-      let leq = fromBoolValue $ VOrderRatTensor (Le, args)
-      let geq = fromBoolValue $ VOrderRatTensor (Ge, args)
+      let leq = fromBoolValue $ VCompareRatTensor (Le, args)
+      let geq = fromBoolValue $ VCompareRatTensor (Ge, args)
       return $ fromBoolValue $ VOr (TensorOp2Args dims leq geq)
 
 eliminateTensorAssertion ::

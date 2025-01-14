@@ -43,8 +43,7 @@ typeStandardBuiltin p b = fromDSL p $ case b of
 
 typeOfTypeClass :: (HasStandardBuiltins builtin) => TypeClass -> DSLExpr builtin
 typeOfTypeClass tc = case tc of
-  HasEq {} -> type0 ~> type0 ~> type0
-  HasOrd {} -> type0 ~> type0 ~> type0
+  HasCompare {} -> type0 ~> type0 ~> type0
   HasQuantifier {} -> type0 ~> type0 ~> type0
   HasAdd -> type0 ~> type0 ~> type0 ~> type0
   HasSub -> type0 ~> type0 ~> type0 ~> type0
@@ -80,8 +79,7 @@ typeOfTypeClassOp b = case b of
   SubTC -> typeOfTCOp2 hasSub
   MulTC -> typeOfTCOp2 hasMul
   DivTC -> typeOfTCOp2 hasDiv
-  EqualsTC op -> typeOfTCComparisonOp $ hasEq op
-  OrderTC op -> typeOfTCComparisonOp $ hasOrd op
+  CompareTC op -> typeOfTCComparisonOp $ hasCompare op
   MapTC -> forAll "f" (type0 ~> type0) $ \f -> hasMap f ~~~> typeOfMap f
   FoldTC -> forAll "f" (type0 ~> type0) $ \f -> hasFold f ~~~> typeOfFold f
   QuantifierTC q ->
@@ -125,20 +123,13 @@ typeOfBuiltinFunction = \case
   ReduceMinRatTensor -> typeOfTensorRatReduceOp
   ReduceMaxRatTensor -> typeOfTensorRatReduceOp
   -- Comparisons
-  Equals dom _op -> case dom of
-    EqIndex {} ->
+  Compare dom _op -> case dom of
+    CompareIndex {} ->
       forAllIrrelevantNat "n1" $ \n1 ->
         forAllIrrelevantNat "n2" $ \n2 ->
           tIndex n1 ~> tIndex n2 ~> tBoolTensor dimNil
-    EqNat {} -> tNat ~> tNat ~> tBoolTensor dimNil
-    EqRatTensor {} -> forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
-  Order dom _op -> case dom of
-    OrderIndex {} ->
-      forAllIrrelevantNat "n1" $ \n1 ->
-        forAllIrrelevantNat "n2" $ \n2 ->
-          tIndex n1 ~> tIndex n2 ~> tBoolTensor dimNil
-    OrderNat {} -> tNat ~> tNat ~> tBoolTensor dimNil
-    OrderRatTensor {} -> forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
+    CompareNat {} -> tNat ~> tNat ~> tBoolTensor dimNil
+    CompareRatTensor {} -> forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
   -- Conversion functions
   FromNat dom -> case dom of
     FromNatToNat -> typeOfFromNat tNat

@@ -34,7 +34,7 @@ import Vehicle.Compile.Print.Builtin (ConvertableBuiltin, PrintableBuiltin)
 import Vehicle.Compile.Simplify
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta.Map (MetaMap (..))
-import Vehicle.Data.Assertion (Assertion (..), Bounds (..), Equality, Inequality, equalityExpr, inequalityExpr, strictness)
+import Vehicle.Data.Assertion (Bounds (..), Inequality, NormalisedRelation (..))
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr (Constant (..), LinearExpr, prettyLinearExpr)
@@ -161,10 +161,8 @@ type family StrategyFor (tags :: Tags) a :: Strategy where
   StrategyFor tags (MaybeTrivial a `In` ctx) = StrategyFor tags (a `In` ctx)
   StrategyFor tags (IntMap a `In` ctx) = StrategyFor tags (a `In` ctx)
   StrategyFor tags (MetaMap a `In` ctx) = StrategyFor tags (a `In` ctx)
-  StrategyFor tags (Equality constant `In` ctx) = StrategyFor tags (LinearExpr constant `In` ctx)
-  StrategyFor tags (Inequality constant `In` ctx) = StrategyFor tags (LinearExpr constant `In` ctx)
+  StrategyFor tags (NormalisedRelation rel constant `In` ctx) = StrategyFor tags (LinearExpr constant `In` ctx)
   StrategyFor tags (Bounds constant `In` ctx) = StrategyFor tags (Inequality constant `In` ctx)
-  StrategyFor tags (Assertion `In` ctx) = StrategyFor tags (LinearExpr RatTensor `In` ctx)
   StrategyFor tags (GenericProg expr `In` ctx) = (StrategyFor tags (expr `In` ctx))
   StrategyFor tags (GenericDecl expr `In` ctx) = (StrategyFor tags (expr `In` ctx))
   StrategyFor tags (GenericArg expr `In` ctx) = (StrategyFor tags (expr `In` ctx))
@@ -540,19 +538,10 @@ instance
 -- Assertions
 
 instance
-  (Constant constant, PrettyUsing rest (LinearExpr constant `In` ctx)) =>
-  PrettyUsing rest (Equality constant `In` ctx)
+  (Constant constant, Pretty rel, PrettyUsing rest (LinearExpr constant `In` ctx)) =>
+  PrettyUsing rest (NormalisedRelation rel constant `In` ctx)
   where
-  prettyUsing (e, ctx) = prettyUsing @rest (equalityExpr e, ctx) <+> "== 0"
-
-instance
-  (Constant constant, PrettyUsing rest (LinearExpr constant `In` ctx)) =>
-  PrettyUsing rest (Inequality constant `In` ctx)
-  where
-  prettyUsing (e, ctx) =
-    prettyUsing @rest (inequalityExpr e, ctx)
-      <+> (if strictness e == Strict then "<" else "<=")
-      <+> "0.0"
+  prettyUsing (e, ctx) = prettyUsing @rest (linearExpr e, ctx) <+> pretty (relation e) <+> "0"
 
 instance
   (Constant constant, PrettyUsing rest (Inequality constant `In` ctx)) =>
@@ -564,16 +553,6 @@ instance
       <+> "and"
       <+> "above by min"
       <+> vsep (fmap (prettyUsing @rest . (,ctx)) upperBounds)
-
-instance
-  ( PrettyUsing rest (Inequality RatTensor `In` ctx),
-    PrettyUsing rest (Equality RatTensor `In` ctx)
-  ) =>
-  PrettyUsing rest (Assertion `In` ctx)
-  where
-  prettyUsing (e, ctx) = case e of
-    InequalityAssertion ineq -> prettyUsing @rest (ineq, ctx)
-    EqualityAssertion eq -> prettyUsing @rest (eq, ctx)
 
 --------------------------------------------------------------------------------
 -- Instances for functors types

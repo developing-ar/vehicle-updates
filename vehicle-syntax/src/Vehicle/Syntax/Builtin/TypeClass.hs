@@ -13,8 +13,7 @@ import Vehicle.Syntax.Builtin.BasicOperations
 
 data TypeClass
   = -- Operation type-classes
-    HasEq EqualityOp
-  | HasOrd OrderOp
+    HasCompare ComparisonOp
   | HasQuantifier Quantifier
   | HasAdd
   | HasSub
@@ -48,8 +47,7 @@ instance Serialize TypeClass
 
 instance Pretty TypeClass where
   pretty = \case
-    HasEq {} -> "HasEq"
-    HasOrd {} -> "HasOrd"
+    HasCompare {} -> "HasComparison"
     HasQuantifier Forall -> "HasForall"
     HasQuantifier Exists -> "HasExists"
     HasQuantifierIn Forall -> "HasForallIn"
@@ -88,8 +86,7 @@ data TypeClassOp
   | SubTC
   | MulTC
   | DivTC
-  | EqualsTC EqualityOp
-  | OrderTC OrderOp
+  | CompareTC ComparisonOp
   | MapTC
   | FoldTC
   | QuantifierTC Quantifier
@@ -112,8 +109,7 @@ instance Pretty TypeClassOp where
     FromNatTC -> "fromNat"
     FromRatTC -> "fromRat"
     VecLiteralTC {} -> "vec"
-    EqualsTC op -> pretty op
-    OrderTC op -> pretty op
+    CompareTC op -> pretty op
     MapTC -> "map"
     FoldTC -> "fold"
     QuantifierTC q -> pretty q

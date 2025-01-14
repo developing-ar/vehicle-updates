@@ -137,12 +137,9 @@ data BoolTensorValue
   | VNot (TensorOp1Args (Value Builtin))
   | VAnd (TensorOp2Args (Value Builtin))
   | VOr (TensorOp2Args (Value Builtin))
-  | VOrderIndex (OrderOp, IndexComparisonArgs (Value Builtin))
-  | VOrderNat (OrderOp, Op2Args (Value Builtin))
-  | VOrderRatTensor (OrderOp, TensorOp2Args (Value Builtin))
-  | VEqualsIndex (EqualityOp, IndexComparisonArgs (Value Builtin))
-  | VEqualsNat (EqualityOp, Op2Args (Value Builtin))
-  | VEqualsRatTensor (EqualityOp, TensorOp2Args (Value Builtin))
+  | VCompareIndex (ComparisonOp, IndexComparisonArgs (Value Builtin))
+  | VCompareNat (ComparisonOp, Op2Args (Value Builtin))
+  | VCompareRatTensor (ComparisonOp, TensorOp2Args (Value Builtin))
   | VReduceAndTensor (TensorOp2Args (Value Builtin))
   | VReduceOrTensor (TensorOp2Args (Value Builtin))
   | VQuantifyRatTensor Quantifier (VArg Builtin) (VBinder Builtin) (Closure Builtin)
@@ -158,12 +155,9 @@ toBoolValue expr = case expr of
   (getExpr accessAndTensor -> Just args) -> VAnd args
   (getExpr accessOrTensor -> Just args) -> VOr args
   (getExpr accessNotTensor -> Just args) -> VNot args
-  (getExpr accessOrderRatTensor -> Just args) -> VOrderRatTensor args
-  (getExpr accessOrderNat -> Just args) -> VOrderNat args
-  (getExpr accessOrderIndex -> Just args) -> VOrderIndex args
-  (getExpr accessEqRatTensor -> Just args) -> VEqualsRatTensor args
-  (getExpr accessEqNat -> Just args) -> VEqualsNat args
-  (getExpr accessEqIndex -> Just args) -> VEqualsIndex args
+  (getExpr accessCompareRatTensor -> Just args) -> VCompareRatTensor args
+  (getExpr accessCompareNat -> Just args) -> VCompareNat args
+  (getExpr accessCompareIndex -> Just args) -> VCompareIndex args
   (getExpr accessQuantifyRatTensor -> Just (op, dims, VLam binder closure)) -> VQuantifyRatTensor op dims binder closure
   (getExpr accessReduceAnd -> Just args) -> VReduceAndTensor args
   (getExpr accessReduceOr -> Just args) -> VReduceOrTensor args
@@ -180,12 +174,9 @@ fromBoolValue = \case
   VAnd args -> mkExpr accessAndTensor args
   VOr args -> mkExpr accessOrTensor args
   VNot args -> mkExpr accessNotTensor args
-  VOrderNat args -> mkExpr accessOrderNat args
-  VOrderIndex args -> mkExpr accessOrderIndex args
-  VOrderRatTensor args -> mkExpr accessOrderRatTensor args
-  VEqualsNat args -> mkExpr accessEqNat args
-  VEqualsIndex args -> mkExpr accessEqIndex args
-  VEqualsRatTensor args -> mkExpr accessEqRatTensor args
+  VCompareNat args -> mkExpr accessCompareNat args
+  VCompareIndex args -> mkExpr accessCompareIndex args
+  VCompareRatTensor args -> mkExpr accessCompareRatTensor args
   VQuantifyRatTensor q dims binder closure -> mkExpr accessQuantifyRatTensor (q, dims, VLam binder closure)
   VReduceAndTensor args -> mkExpr accessReduceAnd args
   VReduceOrTensor args -> mkExpr accessReduceOr args

@@ -39,8 +39,7 @@ typeOfBuiltinFunction = \case
   QuantifyRatTensor q -> typeOfQuantifier q
   If -> typeOfIf
   -- Comparisons
-  Equals {} -> typeOfOp2 maxPolarity
-  Order {} -> typeOfOp2 maxPolarity
+  Compare {} -> typeOfOp2 maxPolarity
   -- Arithmetic operations
   Add {} -> typeOfUnquantifiedOp2
   Mul {} -> typeOfUnquantifiedOp2
@@ -85,7 +84,6 @@ typeOfPolarityRelation :: PolarityRelation -> PolarityDSLExpr
 typeOfPolarityRelation = \case
   NegPolarity -> tPol ~> tPol ~> type0
   ImpliesPolarity -> tPol ~> tPol ~> tPol ~> type0
-  EqPolarity {} -> tPol ~> tPol ~> tPol ~> type0
   IfPolarity -> tPol ~> tPol ~> tPol ~> tPol ~> type0
   MaxPolarity -> tPol ~> tPol ~> tPol ~> type0
   AddPolarity {} -> tPol ~> tPol ~> type0

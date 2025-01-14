@@ -38,12 +38,9 @@ lowerNot lv onBlocked e = do
     ----------------
     VNot (TensorOp1Args _dims x) -> return x
     VBoolTensorLiteral b -> return $ fromBoolValue $ VBoolTensorLiteral (fmap not b)
-    VOrderIndex (op, args) -> return $ fromBoolValue $ VOrderIndex (neg op, args)
-    VEqualsIndex (op, args) -> return $ fromBoolValue $ VEqualsIndex (neg op, args)
-    VOrderNat (op, args) -> return $ fromBoolValue $ VOrderNat (neg op, args)
-    VEqualsNat (op, args) -> return $ fromBoolValue $ VEqualsNat (neg op, args)
-    VOrderRatTensor (op, args) -> return $ fromBoolValue $ VOrderRatTensor (neg op, args)
-    VEqualsRatTensor (op, args) -> return $ fromBoolValue $ VEqualsRatTensor (neg op, args)
+    VCompareIndex (op, args) -> return $ fromBoolValue $ VCompareIndex (neg op, args)
+    VCompareNat (op, args) -> return $ fromBoolValue $ VCompareNat (neg op, args)
+    VCompareRatTensor (op, args) -> return $ fromBoolValue $ VCompareRatTensor (neg op, args)
     -- We can't actually lower the `not` through the body of the quantifier as
     -- it is not yet unnormalised. However, it's fine to stop here as we'll
     -- simply continue to normalise it once we re-encounter it again after

@@ -434,23 +434,14 @@ accessReduceOr = accessArgs accessReduceOrBuiltin
 accessIf :: (HasBoolExpr expr builtin) => Accessor (expr builtin) (IfArgs (expr builtin))
 accessIf = accessArgs accessIfBuiltin
 
-accessOrderIndex :: (HasBoolExpr expr builtin) => IndexComparisonAccessor (expr builtin) OrderOp
-accessOrderIndex = accessOpAndArgs accessOrderIndexBuiltin
+accessCompareIndex :: (HasBoolExpr expr builtin) => IndexComparisonAccessor (expr builtin) ComparisonOp
+accessCompareIndex = accessOpAndArgs accessCompareIndexBuiltin
 
-accessOrderNat :: (HasBoolExpr expr builtin) => NatComparisonAccessor (expr builtin) OrderOp
-accessOrderNat = accessOpAndArgs accessOrderNatBuiltin
+accessCompareNat :: (HasBoolExpr expr builtin) => NatComparisonAccessor (expr builtin) ComparisonOp
+accessCompareNat = accessOpAndArgs accessCompareNatBuiltin
 
-accessOrderRatTensor :: (HasBoolExpr expr builtin) => RatTensorComparisonAccessor (expr builtin) OrderOp
-accessOrderRatTensor = accessOpAndArgs accessOrderRatTensorBuiltin
-
-accessEqIndex :: (HasBoolExpr expr builtin) => IndexComparisonAccessor (expr builtin) EqualityOp
-accessEqIndex = accessOpAndArgs accessEqRatTensorBuiltin
-
-accessEqNat :: (HasBoolExpr expr builtin) => NatComparisonAccessor (expr builtin) EqualityOp
-accessEqNat = accessOpAndArgs accessEqNatBuiltin
-
-accessEqRatTensor :: (HasBoolExpr expr builtin) => RatTensorComparisonAccessor (expr builtin) EqualityOp
-accessEqRatTensor = accessOpAndArgs accessEqRatTensorBuiltin
+accessCompareRatTensor :: (HasBoolExpr expr builtin) => RatTensorComparisonAccessor (expr builtin) ComparisonOp
+accessCompareRatTensor = accessOpAndArgs accessCompareRatTensorBuiltin
 
 accessQuantifyRatTensor :: (HasBoolExpr expr builtin) => Accessor (expr builtin) (Quantifier, GenericArg (expr builtin), expr builtin)
 accessQuantifyRatTensor =

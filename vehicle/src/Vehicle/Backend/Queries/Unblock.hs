@@ -58,20 +58,19 @@ unblockBoolExpr expr = do
 tryPurifyAssertion ::
   (MonadPurify m) =>
   UnblockingActions m ->
-  Value Builtin ->
+  ComparisonOp ->
+  TensorOp2Args (Value Builtin) ->
   m (Value Builtin)
-tryPurifyAssertion actions assertion = do
+tryPurifyAssertion actions op args = do
   preCtx <- getNameContext
   logDebugM MaxDetail $ do
+    let assertion = fromBoolValue $ VCompareRatTensor (op, args)
     let assertionDoc = prettyFriendly (WithContext assertion preCtx)
     return $ line <> "Trying to purify" <+> squotes assertionDoc
   incrCallDepth
 
   let unblock = unblockRatTensorValue actions
-  unblockedExpr <- case toBoolValue assertion of
-    VEqualsRatTensor (Eq, args) -> unblockTensorOp2 unblock (evalEqualsRatTensor Eq) args
-    VOrderRatTensor (op, args) -> unblockTensorOp2 unblock (evalOrderRatTensor op) args
-    _ -> unexpectedExprError "purifying assertion" (prettyVerbose assertion)
+  unblockedExpr <- unblockTensorOp2 unblock (evalCompareRatTensor op) args
 
   logDebugM MaxDetail $ do
     postCtx <- getNameContext
@@ -96,16 +95,13 @@ unblockBoolTensorValue expr = do
     VOr {} -> return expr
     VNot {} -> return expr
     VBoolIf {} -> return expr
-    VOrderRatTensor {} -> return expr
-    VEqualsRatTensor {} -> return expr
+    VCompareRatTensor {} -> return expr
     VQuantifyRatTensor {} -> return expr
     -- Recursively unblock
     VReduceAndTensor args -> unblockReduceTensor unblock evalReduceAndTensor args
     VReduceOrTensor args -> unblockReduceTensor unblock evalReduceOrTensor args
-    VOrderIndex (op, args) -> unblockIndexOp2 (evalOrderIndex op) args
-    VEqualsIndex (op, args) -> unblockIndexOp2 (evalEqualsIndex op) args
-    VOrderNat (op, args) -> unblockOp2 unblock (evalOrderNat op) args
-    VEqualsNat (op, args) -> unblockOp2 unblock (evalEqualsNat op) args
+    VCompareIndex (op, args) -> unblockIndexOp2 (evalCompareIndex op) args
+    VCompareNat (op, args) -> unblockOp2 unblock (evalCompareNat op) args
     VConstBoolTensor args -> unblockConstTensor args
     VBoolStackTensor args -> unblockStackTensor unblock args
     VBoolAt args -> unblockAtTensor unblock args

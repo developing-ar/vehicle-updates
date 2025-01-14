@@ -16,11 +16,10 @@ import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyFriendly)
 import Vehicle.Data.Assertion
 import Vehicle.Data.Code.BooleanExpr
-import Vehicle.Data.Code.LinearExpr (Constant (..), LinearExpr, eliminateVars, rearrangeExprToSolveFor, referencesVariable)
+import Vehicle.Data.Code.LinearExpr (LinearExpr, rearrangeExprToSolveFor, referencesVariable)
 import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RatTensor, allTensor, tensorToList)
+import Vehicle.Data.Tensor (RatTensor, tensorToList)
 import Vehicle.Prelude.Warning (CompileWarning (..))
-import Vehicle.Syntax.Builtin.BasicOperations (Strictness (..))
 
 --------------------------------------------------------------------------------
 -- Main function
@@ -54,10 +53,11 @@ type MonadSolveExists m = MonadQueryStructure m
 -- Tensor equalities
 
 checkAssertion :: ConstraintSearchCriteria
-checkAssertion var = \case
-  EqualityAssertion eq | equalityExpr eq `referencesVariable` var -> SingleEquality eq (Trivial True)
-  InequalityAssertion ineq | inequalityExpr ineq `referencesVariable` var -> Inequalities [ineq] (Trivial True)
-  constraint -> Inequalities [] $ NonTrivial $ Query constraint
+checkAssertion var assertion@NormalisedRelation {..}
+  | linearExpr `referencesVariable` var = case splitRelation assertion of
+      Right equality -> SingleEquality equality (Trivial True)
+      Left inequality -> Inequalities [inequality] (Trivial True)
+  | otherwise = Inequalities [] $ NonTrivial $ Query assertion
 
 solveVariable ::
   (MonadSolveExists m) =>
@@ -72,8 +72,8 @@ solveVariable originalTree userVar solutions constrainedTree = do
   let isTensorVariable = isJust maybeTensorVarInfo
 
   case constrainedTree of
-    SingleEquality (Equality tensorEq) remainingTree -> do
-      let (_, rearrangedExpr) = rearrangeExprToSolveFor userVar tensorEq
+    SingleEquality equality remainingTree -> do
+      let (_, rearrangedExpr) = rearrangeExprToSolveFor userVar (linearExpr equality)
       let elementEqs = case maybeTensorVarInfo of
             Nothing -> []
             Just info -> zip (tensorToList (elementVariables info)) $ reduceTensorExpr globalCtx rearrangedExpr
@@ -91,7 +91,7 @@ solveVariable originalTree userVar solutions constrainedTree = do
         foldlM solveExists initial (tensorToList userRationalVars)
       Nothing -> do
         (bounds, newInequalities) <- fourierMotzkinElimination userVar ineqs
-        let addIneq ineq = andTrivial andBoolExpr (NonTrivial $ Query $ InequalityAssertion ineq)
+        let addIneq ineq = andTrivial andBoolExpr (NonTrivial $ Query $ inequalityToNormRelation ineq)
         let updatedTree = foldr addIneq remainingTree newInequalities
         let step = SolveInequalities userVar bounds
         logInequalitiesSolved userVar step remainingTree
@@ -101,21 +101,7 @@ substituteThrough ::
   Map Variable (LinearExpr RatTensor) ->
   MaybeTrivial AssertionTree ->
   MaybeTrivial AssertionTree
-substituteThrough f =
-  filterTrivialAtoms
-    . fmap
-      ( fmap
-          ( \case
-              EqualityAssertion (Equality expr) -> case eliminateVars f expr of
-                Right newExpr -> NonTrivial $ EqualityAssertion $ Equality newExpr
-                Left tensor -> Trivial (isZero tensor)
-              InequalityAssertion (Inequality strictness expr) -> case eliminateVars f expr of
-                Right newExpr -> NonTrivial $ InequalityAssertion $ Inequality strictness newExpr
-                Left tensor -> do
-                  let test = if strictness == Strict then (0 <) else (0 <=)
-                  Trivial $ allTensor test tensor
-          )
-      )
+substituteThrough f = filterTrivialAtoms . fmap (fmap (eliminateVarsInAssertion f))
 
 --------------------------------------------------------------------------------
 -- UserRationalVariables and equalities/constraints

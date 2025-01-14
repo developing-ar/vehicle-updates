@@ -365,12 +365,12 @@ elabExpr expr = case expr of
   B.And e1 tk e2 -> builtinFunction V.And tk [e1, e2]
   B.Or e1 tk e2 -> builtinFunction V.Or tk [e1, e2]
   B.If tk1 e1 _ e2 _ e3 -> builtinFunction V.If tk1 [e1, e2, e3]
-  B.Eq e1 tk e2 -> builtinTypeClassOp (V.EqualsTC V.Eq) tk [e1, e2]
-  B.Neq e1 tk e2 -> builtinTypeClassOp (V.EqualsTC V.Neq) tk [e1, e2]
-  B.Le e1 tk e2 -> elabOrder V.Le tk e1 e2
-  B.Lt e1 tk e2 -> elabOrder V.Lt tk e1 e2
-  B.Ge e1 tk e2 -> elabOrder V.Ge tk e1 e2
-  B.Gt e1 tk e2 -> elabOrder V.Gt tk e1 e2
+  B.Eq e1 tk e2 -> elabComparison V.Eq tk e1 e2
+  B.Ne e1 tk e2 -> elabComparison V.Ne tk e1 e2
+  B.Le e1 tk e2 -> elabComparison V.Le tk e1 e2
+  B.Lt e1 tk e2 -> elabComparison V.Lt tk e1 e2
+  B.Ge e1 tk e2 -> elabComparison V.Ge tk e1 e2
+  B.Gt e1 tk e2 -> elabComparison V.Gt tk e1 e2
   B.Add e1 tk e2 -> builtinTypeClassOp V.AddTC tk [e1, e2]
   B.Sub e1 tk e2 -> builtinTypeClassOp V.SubTC tk [e1, e2]
   B.Mul e1 tk e2 -> builtinTypeClassOp V.MulTC tk [e1, e2]
@@ -381,9 +381,9 @@ elabExpr expr = case expr of
   B.Fold tk -> builtinTypeClassOp V.FoldTC tk []
   B.ReduceOr tk -> builtinFunction V.ReduceOrTensor tk []
   B.ReduceAnd tk -> builtinFunction V.ReduceAndTensor tk []
-  B.HasEq tk -> builtinTypeClass (V.HasEq V.Eq) tk []
-  B.HasNotEq tk -> builtinTypeClass (V.HasEq V.Neq) tk []
-  B.HasLeq tk -> builtinTypeClass (V.HasOrd V.Le) tk []
+  B.HasEq tk -> builtinTypeClass (V.HasCompare V.Eq) tk []
+  B.HasNotEq tk -> builtinTypeClass (V.HasCompare V.Ne) tk []
+  B.HasLeq tk -> builtinTypeClass (V.HasCompare V.Le) tk []
   B.HasAdd tk -> builtinTypeClass V.HasAdd tk []
   B.HasSub tk -> builtinTypeClass V.HasSub tk []
   B.HasMul tk -> builtinTypeClass V.HasMul tk []
@@ -542,27 +542,30 @@ elabApp fun arg = do
   arg' <- elabArg arg
   return $ V.normAppList fun' [arg']
 
-elabOrder :: (MonadElab m, IsToken token) => V.OrderOp -> token -> B.Expr -> B.Expr -> m V.Expr
-elabOrder order tk e1 e2 = do
+elabComparison :: (MonadElab m, IsToken token) => V.ComparisonOp -> token -> B.Expr -> B.Expr -> m V.Expr
+elabComparison op tk e1 e2 = do
   let Tk tkDetails@(tkPos, _) = toToken tk
   let chainedOrder = case e1 of
         B.Le _ _ e -> Just (V.Le, e)
         B.Lt _ _ e -> Just (V.Lt, e)
         B.Ge _ _ e -> Just (V.Ge, e)
         B.Gt _ _ e -> Just (V.Gt, e)
+        B.Eq _ _ e -> Just (V.Eq, e)
         _ -> Nothing
 
   case chainedOrder of
-    Nothing -> builtin (V.TypeClassOp $ V.OrderTC order) tk [e1, e2]
-    Just (prevOrder, e)
-      | not (V.chainable prevOrder order) -> do
+    Nothing -> builtin (V.TypeClassOp $ V.CompareTC op) tk [e1, e2]
+    Just (prevOp, e)
+      | not (V.chainable prevOp op) -> do
           p <- mkProvenance tk
-          throwError $ UnchainableOrders p prevOrder order
-      | otherwise -> elabExpr $ B.And e1 (B.TokAnd (tkPos, "and")) $ case order of
+          throwError $ UnchainableComparisons p prevOp op
+      | otherwise -> elabExpr $ B.And e1 (B.TokAnd (tkPos, "and")) $ case op of
           V.Le -> B.Le e (B.TokLe tkDetails) e2
           V.Lt -> B.Lt e (B.TokLt tkDetails) e2
           V.Ge -> B.Ge e (B.TokGe tkDetails) e2
           V.Gt -> B.Gt e (B.TokGt tkDetails) e2
+          V.Eq -> B.Eq e (B.TokEq tkDetails) e2
+          V.Ne -> B.Ne e (B.TokNe tkDetails) e2
 
 -- | Unfolds a list of binders into a consecutative forall expressions
 elabForallT :: (MonadElab m) => B.TokForallT -> [B.NameBinder] -> B.Expr -> m V.Expr

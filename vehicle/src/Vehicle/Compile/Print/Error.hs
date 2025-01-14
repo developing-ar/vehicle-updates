@@ -145,7 +145,7 @@ instance MeaningfulError CompileError where
               problem = "expected at least one variable name after" <+> quotePretty symbol,
               fix = Just $ "add one or more names after" <+> quotePretty symbol
             }
-      UnchainableOrders p prevOrder currentOrder ->
+      UnchainableComparisons p prevOrder currentOrder ->
         UError $
           UserError
             { provenance = p,
@@ -903,8 +903,6 @@ prettyPolarityProvenance topQuantifierProv topQuantifier bottomQuantifierProvena
         transform p ("the" <+> quotePretty Not) : go (neg q) pp
       LHSImpliesProvenance p pp ->
         transform p ("being on the LHS of the" <+> quotePretty Implies) : go (neg q) pp
-      EqProvenance p pp eq ->
-        transform p ("being involved in the" <+> quotePretty (EqualsTC eq)) : go (neg q) pp
       PolFunctionProvenance p pp position ->
         surround p (prettyAuxiliaryFunctionProvenance position) : go q pp
       where

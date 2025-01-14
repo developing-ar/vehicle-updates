@@ -54,7 +54,6 @@ solve = \case
   NegPolarity -> solveNegPolarity
   QuantifierPolarity q -> solveQuantifierPolarity q
   AddPolarity q -> solveAddPolarityOp q
-  EqPolarity eq -> solveEqPolarity eq
   ImpliesPolarity -> solveImplPolarity
   MaxPolarity -> solveMaxPolarityOp
   FunctionPolarity position -> solveFunctionPolarity position
@@ -110,17 +109,6 @@ solveMaxPolarityOp info [arg1, arg2, res] = case (arg1, arg2) of
   (_, getNMeta -> Just m2) -> blockOn [m2]
   _ -> Nothing
 solveMaxPolarityOp _ _ = Nothing
-
-solveEqPolarity :: EqualityOp -> PolaritySolver
-solveEqPolarity eq info@(ctx, _) [arg1, arg2, res] = case (arg1, arg2) of
-  (VPolarityExpr pol1, VPolarityExpr pol2) -> Just $ do
-    let pol3 = VPolarityExpr $ eqPolarityOp eq (provenanceOf ctx) pol1 pol2
-    resEq <- createInstanceUnification info res pol3
-    return $ Progress [resEq] []
-  (getNMeta -> Just m1, _) -> blockOn [m1]
-  (_, getNMeta -> Just m2) -> blockOn [m2]
-  _ -> Nothing
-solveEqPolarity _ _ _ = Nothing
 
 solveImplPolarity :: PolaritySolver
 solveImplPolarity info@(ctx, _) [arg1, arg2, res] = case (arg1, arg2) of
@@ -205,19 +193,6 @@ maxPolarityOp pol1 pol2 = case (pol1, pol2) of
   (MixedParallel {}, MixedParallel {}) -> pol1
   (MixedSequential {}, _) -> pol1
   (_, MixedSequential {}) -> pol2
-
-eqPolarityOp ::
-  EqualityOp ->
-  Provenance ->
-  Polarity ->
-  Polarity ->
-  Polarity
-eqPolarityOp eq p pol1 pol2 =
-  let negPol = negPolarityOp (\pp -> EqProvenance p pp eq)
-   in -- `a == b` = (a and b) or (not a and not b)
-      maxPolarityOp
-        (maxPolarityOp pol1 pol2)
-        (maxPolarityOp (negPol pol1) (negPol pol2))
 
 implPolarityOp ::
   Provenance ->

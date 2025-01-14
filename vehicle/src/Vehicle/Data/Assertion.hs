@@ -3,108 +3,117 @@ module Vehicle.Data.Assertion where
 import Control.DeepSeq (NFData)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Map (Map)
 import GHC.Generics
 import Vehicle.Data.Builtin.Core
-import Vehicle.Data.Code.BooleanExpr
+import Vehicle.Data.Code.BooleanExpr (MaybeTrivial (..))
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.Hashing ()
 import Vehicle.Data.Tensor (RatTensor, allTensor)
 import Vehicle.Prelude
 
 --------------------------------------------------------------------------------
--- Rational equalities
+-- Relations
 
-newtype Equality constant = Equality
-  { equalityExpr :: LinearExpr constant
-  }
-  deriving (Show, Eq, Ord, Generic)
+data Relation
+  = OEq
+  | OLe
+  | OLt
+  deriving (Eq, Ord)
 
-instance (ToJSON constant) => ToJSON (Equality constant)
+relationToComparisonOp :: Relation -> ComparisonOp
+relationToComparisonOp = \case
+  OEq -> Eq
+  OLe -> Le
+  OLt -> Lt
 
-instance (FromJSON constant) => FromJSON (Equality constant)
-
--- | Checks whether an equality is trivial or not. Returns `Nothing` if
--- non-trivial, and otherwise `Just b` where `b` is the value of the assertion
--- if it is trivial.
-checkEqualityTriviality :: Equality RatTensor -> Maybe Bool
-checkEqualityTriviality (Equality e) = fmap isZero (isConstant e)
+instance Pretty Relation where
+  pretty = pretty . relationToComparisonOp
 
 --------------------------------------------------------------------------------
--- Rational inequalities
+-- Strictness
 
-data Inequality constant = Inequality
-  { strictness :: Strictness,
-    inequalityExpr :: LinearExpr constant
+data InequalityRelation
+  = Strict
+  | NonStrict
+  deriving (Show, Eq, Ord, Generic)
+
+instance NFData InequalityRelation
+
+instance ToJSON InequalityRelation
+
+instance FromJSON InequalityRelation
+
+inequalityToRelation :: InequalityRelation -> Relation
+inequalityToRelation = \case
+  Strict -> OLe
+  NonStrict -> OLt
+
+instance Pretty InequalityRelation where
+  pretty = pretty . inequalityToRelation
+
+--------------------------------------------------------------------------------
+-- Normalisation relations
+
+data NormalisedRelation rel constant = NormalisedRelation
+  { relation :: rel,
+    linearExpr :: LinearExpr constant
   }
   deriving (Show, Eq, Ord, Generic)
 
-instance (NFData constant) => NFData (Inequality constant)
+instance (NFData constant, NFData rel) => NFData (NormalisedRelation rel constant)
 
-instance (ToJSON constant) => ToJSON (Inequality constant)
+instance (ToJSON constant, ToJSON rel) => ToJSON (NormalisedRelation rel constant)
 
-instance (FromJSON constant) => FromJSON (Inequality constant)
-
-mkInequality :: (Constant constant) => OrderOp -> LinearExpr constant -> LinearExpr constant -> Inequality constant
-mkInequality op e1 e2 =
-  case op of
-    Lt -> Inequality Strict (addExprs 1 (-1) e1 e2)
-    Le -> Inequality NonStrict (addExprs 1 (-1) e1 e2)
-    Gt -> Inequality Strict (addExprs (-1) 1 e1 e2)
-    Ge -> Inequality NonStrict (addExprs (-1) 1 e1 e2)
-
--- | Checks whether an assertion is trivial or not. Returns `Nothing` if
--- non-trivial, and otherwise `Just b` where `b` is the value of the assertion
--- if it is trivial.
-checkInequalityTriviality :: Inequality RatTensor -> Maybe Bool
-checkInequalityTriviality (Inequality s e) = case isConstant e of
-  Nothing -> Nothing
-  Just tensor -> Just $ case s of
-    Strict -> allTensor (< 0.0) tensor
-    NonStrict -> allTensor (<= 0.0) tensor
+instance (FromJSON constant, FromJSON rel) => FromJSON (NormalisedRelation rel constant)
 
 --------------------------------------------------------------------------------
 -- Assertions
 
-data Assertion
-  = InequalityAssertion (Inequality RatTensor)
-  | EqualityAssertion (Equality RatTensor)
-  deriving (Show, Eq, Generic)
+type Inequality constant = NormalisedRelation InequalityRelation constant
 
-instance ToJSON Assertion
+type Equality constant = NormalisedRelation () constant
 
-instance FromJSON Assertion
+splitRelation :: NormalisedRelation Relation constant -> Either (Inequality constant) (Equality constant)
+splitRelation r = case relation r of
+  OEq -> Right $ r {relation = ()}
+  OLe -> Left $ r {relation = NonStrict}
+  OLt -> Left $ r {relation = Strict}
 
-checkTriviality :: Assertion -> MaybeTrivial Assertion
-checkTriviality ass = case ass of
-  InequalityAssertion ineq -> maybe (NonTrivial ass) Trivial (checkInequalityTriviality ineq)
-  EqualityAssertion eq -> maybe (NonTrivial ass) Trivial (checkEqualityTriviality eq)
+inequalityToNormRelation :: Inequality constant -> NormalisedRelation Relation constant
+inequalityToNormRelation r = case relation r of
+  Strict -> r {relation = OLt}
+  NonStrict -> r {relation = OLe}
 
-data Relation
-  = Equal
-  | LessThan
-  | LessThanOrEqual
-  deriving (Eq, Ord)
+type Assertion = NormalisedRelation Relation RatTensor
 
-assertionRel :: Assertion -> Relation
-assertionRel = \case
-  EqualityAssertion {} -> Equal
-  InequalityAssertion ineq
-    | strictness ineq == Strict -> LessThan
-    | otherwise -> LessThanOrEqual
+checkTriviality :: Relation -> RatTensor -> Bool
+checkTriviality op tensor = case op of
+  OLe -> allTensor (<= 0.0) tensor
+  OLt -> allTensor (< 0.0) tensor
+  OEq -> isZero tensor
 
-eqToAssertion :: LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion
-eqToAssertion e1 e2 = EqualityAssertion $ Equality $ addExprs 1 (-1) e1 e2
+comparisonToAssertion :: ComparisonOp -> LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion
+comparisonToAssertion op e1 e2 = case op of
+  Ne -> developerError "Cannot convert `Ne` to assertion"
+  Eq -> NormalisedRelation OEq $ addExprs 1 (-1) e1 e2
+  Lt -> NormalisedRelation OLt $ addExprs 1 (-1) e1 e2
+  Le -> NormalisedRelation OLe $ addExprs 1 (-1) e1 e2
+  Gt -> NormalisedRelation OLt $ addExprs (-1) 1 e1 e2
+  Ge -> NormalisedRelation OLe $ addExprs (-1) 1 e1 e2
 
-ordToAssertion :: OrderOp -> LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion
-ordToAssertion op e1 e2 = InequalityAssertion $ mkInequality op e1 e2
+eliminateVarsInAssertion :: Map Variable (LinearExpr RatTensor) -> Assertion -> MaybeTrivial Assertion
+eliminateVarsInAssertion f NormalisedRelation {..} = case eliminateVars f linearExpr of
+  Right newExpr -> NonTrivial $ NormalisedRelation {linearExpr = newExpr, ..}
+  Left tensor -> Trivial (checkTriviality relation tensor)
 
 --------------------------------------------------------------------------------
 -- Bounds
 
 type Bound constant = Inequality constant
 
-pattern Bound :: Strictness -> LinearExpr constant -> Bound constant
-pattern Bound s e = Inequality s e
+pattern Bound :: InequalityRelation -> LinearExpr constant -> Bound constant
+pattern Bound s e = NormalisedRelation s e
 
 {-# COMPLETE Bound #-}
 

@@ -10,7 +10,6 @@ import GHC.Real (infinity)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Assertion
-import Vehicle.Data.Builtin.Core (Strictness (..))
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.Tensor (RatTensor, pattern ZeroDimTensor)
 
@@ -31,10 +30,10 @@ fourierMotzkinElimination var inequalities = do
   return (solution, newInequalities <> unusedInequalities)
 
 combineInequalities :: (Constant constant) => (LowerBound constant, UpperBound constant) -> Inequality constant
-combineInequalities (Inequality rel1 lowerBound, Inequality rel2 upperBound) =
-  Inequality
-    { inequalityExpr = addExprs 1 (-1) lowerBound upperBound,
-      strictness = case (rel1, rel2) of
+combineInequalities (NormalisedRelation rel1 lowerBound, NormalisedRelation rel2 upperBound) =
+  NormalisedRelation
+    { linearExpr = addExprs 1 (-1) lowerBound upperBound,
+      relation = case (rel1, rel2) of
         (Strict, _) -> Strict
         (_, Strict) -> Strict
         (_, _) -> NonStrict
@@ -52,7 +51,7 @@ partition var = foldr categorise (Bounds [] [], [])
       Inequality constant ->
       (Bounds constant, [Inequality constant]) ->
       (Bounds constant, [Inequality constant])
-    categorise ineq@(Inequality rel expr) (bounds@Bounds {..}, unused) = do
+    categorise ineq@(NormalisedRelation rel expr) (bounds@Bounds {..}, unused) = do
       let (coeff, valueExpr) = rearrangeExprToSolveFor var expr
       let bound = Bound rel valueExpr
       if coeff < 0
@@ -94,9 +93,9 @@ reconstructFourierMotzkinVariableValue assignment solution = do
       developerError "Fourier-Motzkin reconstruction failed. This isn't supposed to be possible..."
   where
     evaluateMinValue ::
-      (Rational, Strictness) ->
+      (Rational, InequalityRelation) ->
       LowerBound RatTensor ->
-      Either Variable (Rational, Strictness)
+      Either Variable (Rational, InequalityRelation)
     evaluateMinValue current@(currentMin, _) (Bound rel expr) = do
       value <- extractRationalConstant <$> evaluateExpr expr assignment
       return $
@@ -105,9 +104,9 @@ reconstructFourierMotzkinVariableValue assignment solution = do
           else current
 
     evaluateMaxValue ::
-      (Rational, Strictness) ->
+      (Rational, InequalityRelation) ->
       UpperBound RatTensor ->
-      Either Variable (Rational, Strictness)
+      Either Variable (Rational, InequalityRelation)
     evaluateMaxValue current@(currentMax, _) (Bound rel expr) = do
       value <- extractRationalConstant <$> evaluateExpr expr assignment
       return $

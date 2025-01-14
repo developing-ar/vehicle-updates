@@ -299,51 +299,31 @@ allInstances =
             False
           )
         ]
-      <> orderCandidates Le
-      <> orderCandidates Lt
-      <> orderCandidates Ge
-      <> orderCandidates Gt
-      <> eqCandidates Eq
-      <> eqCandidates Neq
+      <> comparisonCandidates Le
+      <> comparisonCandidates Lt
+      <> comparisonCandidates Ge
+      <> comparisonCandidates Gt
+      <> comparisonCandidates Eq
+      <> comparisonCandidates Ne
       <> quantifierCandidates Forall StdForallIndex
       <> quantifierCandidates Exists StdExistsIndex
   where
-    orderCandidates :: OrderOp -> [(StandardDSLExpr, StandardDSLExpr, Bool)]
-    orderCandidates op =
+    comparisonCandidates :: ComparisonOp -> [(StandardDSLExpr, StandardDSLExpr, Bool)]
+    comparisonCandidates op =
       [ ( forAll "n1" tNat $ \n1 ->
             forAll "n2" tNat $ \n2 ->
-              hasOrd op (tIndex n1) (tIndex n2) (tBoolTensor dimNil),
+              hasCompare op (tIndex n1) (tIndex n2) (tBoolTensor dimNil),
           implLam "n1" tNat $ \n1 ->
             implLam "n2" tNat $ \n2 ->
-              builtinFunction (Order OrderIndex op) @@@ [n1, n2],
+              builtinFunction (Compare CompareIndex op) @@@ [n1, n2],
           False
         ),
-        ( hasOrd op tNat tNat (tBoolTensor dimNil),
-          builtinFunction (Order OrderNat op),
+        ( hasCompare op tNat tNat (tBoolTensor dimNil),
+          builtinFunction (Compare CompareNat op),
           True
         ),
-        ( forAllDims $ \dims -> hasOrd op (tRatTensor dims) (tRatTensor dims) (tBoolTensor dims),
-          lamDims $ \dims -> builtinFunction (Order OrderRatTensor op) .@@@ [dims],
-          False
-        )
-      ]
-
-    eqCandidates :: EqualityOp -> [(StandardDSLExpr, StandardDSLExpr, Bool)]
-    eqCandidates op =
-      [ ( forAll "n1" tNat $ \n1 ->
-            forAll "n2" tNat $ \n2 ->
-              hasEq op (tIndex n1) (tIndex n2) (tBoolTensor dimNil),
-          implLam "n1" tNat $ \n1 ->
-            implLam "n2" tNat $ \n2 ->
-              builtinFunction (Equals EqIndex op) @@@ [n1, n2],
-          False
-        ),
-        ( hasEq op tNat tNat (tBoolTensor dimNil),
-          builtinFunction (Equals EqNat op),
-          True
-        ),
-        ( forAllDims $ \dims -> hasEq op (tRatTensor dims) (tRatTensor dims) (tBoolTensor dims),
-          lamDims $ \dims -> builtinFunction (Equals EqRatTensor op) .@@@ [dims],
+        ( forAllDims $ \dims -> hasCompare op (tRatTensor dims) (tRatTensor dims) (tBoolTensor dims),
+          lamDims $ \dims -> builtinFunction (Compare CompareRatTensor op) .@@@ [dims],
           False
         )
       ]

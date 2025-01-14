@@ -2,7 +2,7 @@
 module Vehicle.Syntax.Builtin.BasicOperations where
 
 import Control.DeepSeq (NFData (..))
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (ToJSON)
 import Data.Hashable (Hashable (..))
 import Data.Serialize (Serialize)
 import Data.Serialize.Text ()
@@ -31,105 +31,75 @@ instance Pretty FunctionPosition where
     FunctionOutput n -> "Output[" <> pretty n <> "]"
 
 --------------------------------------------------------------------------------
--- EqualityOp
+-- Comparisons
 
-data EqualityOp
-  = Eq
-  | Neq
-  deriving (Eq, Ord, Show, Generic)
-
-instance Hashable EqualityOp
-
-instance Serialize EqualityOp
-
-instance NFData EqualityOp
-
-instance Pretty EqualityOp where
-  pretty = \case
-    Eq -> "=="
-    Neq -> "!="
-
-equalityOpName :: EqualityOp -> Doc a
-equalityOpName = \case
-  Eq -> "equals"
-  Neq -> "notEquals"
-
-equalityOp :: (Eq a) => EqualityOp -> (a -> a -> Bool)
-equalityOp Eq = (==)
-equalityOp Neq = (/=)
-
---------------------------------------------------------------------------------
--- Orders
-
-data OrderOp
+data ComparisonOp
   = Le
   | Lt
   | Ge
   | Gt
+  | Eq
+  | Ne
   deriving (Eq, Ord, Show, Generic)
 
-instance NFData OrderOp
+instance NFData ComparisonOp
 
-instance Hashable OrderOp
+instance Hashable ComparisonOp
 
-instance Serialize OrderOp
+instance Serialize ComparisonOp
 
-instance Pretty OrderOp where
+instance Pretty ComparisonOp where
   pretty = \case
     Le -> "<="
     Lt -> "<"
     Ge -> ">="
     Gt -> ">"
+    Eq -> "=="
+    Ne -> "!="
 
-orderOp :: (Ord a) => OrderOp -> (a -> a -> Bool)
-orderOp Le = (<=)
-orderOp Lt = (<)
-orderOp Ge = (>=)
-orderOp Gt = (>)
+comparisonOp :: (Ord a) => ComparisonOp -> (a -> a -> Bool)
+comparisonOp Le = (<=)
+comparisonOp Lt = (<)
+comparisonOp Ge = (>=)
+comparisonOp Gt = (>)
+comparisonOp Eq = (==)
+comparisonOp Ne = (/=)
 
-orderOpName :: OrderOp -> Doc a
-orderOpName = \case
+comparisonOpName :: ComparisonOp -> Doc a
+comparisonOpName = \case
   Le -> "leq"
   Lt -> "lt"
   Ge -> "geq"
   Gt -> "gt"
+  Eq -> "equals"
+  Ne -> "notEquals"
 
-isStrict :: OrderOp -> Bool
+isStrict :: ComparisonOp -> Bool
 isStrict order = order == Lt || order == Gt
 
-isForward :: OrderOp -> Bool
+isForward :: ComparisonOp -> Bool
 isForward order = order == Lt || order == Le
 
-flipStrictness :: OrderOp -> OrderOp
+flipStrictness :: ComparisonOp -> ComparisonOp
 flipStrictness = \case
   Le -> Lt
   Lt -> Le
   Ge -> Gt
   Gt -> Ge
+  Eq -> Eq
+  Ne -> Ne
 
-flipOrder :: OrderOp -> OrderOp
+flipOrder :: ComparisonOp -> ComparisonOp
 flipOrder = \case
   Le -> Ge
   Lt -> Gt
   Ge -> Le
   Gt -> Lt
+  Eq -> Eq
+  Ne -> Ne
 
-chainable :: OrderOp -> OrderOp -> Bool
-chainable e1 e2 = e1 == e2 || e1 == flipStrictness e2
-
---------------------------------------------------------------------------------
--- Strictness
-
-data Strictness
-  = Strict
-  | NonStrict
-  deriving (Show, Eq, Ord, Generic)
-
-instance NFData Strictness
-
-instance ToJSON Strictness
-
-instance FromJSON Strictness
+chainable :: ComparisonOp -> ComparisonOp -> Bool
+chainable e1 e2 = (e1 == e2 || e1 == flipStrictness e2) && e1 /= Ne
 
 --------------------------------------------------------------------------------
 -- Quantifiers
@@ -155,41 +125,23 @@ instance Pretty Quantifier where
 --------------------------------------------------------------------------------
 -- Domains
 
-data OrderDomain
-  = OrderIndex
-  | OrderNat
-  | OrderRatTensor
+data ComparisonDomain
+  = CompareIndex
+  | CompareNat
+  | CompareRatTensor
   deriving (Eq, Ord, Show, Generic)
 
-instance NFData OrderDomain
+instance NFData ComparisonDomain
 
-instance Hashable OrderDomain
+instance Hashable ComparisonDomain
 
-instance Serialize OrderDomain
+instance Serialize ComparisonDomain
 
-instance Pretty OrderDomain where
+instance Pretty ComparisonDomain where
   pretty = \case
-    OrderNat -> "Nat"
-    OrderIndex -> "Index"
-    OrderRatTensor -> "RatTensor"
-
-data EqualityDomain
-  = EqIndex
-  | EqNat
-  | EqRatTensor
-  deriving (Eq, Ord, Show, Generic)
-
-instance NFData EqualityDomain
-
-instance Hashable EqualityDomain
-
-instance Serialize EqualityDomain
-
-instance Pretty EqualityDomain where
-  pretty = \case
-    EqIndex -> "Index"
-    EqNat -> "Nat"
-    EqRatTensor -> "RatTensor"
+    CompareIndex -> "Index"
+    CompareNat -> "Nat"
+    CompareRatTensor -> "RatTensor"
 
 data NegDomain
   = NegRatTensor

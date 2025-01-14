@@ -179,8 +179,7 @@ delabBuiltinFunction fun args = case fun of
   V.Sub _dom -> delabTypeClassOp V.SubTC args
   V.Div _dom -> delabTypeClassOp V.DivTC args
   V.QuantifyRatTensor q -> delabTypeClassOp (V.QuantifierTC q) args
-  V.Equals _ op -> delabTypeClassOp (V.EqualsTC op) args
-  V.Order _ op -> delabTypeClassOp (V.OrderTC op) args
+  V.Compare _ op -> delabTypeClassOp (V.CompareTC op) args
   V.FoldList -> delabTypeClassOp V.FoldTC args
   V.MapList -> delabTypeClassOp V.MapTC args
   V.At -> delabInfixOp2 B.At tokAt args
@@ -217,16 +216,19 @@ delabBuiltinType fun args = case fun of
 
 delabTypeClass :: (MonadDelab m) => V.TypeClass -> [V.Arg] -> m B.Expr
 delabTypeClass tc args = case tc of
-  V.HasEq eq -> case eq of
+  V.HasCompare eq -> case eq of
     V.Eq -> delabApp (B.HasEq tokHasEq) args
-    V.Neq -> delabApp (B.HasNotEq tokHasNotEq) args
-  V.HasOrd V.Le -> delabApp (B.HasLeq tokHasLeq) args
+    V.Ne -> delabApp (B.HasNotEq tokHasNotEq) args
+    V.Le -> delabApp (B.HasLeq tokHasLeq) args
+    _ -> cheat
   V.HasAdd -> delabApp (B.HasAdd tokHasAdd) args
   V.HasSub -> delabApp (B.HasSub tokHasSub) args
   V.HasMul -> delabApp (B.HasMul tokHasMul) args
   V.HasMap -> delabApp (B.HasMap tokHasMap) args
   V.HasFold -> delabApp (B.HasFold tokHasFold) args
-  _ -> delabApp (B.Var (delabSymbol (layoutAsText $ pretty tc))) args
+  _ -> cheat
+  where
+    cheat = delabApp (B.Var (delabSymbol (layoutAsText $ pretty tc))) args
 
 delabConstructor :: (MonadDelab m) => V.BuiltinConstructor -> [V.Arg] -> m B.Expr
 delabConstructor fun args = case fun of
@@ -250,10 +252,9 @@ delabTypeClassOp op args = case op of
   V.SubTC -> delabInfixOp2 B.Sub tokSub args
   V.MulTC -> delabInfixOp2 B.Mul tokMul args
   V.DivTC -> delabInfixOp2 B.Div tokDiv args
-  V.EqualsTC eq -> case eq of
+  V.CompareTC eq -> case eq of
     V.Eq -> delabInfixOp2 B.Eq tokEq args
-    V.Neq -> delabInfixOp2 B.Neq tokNeq args
-  V.OrderTC ord -> case ord of
+    V.Ne -> delabInfixOp2 B.Ne tokNe args
     V.Le -> delabInfixOp2 B.Le tokLe args
     V.Lt -> delabInfixOp2 B.Lt tokLt args
     V.Ge -> delabInfixOp2 B.Ge tokGe args

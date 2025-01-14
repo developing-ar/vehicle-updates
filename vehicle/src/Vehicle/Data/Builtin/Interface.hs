@@ -43,12 +43,9 @@ class BuiltinHasBoolLiterals builtin where
   accessReduceOrBuiltin :: Accessor builtin ()
   accessIfBuiltin :: Accessor builtin ()
 
-  accessOrderIndexBuiltin :: Accessor builtin OrderOp
-  accessOrderNatBuiltin :: Accessor builtin OrderOp
-  accessOrderRatTensorBuiltin :: Accessor builtin OrderOp
-  accessEqIndexBuiltin :: Accessor builtin EqualityOp
-  accessEqNatBuiltin :: Accessor builtin EqualityOp
-  accessEqRatTensorBuiltin :: Accessor builtin EqualityOp
+  accessCompareIndexBuiltin :: Accessor builtin ComparisonOp
+  accessCompareNatBuiltin :: Accessor builtin ComparisonOp
+  accessCompareRatTensorBuiltin :: Accessor builtin ComparisonOp
 
   accessQuantifyRatTensorBuiltin :: Accessor builtin Quantifier
 
