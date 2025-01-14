@@ -4,7 +4,7 @@ module Vehicle.Backend.Queries.UserVariableElimination.Core where
 
 import Control.DeepSeq (NFData)
 import Control.Monad.Reader (MonadReader (..))
-import Control.Monad.State (MonadState (..), gets)
+import Control.Monad.State (MonadState (..), StateT, gets)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (Bifunctor (..))
 import Data.LinkedHashMap (LinkedHashMap)
@@ -14,7 +14,9 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
 import GHC.Generics
+import Vehicle.Compile.Context.Bound.Class (MonadBoundContext (..))
 import Vehicle.Compile.Context.Free.Class (MonadFreeContext)
+import Vehicle.Compile.Context.Name (MonadNameContext)
 import Vehicle.Compile.Error
 import Vehicle.Compile.ExpandResources.Core
 import Vehicle.Compile.Prelude
@@ -174,6 +176,12 @@ addNetworkApplicationToGlobalCtx app@(networkName, _) networkInfo GlobalCtx {..}
 
   return (inputVarExpr, outputVarExpr, newGlobalCtx)
 
+instance (Monad m) => MonadBoundContext () (StateT GlobalCtx m) where
+  addBinderToContext = developerError "Cannot add binder to context in GlobalCtx"
+  getBoundCtx _p = do
+    nameCtx <- gets globalBoundVarCtx
+    return $ map (mkExplicitBinder () . Just) nameCtx
+
 --------------------------------------------------------------------------------
 -- Reconstructions
 
@@ -278,7 +286,8 @@ type MonadPropertyStructure m =
 
 type MonadQueryStructure m =
   ( MonadPropertyStructure m,
-    MonadState GlobalCtx m
+    MonadState GlobalCtx m,
+    MonadNameContext m
   )
 
 getGlobalNamedBoundCtx :: (MonadQueryStructure m) => m NamedBoundCtx

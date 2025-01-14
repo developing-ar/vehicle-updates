@@ -232,18 +232,34 @@ instance IsArgs ForeachArgs where
       }
 
 -- | Arguments for `FromNat`
-data FromNatArgs expr = FromNatArgs
+data FromNatToSimpleArgs expr = FromNatToSimpleArgs
   { fromNatArg :: expr,
     fromNatInDomain :: GenericArg expr
   }
 
-instance IsArgs FromNatArgs where
+instance IsArgs FromNatToSimpleArgs where
   accessSpine =
     Access
       { getExpr = \case
-          [x, d] -> Just $ FromNatArgs (argExpr x) d
+          [x, d] -> Just $ FromNatToSimpleArgs (argExpr x) d
           _ -> Nothing,
-        mkExpr = \(FromNatArgs x d) -> [explicit x, d]
+        mkExpr = \(FromNatToSimpleArgs x d) -> [explicit x, d]
+      }
+
+-- | Arguments for `FromNatToIndex`
+data FromNatToIndexArgs expr = FromNatToIndexArgs
+  { indexSize :: GenericArg expr,
+    fromNatArg :: expr,
+    fromNatInDomain :: GenericArg expr
+  }
+
+instance IsArgs FromNatToIndexArgs where
+  accessSpine =
+    Access
+      { getExpr = \case
+          [n, x, d] -> Just $ FromNatToIndexArgs n (argExpr x) d
+          _ -> Nothing,
+        mkExpr = \(FromNatToIndexArgs n x d) -> [n, explicit x, d]
       }
 
 -- | Arguments for `MapList`
@@ -679,12 +695,12 @@ accessIterate = accessArgs accessIterateBuiltin
 
 accessFromNatToIndex ::
   (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>
-  Accessor (expr builtin) (FromNatArgs (expr builtin))
+  Accessor (expr builtin) (FromNatToIndexArgs (expr builtin))
 accessFromNatToIndex = accessArgs accessFromNatToIndexBuiltin
 
 accessFromNatToRat ::
   (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>
-  Accessor (expr builtin) (FromNatArgs (expr builtin))
+  Accessor (expr builtin) (FromNatToSimpleArgs (expr builtin))
 accessFromNatToRat = accessArgs accessFromNatToRatBuiltin
 
 accessFromVectorToList ::

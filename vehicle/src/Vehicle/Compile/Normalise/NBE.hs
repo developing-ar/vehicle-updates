@@ -183,10 +183,10 @@ evalBuiltin ::
   m (Value builtin)
 evalBuiltin freeEnv b args
   | not (isTypeClassOp b) = do
-      logDebug MaxDetail $ pretty b
-      logDebug MaxDetail $ prettyVerbose args
+      -- logDebug MaxDetail $ pretty b
+      -- logDebug MaxDetail $ prettyVerbose args
       result <- evaluateBuiltin (evalApp freeEnv) b args
-      logDebug MaxDetail $ prettyVerbose result
+      -- logDebug MaxDetail $ prettyVerbose result
       return result
   | otherwise = do
       (inst, remainingArgs) <- findInstanceArg b args

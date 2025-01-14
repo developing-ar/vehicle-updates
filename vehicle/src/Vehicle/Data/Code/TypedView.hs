@@ -91,11 +91,11 @@ data IndexValue
   | VIndexIf (IfArgs (Value Builtin))
 
 toIndexValue :: (HasCallStack) => Value Builtin -> IndexValue
-toIndexValue = \case
+toIndexValue e = case e of
   VBoundVar v spine -> VIndexBoundVar v spine
   (getExpr accessIndexLiteral -> Just i) -> VIndexLiteral i
   (getExpr accessIf -> Just args) -> VIndexIf args
-  _ -> developerError "ill-typed Dimensions expression"
+  _ -> developerError $ "ill-typed index expression" <+> prettyVerbose e
 
 -------------------------------------------------------------------------------
 -- Nat
@@ -277,10 +277,10 @@ data DimensionsValue
   | VDimsBoundVar Lv (Spine Builtin)
   | VDimsIf (IfArgs (Value Builtin))
 
-toDimensionsValue :: Value Builtin -> DimensionsValue
-toDimensionsValue = \case
+toDimensionsValue :: (HasCallStack) => Value Builtin -> DimensionsValue
+toDimensionsValue e = case e of
   VBoundVar lv spine -> VDimsBoundVar lv spine
   (getExpr accessNil -> Just (argExpr -> INatType)) -> VDimsNil
   (getExpr accessCons -> Just (argExpr -> INatType, x, xs)) -> VDimsCons x xs
   (getExpr accessIf -> Just args) -> VDimsIf args
-  _ -> developerError "ill-typed Dimensions expression"
+  _ -> developerError $ "ill-typed Dimensions expression" <+> prettyVerbose e

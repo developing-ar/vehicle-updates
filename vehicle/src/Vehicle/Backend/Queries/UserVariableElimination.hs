@@ -21,6 +21,7 @@ import Vehicle.Backend.Queries.UserVariableElimination.Core
 import Vehicle.Backend.Queries.UserVariableElimination.EliminateExists (solveExists)
 import Vehicle.Compile.Boolean.LiftIf (liftIf, unfoldIf)
 import Vehicle.Compile.Boolean.LowerNot (lowerNot, notClosure)
+import Vehicle.Compile.Context.Name (runFreshNameContextT)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Normalise.Builtin (EvalSimple, evalAt, evalEqualsRatTensor, evalOrderRatTensor, evalStackTensor)
 import Vehicle.Compile.Normalise.NBE
@@ -95,7 +96,7 @@ eliminateUserVariables expr = case toBoolValue expr of
   VEqualsRatTensor {} -> compileUnquantifiedQuerySet expr
   VOrderRatTensor {} -> compileUnquantifiedQuerySet expr
   where
-    unblock = Unblocking.unblockBoolExpr mempty
+    unblock e = runFreshNameContextT (Unblocking.unblockBoolExpr e)
 
 compileTrivial ::
   (MonadPropertyStructure m) =>
@@ -166,18 +167,13 @@ compileBoolExpr expr = case toBoolValue expr of
   ---------------------
   VNot (TensorOp1Args _ e) -> do
     lv <- boundCtxLv <$> getGlobalNamedBoundCtx
-    compileBoolExpr =<< lowerNot lv unblockBoolExpr e
+    compileBoolExpr =<< lowerNot lv Unblocking.unblockBoolExpr e
   VBoolIf args -> compileBoolExpr =<< unfoldIf args
   VEqualsRatTensor (Neq, args) -> compileBoolExpr =<< eliminateNotEqualRatTensor args
   VAnd (TensorOp2Args _dims x y) -> andTrivial andPartitions <$> compileBoolExpr x <*> compileBoolExpr y
   VOr (TensorOp2Args _dims x y) -> orTrivial orPartitions <$> compileBoolExpr x <*> compileBoolExpr y
   VQuantifyRatTensor Exists _ binder closure -> eliminateExists binder closure
-  _ -> compileBoolExpr =<< unblockBoolExpr expr
-  where
-    unblockBoolExpr :: (MonadQueryStructure m) => Value Builtin -> m (Value Builtin)
-    unblockBoolExpr value = do
-      ctx <- getGlobalNamedBoundCtx
-      Unblocking.unblockBoolExpr ctx value
+  _ -> compileBoolExpr =<< Unblocking.unblockBoolExpr expr
 
 purifyAndCompileAssertion ::
   (MonadQuantifierBody m) =>
@@ -219,17 +215,16 @@ unblockQuantifiedBoundVar lv = do
 
 unblockNetworkApplication ::
   (MonadQuantifierBody m) =>
-  (Value Builtin -> m (Value Builtin)) ->
   NetworkApplication ->
   m (Value Builtin)
-unblockNetworkApplication unblockRatVector (networkName, NetworkAppArgs arg) = do
+unblockNetworkApplication (networkName, NetworkAppArgs arg) = do
   networkContext <- asks networkCtx
   networkInfo <- case Map.lookup networkName networkContext of
     Nothing -> compilerDeveloperError $ "Expecting" <+> quotePretty networkName <+> "to be a @network"
     Just info -> return info
 
-  unblockedArg <- unblockRatVector arg
-  liftIf unblockedArg $ \unblockedArg' ->
+  unblockedArg <- Unblocking.unblockRatTensorValue unblockingActions arg
+  liftIf unblockedArg $ \unblockedArg' -> do
     if unblockedArg' /= unblockedArg
       then do
         let ident = Identifier (ModulePath [User]) networkName
@@ -247,7 +242,7 @@ unblockNetworkApplication unblockRatVector (networkName, NetworkAppArgs arg) = d
             let inputEquality = fromBoolValue $ VEqualsRatTensor (Eq, TensorOp2Args inputDimsExpr inputVarExpr unblockedArg)
             put newGlobalCtx
             tell [inputEquality]
-            unblockRatVector outputVarExpr
+            Unblocking.unblockRatTensorValue unblockingActions outputVarExpr
 
 compileAssertion ::
   (MonadQuantifierBody m) =>

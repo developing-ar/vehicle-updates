@@ -292,14 +292,14 @@ evalEqualsNat op = \case
 
 evalFromNatToNat ::
   (MonadNormBuiltin m, BuiltinHasNatLiterals builtin) =>
-  EvalSimple FromNatArgs builtin m
-evalFromNatToNat (FromNatArgs v _) = return v
+  EvalSimple FromNatToSimpleArgs builtin m
+evalFromNatToNat (FromNatToSimpleArgs v _) = return v
 
 evalFromNatToIndex ::
   (MonadNormBuiltin m, BuiltinHasIndexLiterals builtin, BuiltinHasNatLiterals builtin, BuiltinHasCasts builtin) =>
-  EvalSimple FromNatArgs builtin m
+  EvalSimple FromNatToIndexArgs builtin m
 evalFromNatToIndex = \case
-  FromNatArgs (INatLiteral v) _ -> return $ IIndexLiteral v
+  FromNatToIndexArgs _ (INatLiteral v) _ -> return $ IIndexLiteral v
   args -> return $ mkExpr accessFromNatToIndex args
 
 -----------------------------------------------------------------------------
@@ -307,19 +307,21 @@ evalFromNatToIndex = \case
 
 evalFromNatToRat ::
   (MonadNormBuiltin m, HasRatExpr Value builtin, BuiltinHasNatLiterals builtin, BuiltinHasCasts builtin) =>
-  EvalSimple FromNatArgs builtin m
+  EvalSimple FromNatToSimpleArgs builtin m
 evalFromNatToRat = \case
-  FromNatArgs (INatLiteral n) _ -> return $ IRatLiteral $ fromIntegral n
+  FromNatToSimpleArgs (INatLiteral n) _ -> return $ IRatLiteral $ fromIntegral n
   args -> return $ mkExpr accessFromNatToRat args
 
 evalFromRatToRat :: (MonadNormBuiltin m) => EvalSimple Op1Args builtin m
 evalFromRatToRat (Op1Args x) = return x
 
 evalVectorToList ::
-  (MonadNormBuiltin m, BuiltinHasNatLiterals builtin, BuiltinHasListLiterals builtin, BuiltinHasCasts builtin) =>
+  (MonadNormBuiltin m, Show builtin, BuiltinHasNatLiterals builtin, BuiltinHasListLiterals builtin, BuiltinHasCasts builtin) =>
   EvalSimple VectorToListArgs builtin m
 evalVectorToList args@(VectorToListArgs t d xs) = do
-  logDebug MaxDetail "Hit8"
+  -- logDebug MaxDetail "Hit8"
+  -- logDebug MaxDetail $ pretty $ show d
+  -- logDebug MaxDetail $ pretty $ length xs
   case argExpr d of
     INatLiteral n | n == length xs -> return $ mkListExpr (argExpr t) xs
     _ -> return $ mkExpr accessFromVectorToList args
@@ -712,7 +714,7 @@ functionBlockingArgs = \case
   Foreach -> Known [1]
   Iterate -> Known [2]
   StackTensor -> Unknown
-  FromVectorToList -> Known [0]
+  FromVectorToList -> Known [1]
 
 -----------------------------------------------------------------------------
 -- Type-class

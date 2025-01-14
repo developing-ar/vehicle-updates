@@ -1,7 +1,6 @@
 module Vehicle.Compile.Context.Bound.Class where
 
 import Control.Monad.Reader
-import Control.Monad.State
 import Control.Monad.Writer
 import Data.Data (Proxy (..))
 import Vehicle.Compile.Context.Bound.Core
@@ -23,10 +22,6 @@ instance (Monoid w, MonadBoundContext expr m) => MonadBoundContext expr (WriterT
 
 instance (MonadBoundContext expr m) => MonadBoundContext expr (ReaderT w m) where
   addBinderToContext = mapReaderT . addBinderToContext
-  getBoundCtx = lift . getBoundCtx
-
-instance (MonadBoundContext expr m) => MonadBoundContext expr (StateT w m) where
-  addBinderToContext = mapStateT . addBinderToContext
   getBoundCtx = lift . getBoundCtx
 
 --------------------------------------------------------------------------------

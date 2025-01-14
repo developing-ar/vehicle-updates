@@ -5,6 +5,7 @@ module Vehicle.Compile.Context.Name where
 
 import Control.Monad (void)
 import Data.Proxy (Proxy (..))
+import GHC.Stack (HasCallStack)
 import Vehicle.Compile.Context.Bound.Class
 import Vehicle.Compile.Context.Bound.Core
 import Vehicle.Compile.Context.Bound.Instance (BoundContext, BoundContextT, runBoundContext, runBoundContextT, runFreshBoundContext, runFreshBoundContextT)
@@ -43,7 +44,7 @@ getNameContext = getNamedBoundCtx (Proxy @())
 getBinderDepth :: (MonadNameContext m) => m Lv
 getBinderDepth = getCurrentLv (Proxy @())
 
-ixToProperName :: (MonadNameContext m) => Provenance -> Ix -> m Name
+ixToProperName :: (MonadNameContext m, HasCallStack) => Provenance -> Ix -> m Name
 ixToProperName p ix = do
   ctx <- getNameContext
   case lookupIx ctx ix of
@@ -51,7 +52,7 @@ ixToProperName p ix = do
     Just Nothing -> return "_"
     Just (Just name) -> return name
 
-lvToProperName :: (MonadNameContext m) => Provenance -> Lv -> m Name
+lvToProperName :: (MonadNameContext m, HasCallStack) => Provenance -> Lv -> m Name
 lvToProperName p lv = do
   ctx <- getNameContext
   case lookupLv ctx lv of
@@ -60,7 +61,7 @@ lvToProperName p lv = do
     Just (Just name) -> return name
 
 -- | Throw an |IndexOutOfBounds| error using an arbitrary var.
-varOutOfBounds :: (MonadNameContext m, Pretty var) => Doc a -> Provenance -> var -> Int -> m a
+varOutOfBounds :: (MonadNameContext m, Pretty var, HasCallStack) => Doc a -> Provenance -> var -> Int -> m a
 varOutOfBounds varType p var ctxSize =
   developerError $
     "During descoping found"
