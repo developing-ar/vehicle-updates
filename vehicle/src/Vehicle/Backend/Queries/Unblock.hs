@@ -69,8 +69,7 @@ tryPurifyAssertion actions op args = do
     return $ line <> "Trying to purify" <+> squotes assertionDoc
   incrCallDepth
 
-  let unblock = unblockRatTensorValue actions
-  unblockedExpr <- unblockTensorOp2 unblock (evalCompareRatTensor op) args
+  unblockedExpr <- unblockTensorOp2 (unblockRatTensorValue actions) (evalCompareRatTensor op) args
 
   logDebugM MaxDetail $ do
     postCtx <- getNameContext

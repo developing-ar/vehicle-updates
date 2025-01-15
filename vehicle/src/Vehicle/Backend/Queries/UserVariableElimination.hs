@@ -178,6 +178,7 @@ purifyAndCompileAssertion ::
 purifyAndCompileAssertion op args = case op of
   Ne -> compileBoolExpr =<< eliminateNotEqualRatTensor args
   _ -> do
+    logDebug MaxDetail $ prettyVerbose (tensorOp2Dims args)
     result <- Unblocking.tryPurifyAssertion unblockingActions op args
     case toBoolValue result of
       VCompareRatTensor (op', args') -> do
