@@ -23,10 +23,10 @@ import Vehicle.Compile.Boolean.LiftIf (unfoldIf)
 import Vehicle.Compile.Boolean.LowerNot (lowerNot, notClosure)
 import Vehicle.Compile.Context.Name (getNameContext, runFreshNameContextT)
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Builtin (EvalSimple, evalAt, evalCompareRatTensor, evalStackTensor)
+import Vehicle.Compile.Normalise.Builtin (EvalSimple, evalAt, evalCompareRatTensor, evalReduceAndTensor, evalStackTensor)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (prettyFriendly, prettyFriendlyEmptyCtx, prettyVerbose)
+import Vehicle.Compile.Print (prettyFriendlyEmptyCtx, prettyVerbose)
 import Vehicle.Compile.Rational.LinearExpr (LinearityError (..), compileLinearRelation)
 import Vehicle.Compile.Resource (NetworkTensorType (..), NetworkType (..))
 import Vehicle.Compile.Variable (createUserVar)
@@ -34,10 +34,9 @@ import Vehicle.Data.Assertion
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.Interface
-import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value
-import Vehicle.Data.Tensor (RatTensor, Tensor, pattern ZeroDimTensor)
+import Vehicle.Data.Tensor (Tensor, pattern ZeroDimTensor)
 import Vehicle.Verify.Core (NetworkContextInfo (..), QuerySetNegationStatus)
 import Vehicle.Verify.QueryFormat (QueryFormat (..), supportsStrictInequalities)
 import Vehicle.Verify.Specification
@@ -161,7 +160,7 @@ compileBoolExpr expr = case toBoolValue expr of
   -- Recursive cases --
   ---------------------
   VNot (TensorOp1Args _ e) -> do
-    lv <- boundCtxLv <$> getGlobalNamedBoundCtx
+    lv <- boundCtxLv <$> getNameContext
     compileBoolExpr =<< lowerNot lv Unblocking.unblockBoolExpr e
   VBoolIf args -> compileBoolExpr =<< unfoldIf args
   VAnd (TensorOp2Args _dims x y) -> andTrivial andPartitions <$> compileBoolExpr x <*> compileBoolExpr y
@@ -174,17 +173,55 @@ purifyAndCompileAssertion ::
   ComparisonOp ->
   TensorOp2Args (Value Builtin) ->
   m (MaybeTrivial Partitions)
-purifyAndCompileAssertion op args = case op of
-  Ne -> compileBoolExpr =<< eliminateNotEqualRatTensor args
-  _ -> do
-    result <- Unblocking.tryPurifyAssertion unblockingActions op args
-    case toBoolValue result of
-      VCompareRatTensor (op', args') -> do
-        logDebug MaxDetail "Pure assertion found"
-        compileAssertion (comparisonToAssertion op) (evalCompareRatTensor op') args'
-      _ -> do
-        logDebug MaxDetail "Impure assertion found"
-        compileBoolExpr result
+purifyAndCompileAssertion op args
+  | op == Ne =
+      -- We can't handle negative equalities so just eliminate it
+      compileBoolExpr =<< eliminateNotEqualRatTensor args
+  | otherwise = do
+      let evalOp = evalCompareRatTensor op
+      let shape = case getDims (argExpr (tensorOp2Dims args)) of
+            Nothing -> developerError $ "Non-concrete dimensions found" <+> prettyVerbose (argExpr (tensorOp2Dims args))
+            Just concreteShape -> concreteShape
+
+      logDebug MaxDetail ""
+      recurseOrResult <- logCompilerPass MaxDetail "assertion compilation" $ do
+        logDebugM MaxDetail $ do
+          assertionDoc <- prettyFriendlyInCtx $ fromBoolValue $ VCompareRatTensor (op, args)
+          return $ "assertion:" <+> assertionDoc <> line
+
+        maybePurifiedValue <- Unblocking.tryPurifyAssertion unblockingActions op args
+        case maybePurifiedValue of
+          Left purifiedValue -> do
+            logDebugM MaxDetail $ do
+              valueDoc <- prettyFriendlyInCtx purifiedValue
+              return $ "Additional boolean structure found:" <+> valueDoc
+            return $ Left purifiedValue
+          Right (TensorOp2Args _ xs ys) -> do
+            maybeLinearRel <- compileLinearRelation shape xs ys
+            case maybeLinearRel of
+              Right (e1, e2) -> do
+                let assertion = comparisonToAssertion op e1 e2
+                logDebugM MaxDetail $ do
+                  assertionDoc <- prettyFriendlyInCtx assertion
+                  return $ "Final assertion:" <+> assertionDoc
+                return $ Right assertion
+              Left NonLinearity ->
+                throwError catchableUnsupportedNonLinearConstraint
+              Left (UnexpectedExpr e) ->
+                developerError ("unexpected expression" <+> prettyVerbose e)
+              Left (UnreducedExpr e) -> do
+                logDebugM MaxDetail $ do
+                  exprDoc <- prettyFriendlyInCtx e
+                  return $ "Non-variable expression found:" <+> exprDoc
+                elementComparisonValue <- eliminateTensorAssertion evalOp args
+                logDebugM MaxDetail $ do
+                  newValueDoc <- prettyFriendlyInCtx elementComparisonValue
+                  return $ "Converting to element comparison:" <+> newValueDoc
+                return $ Left elementComparisonValue
+
+      case recurseOrResult of
+        Left value -> compileBoolExpr value
+        Right assertion -> return $ mkTrivialPartition assertion
 
 --------------------------------------------------------------------------------
 -- Unblocking
@@ -213,16 +250,15 @@ unblockNetworkApplication ::
   m (Value Builtin)
 unblockNetworkApplication networkApp@(networkName, NetworkAppArgs arg) = do
   globalCtx <- get
-  networkContext <- asks networkCtx
-
-  networkInfo <- case Map.lookup networkName networkContext of
-    Nothing -> compilerDeveloperError $ "Expecting" <+> quotePretty networkName <+> "to be a @network"
-    Just info -> return info
-
   case LinkedHashMap.lookup networkApp (networkApplications globalCtx) of
     Just existingAppInfo ->
       return $ outputVarExpr existingAppInfo
     Nothing -> do
+      networkContext <- asks networkCtx
+      networkInfo <- case Map.lookup networkName networkContext of
+        Nothing -> compilerDeveloperError $ "Expecting" <+> quotePretty networkName <+> "to be a @network"
+        Just info -> return info
+
       (inputVarExpr, outputVarExpr, newGlobalCtx) <- addNetworkApplicationToGlobalCtx networkApp networkInfo globalCtx
       let inputDims = dimensions (inputTensor (networkType networkInfo))
       let inputDimsExpr = implicitIrrelevant $ mkDims inputDims
@@ -230,24 +266,6 @@ unblockNetworkApplication networkApp@(networkName, NetworkAppArgs arg) = do
       put newGlobalCtx
       tell [inputEquality]
       return outputVarExpr
-
-compileAssertion ::
-  (MonadQuantifierBody m) =>
-  (LinearExpr RatTensor -> LinearExpr RatTensor -> Assertion) ->
-  EvalSimple TensorOp2Args Builtin m ->
-  TensorOp2Args (Value Builtin) ->
-  m (MaybeTrivial Partitions)
-compileAssertion mkAssertion evalRel args@(TensorOp2Args _ xs ys) = do
-  result <- compileLinearRelation getTensorVariableShape xs ys
-  case result of
-    Right (e1, e2) -> return $ mkTrivialPartition (mkAssertion e1 e2)
-    Left NonLinearity -> throwError catchableUnsupportedNonLinearConstraint
-    Left (UnexpectedExpr e) ->
-      developerError ("unexpected expression" <+> prettyVerbose e)
-    Left (UnreducedExpr e) -> do
-      ctx <- getNameContext
-      logDebug MaxDetail $ "Eliminating tensor assertion as unreduced expression found:" <+> prettyFriendly (WithContext e ctx)
-      compileBoolExpr =<< eliminateTensorAssertion evalRel args
 
 --------------------------------------------------------------------------------
 -- Elimination operations
@@ -274,14 +292,17 @@ eliminateTensorAssertion ::
 eliminateTensorAssertion evalFn (TensorOp2Args dims xs ys) =
   case argExpr dims of
     ICons _ d@(INatLiteral n) ds -> do
+      logDebug MaxDetail "Hit"
       let tElem = implicit $ fromTypeValue VRatType
       let dsArg = implicitIrrelevant ds
       let mkAt vs i = evalAt (AtArgs tElem (implicitIrrelevant d) dsArg vs (IIndexLiteral i))
-      let stackElements vs = (traverse (mkAt vs) [0 .. (n - 1)] :: m [Value Builtin])
-      let stackArgs vs = StackTensorArgs tElem d dsArg <$> stackElements vs
-      let stackExpr vs = evalStackTensor =<< stackArgs vs
-      relArgs <- TensorOp2Args dims <$> stackExpr xs <*> stackExpr ys
-      evalFn relArgs
+      let mkStackElement i = do
+            xsi <- mkAt xs i
+            ysi <- mkAt ys i
+            evalFn (TensorOp2Args (implicitIrrelevant ds) xsi ysi)
+      stackElements <- traverse mkStackElement [0 .. (n - 1)] :: m [Value Builtin]
+      stackExpr <- evalStackTensor (StackTensorArgs tElem d dsArg stackElements)
+      evalReduceAndTensor (TensorOp2Args dims (IBoolLiteral True) stackExpr)
     _ -> do
       compilerDeveloperError ("unexpected dimensions" <+> prettyVerbose dims)
 
@@ -295,7 +316,7 @@ eliminateExists binder (Closure env body) = do
   let subpassDoc = "compilation of quantified variable" <+> quotePretty varName
   logCompilerPass MidDetail subpassDoc $ do
     -- Get the shape and name of the quantified variable
-    namedCtx <- getGlobalNamedBoundCtx
+    namedCtx <- getNameContext
     propertyProv <- asks propertyProvenance
     (userVarName, userVarShapeValue) <- createUserVar propertyProv namedCtx binder
     userVarShape <- case getDims userVarShapeValue of
@@ -329,7 +350,7 @@ networkEqualitiesToPartition ::
 networkEqualitiesToPartition networkEqualities = do
   logDebugM MaxDetail $ do
     networkEqDocs <- traverse prettyFriendlyInCtx networkEqualities
-    return $ line <> "Generated network equalities:" <> line <> indent 2 (vsep networkEqDocs)
+    return $ "Network equalities generated:" <> line <> indent 2 (vsep networkEqDocs)
 
   results <- forM networkEqualities $ \equality -> do
     (partitions, newNetworkEqualities) <- runWriterT (compileBoolExpr equality)

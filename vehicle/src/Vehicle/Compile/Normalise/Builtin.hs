@@ -782,18 +782,18 @@ instance NormalisableBuiltin LossBuiltin where
   blockingArgs = developerError "Blocking arguments not yet implemented for LossBuiltin"
 
 instance NormalisableBuiltin LinearityBuiltin where
-  evalScheme b = notImplemented b
-    where
-      notImplemented = normNotImplemented "Linearity"
+  evalScheme b = case b of
+    LinearityFunction _ -> normNotImplemented "Linearity" b
+    _ -> None
 
   blockingArgs = \case
     LinearityFunction f -> functionBlockingArgs f
     _ -> noBlockingArgs
 
 instance NormalisableBuiltin PolarityBuiltin where
-  evalScheme b = notImplemented b
-    where
-      notImplemented = normNotImplemented "Polarity"
+  evalScheme b = case b of
+    PolarityFunction _ -> normNotImplemented "Polarity" b
+    _ -> None
 
   blockingArgs = \case
     PolarityFunction f -> functionBlockingArgs f
@@ -801,4 +801,4 @@ instance NormalisableBuiltin PolarityBuiltin where
 
 normNotImplemented :: (Pretty fn) => Doc () -> fn -> a
 normNotImplemented typeSystem b =
-  developerError $ "Normalisation of " <+> pretty b <+> "at the type-level not yet supported for" <+> typeSystem <+> "system"
+  developerError $ "Normalisation of" <+> pretty b <+> "at the type-level not yet supported for" <+> typeSystem <+> "system"

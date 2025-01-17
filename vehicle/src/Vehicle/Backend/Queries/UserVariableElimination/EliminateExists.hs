@@ -11,6 +11,7 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe, isJust)
 import Vehicle.Backend.Queries.ConstraintSearch
 import Vehicle.Backend.Queries.UserVariableElimination.Core
+import Vehicle.Compile.Context.Name (getNameContext)
 import Vehicle.Compile.FourierMotzkinElimination
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyFriendly)
@@ -37,7 +38,7 @@ solveExists maybePartitions userVar = case maybePartitions of
   NonTrivial partitions -> do
     let solve (sol, tree) = do
           logDebugM MaxDetail $ do
-            ctx <- getGlobalNamedBoundCtx
+            ctx <- getNameContext
             let userVarName = lookupLvInBoundCtx userVar ctx
             return $ "Solving for" <+> quotePretty userVarName <+> "in:" <> line <> indent 2 (prettyFriendly (WithContext tree ctx)) <> line
 
@@ -115,7 +116,7 @@ logEqualitySolved ::
   m ()
 logEqualitySolved var rearrangedEq remainingTree updatedTree =
   logDebugM MaxDetail $ do
-    ctx <- getGlobalNamedBoundCtx
+    ctx <- getNameContext
     let varName = lookupLvInBoundCtx var ctx
     return $
       "Solving"
@@ -138,7 +139,7 @@ logInequalitiesSolved ::
   m ()
 logInequalitiesSolved var step remainingTree = do
   PropertyMetaData {..} <- ask
-  ctx <- getGlobalNamedBoundCtx
+  ctx <- getNameContext
   let varName = fromMaybe "<unknown-var>" $ lookupLvInBoundCtx var ctx
 
   logWarning $ UnderSpecifiedProblemSpaceVar propertyAddress varName

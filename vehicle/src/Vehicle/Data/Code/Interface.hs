@@ -646,7 +646,7 @@ getDimsExprs = \case
   ICons _ d ds -> (d :) <$> getDimsExprs ds
   e -> throwError e
 
-getDims :: (HasNatExpr expr builtin, HasListExpr expr builtin) => expr builtin -> Maybe [Int]
+getDims :: (HasNatExpr expr builtin, HasListExpr expr builtin) => expr builtin -> Maybe TensorShape
 getDims v = case getDimsExprs v of
   Left {} -> Nothing
   Right xs -> traverse getDim xs

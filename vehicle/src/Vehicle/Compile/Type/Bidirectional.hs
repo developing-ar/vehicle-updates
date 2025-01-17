@@ -244,6 +244,7 @@ inferApp ::
   [Arg builtin] ->
   m (Expr builtin, Type builtin)
 inferApp fun funType args = do
+  relevance <- getCurrentRelevance (Proxy @builtin)
   ctx <- getBoundCtx (Proxy @(Type builtin))
   let insertionProblem =
         ArgInsertionProblem
@@ -252,7 +253,8 @@ inferApp fun funType args = do
             originalType = funType,
             checkedArgs = mempty,
             currentExpectedType = funType,
-            uncheckedArgs = args
+            uncheckedArgs = args,
+            contextRelevance = relevance
           }
   result <- solveArgInsertionProblem ctx insertionProblem
   case result of
@@ -382,7 +384,7 @@ checkArgsAgainstPiType ctx problem binder resultType
       checkedArg <- case matchedUncheckedArg of
         Just arg -> do
           logDebug MaxDetail $ "checking existing argument for binder" <+> prettyVerbose binder
-          let relevance = relevanceOf binder
+          let relevance = if contextRelevance problem == Irrelevant then Irrelevant else relevanceOf binder
           checkedArgExpr <- checkExprType ctx relevance (typeOf binder) (argExpr arg)
           return $ Arg p visibility relevance checkedArgExpr
         Nothing -> do

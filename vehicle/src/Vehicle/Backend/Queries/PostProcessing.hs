@@ -25,7 +25,7 @@ import Vehicle.Data.Assertion
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.QuantifiedVariable
-import Vehicle.Data.Tensor (RatTensor, tensorShape, tensorToList)
+import Vehicle.Data.Tensor (tensorShape, tensorToList)
 import Vehicle.Prelude.Warning (CompileWarning (..))
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core
@@ -45,42 +45,43 @@ convertPartitionsToQueries partitions = do
   globalCtx <- get
 
   allQueries <- forM (partitionsToDisjuncts partitions) $ \(reconstructionSteps, assertionTree) -> do
-    allReconstructionSteps <- reconstructNetworkTensorVars globalCtx reconstructionSteps
-    networkVarAssertions <- convertToNetworkRatVarAssertions globalCtx assertionTree
-    let dnfTree = exprToDNF networkVarAssertions
-    forM dnfTree $ \assertions -> do
-      -- Calculate query address
-      queryID <- demand
-      let queryAddress = (propertyAddress, queryID)
+    logCompilerPass MaxDetail "compiling partition" $ do
+      allReconstructionSteps <- reconstructNetworkTensorVars globalCtx reconstructionSteps
+      networkVarAssertions <- convertToNetworkRatVarAssertions globalCtx assertionTree
+      let dnfTree = exprToDNF networkVarAssertions
+      forM dnfTree $ \assertions -> do
+        -- Calculate query address
+        queryID <- demand
+        let queryAddress = (propertyAddress, queryID)
 
-      logCompilerSection MaxDetail ("Compiling query" <+> pretty queryID) $ do
-        -- Calculate query meta network
-        let metaNetworkApps = calculateMetaNetworkApplications globalCtx assertions
+        logCompilerPass MaxDetail ("compiling query" <+> pretty queryID) $ do
+          -- Calculate query meta network
+          let metaNetworkApps = calculateMetaNetworkApplications globalCtx assertions
 
-        -- Check if all variables have lower and upper bounds
-        checkIfNetworkInputsBounded globalCtx (queryFormatID queryFormat) queryAddress metaNetworkApps assertions
+          -- Check if all variables have lower and upper bounds
+          checkIfNetworkInputsBounded globalCtx (queryFormatID queryFormat) queryAddress metaNetworkApps assertions
 
-        -- Convert to query variables
-        (variableStore, queryAssertions) <-
-          compileQueryVariables globalCtx (compileVariable queryFormat) metaNetworkApps assertions
+          -- Convert to query variables
+          (variableStore, queryAssertions) <-
+            compileQueryVariables globalCtx (compileVariable queryFormat) metaNetworkApps assertions
 
-        logDebug MaxDetail $ "Variable mapping:" <+> pretty variableStore
+          logDebug MaxDetail $ "Variable mapping:" <+> pretty variableStore
 
-        -- Construct the meta-data object
-        let reconstruction = Reconstruction variableStore allReconstructionSteps
-        let metaNetwork = makeMetaNetwork metaNetworkApps
-        let queryMetaData = QueryMetaData queryAddress metaNetwork reconstruction
+          -- Construct the meta-data object
+          let reconstruction = Reconstruction variableStore allReconstructionSteps
+          let metaNetwork = makeMetaNetwork metaNetworkApps
+          let queryMetaData = QueryMetaData queryAddress metaNetwork reconstruction
 
-        -- Compile to query format
-        let queryContents = QueryContents (getQueryVariables reconstruction) queryAssertions
-        queryText <- compileQuery queryFormat queryAddress queryContents
+          -- Compile to query format
+          let queryContents = QueryContents (getQueryVariables reconstruction) queryAssertions
+          queryText <- compileQuery queryFormat queryAddress queryContents
 
-        -- Write out the query
-        case outputLocation of
-          Nothing -> programOutput $ line <> line <> pretty queryAddress <> line <> pretty queryText
-          Just folder -> writeVerificationQuery queryFormat folder (queryMetaData, queryText)
+          -- Write out the query
+          case outputLocation of
+            Nothing -> programOutput $ line <> line <> pretty queryAddress <> line <> pretty queryText
+            Just folder -> writeVerificationQuery queryFormat folder (queryMetaData, queryText)
 
-        return queryMetaData
+          return queryMetaData
   return $ disjunctDisjuncts allQueries
 
 --------------------------------------------------------------------------------
@@ -109,7 +110,9 @@ convertToNetworkRatVarAssertions ::
   GlobalCtx ->
   AssertionTree ->
   m (BooleanExpr (QueryAssertion NetworkElementVariable))
-convertToNetworkRatVarAssertions globalCtx = go
+convertToNetworkRatVarAssertions globalCtx assertions = do
+  logCompilerPass MaxDetail "eliminating remaining tensor assertions" $ do
+    go assertions
   where
     go :: BooleanExpr Assertion -> m (BooleanExpr (QueryAssertion NetworkElementVariable))
     go = \case
@@ -118,19 +121,19 @@ convertToNetworkRatVarAssertions globalCtx = go
       Conjunct xs -> Conjunct <$> traverse go xs
 
     convert :: Assertion -> m (BooleanExpr (QueryAssertion NetworkElementVariable))
-    convert NormalisedRelation {..} = case relation of
-      OEq | null (tensorShape (constantValue linearExpr)) -> do
-        let rationalEqualities = reduceTensorExpr globalCtx linearExpr
-        let assertions = fmap (Query . NormalisedRelation OEq) rationalEqualities
-        go $ Conjunct $ ConjunctAll (NonEmpty.fromList assertions)
-      _ -> Query <$> makeQueryAssertion relation linearExpr
+    convert assertion
+      | not (null (assertionShape assertion)) = do
+          let rationalEqualities = reduceTensorExpr globalCtx (linearExpr assertion)
+          let reducedAssertions = fmap (Query . NormalisedRelation OEq) rationalEqualities
+          go $ Conjunct $ ConjunctAll (NonEmpty.fromList reducedAssertions)
+      | otherwise =
+          Query <$> makeQueryAssertion assertion
 
 makeQueryAssertion ::
   (MonadCompile m) =>
-  Relation ->
-  LinearExpr RatTensor ->
+  Assertion ->
   m (QueryAssertion NetworkElementVariable)
-makeQueryAssertion relation (Sparse coefficients constant) = do
+makeQueryAssertion (NormalisedRelation relation (Sparse coefficients constant)) = do
   let finalRelation = relationToQueryRelation relation
   let rationalVarCoefs = swap <$> Map.toList coefficients
   finalLHS <- case rationalVarCoefs of
@@ -189,23 +192,24 @@ checkIfNetworkInputsBounded ::
   ConjunctAll (QueryAssertion NetworkElementVariable) ->
   m ()
 checkIfNetworkInputsBounded globalCtx queryFormatID queryAddress metaNetworkApps constraints = do
-  let inputVariables = concatMap (\app -> tensorToList $ getReducedVariablesFor globalCtx (inputVariable app)) metaNetworkApps
+  logCompilerPass MaxDetail "network variable bounds checks" $ do
+    let inputVariables = concatMap (\app -> tensorToList $ getReducedVariablesFor globalCtx (inputVariable app)) metaNetworkApps
 
-  finalStatuses <- variableConstraintStatus inputVariables constraints
+    finalStatuses <- variableConstraintStatus inputVariables constraints
 
-  -- If Marabou, then warn if all inputs are constant.
-  -- See https://github.com/NeuralNetworkVerification/Marabou/issues/670
-  when (queryFormatID == MarabouQueries && all (== Constant) finalStatuses) $
-    logWarning $
-      AllConstantNetworkInputVars queryFormatID queryAddress
+    -- If Marabou, then warn if all inputs are constant.
+    -- See https://github.com/NeuralNetworkVerification/Marabou/issues/670
+    when (queryFormatID == MarabouQueries && all (== Constant) finalStatuses) $
+      logWarning $
+        AllConstantNetworkInputVars queryFormatID queryAddress
 
-  -- Check if all inputs are well-specified.
-  let unboundedVariables = Map.toList $ Map.mapMaybe toUnderConstrainedStatus finalStatuses
-  unless (null unboundedVariables) $ do
-    let lookupVar v = lookupLvInBoundCtx v (globalBoundVarCtx globalCtx)
-    let unboundedVariableNames = fmap (first lookupVar) unboundedVariables
-    logWarning $
-      UnboundedNetworkInputVariables queryFormatID queryAddress unboundedVariableNames
+    -- Check if all inputs are well-specified.
+    let unboundedVariables = Map.toList $ Map.mapMaybe toUnderConstrainedStatus finalStatuses
+    unless (null unboundedVariables) $ do
+      let lookupVar v = lookupLvInBoundCtx v (globalBoundVarCtx globalCtx)
+      let unboundedVariableNames = fmap (first lookupVar) unboundedVariables
+      logWarning $
+        UnboundedNetworkInputVariables queryFormatID queryAddress unboundedVariableNames
 
 -- | How the value of a particular value of a variable is constrained.
 data VariableConstraintStatus

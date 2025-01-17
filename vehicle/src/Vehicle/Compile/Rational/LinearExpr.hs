@@ -6,7 +6,7 @@ where
 
 -- Needed as Applicative is exported by Prelude in GHC 9.6 and above.
 import Control.Applicative (Applicative (..))
-import Control.Monad.Except (ExceptT, MonadError (..), runExceptT)
+import Control.Monad.Except (MonadError (..), runExceptT)
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.Interface
@@ -31,47 +31,46 @@ data LinearityError
 
 compileLinearRelation ::
   (MonadLogger m) =>
-  (Lv -> ExceptT LinearityError m TensorShape) ->
+  TensorShape ->
   Value Builtin ->
   Value Builtin ->
   m (Either LinearityError (LinearExpr RatTensor, LinearExpr RatTensor))
-compileLinearRelation lookupVar x y = do
+compileLinearRelation shape x y = do
   runExceptT $ do
-    x' <- compile lookupVar x
-    y' <- compile lookupVar y
+    x' <- compile shape x
+    y' <- compile shape y
     return (x', y')
 
 compile ::
   forall m.
   (MonadCompileLinearExpr m) =>
-  (Lv -> m TensorShape) ->
+  TensorShape ->
   Value Builtin ->
   m (LinearExpr RatTensor)
-compile lookupVar expr = case toRatTensorValue expr of
+compile shape expr = case toRatTensorValue expr of
   ----------------
   -- Base cases --
   ----------------
   VRatTensorLiteral t -> do
     return $ constantExpr t
-  VRatTensorVar lv -> do
-    shape <- lookupVar lv
+  VRatTensorVar lv ->
     return $ singletonVarExpr (zeroTensor shape) lv
   ---------------------
   -- Inductive cases --
   ---------------------
-  VNegRatTensor (TensorOp1Args _ e) -> scaleExpr (-1) <$> compile lookupVar e
-  VAddRatTensor (TensorOp2Args _ e1 e2) -> addExprs 1 1 <$> compile lookupVar e1 <*> compile lookupVar e2
-  VSubRatTensor (TensorOp2Args _ e1 e2) -> addExprs 1 (-1) <$> compile lookupVar e1 <*> compile lookupVar e2
+  VNegRatTensor (TensorOp1Args _ e) -> scaleExpr (-1) <$> compile shape e
+  VAddRatTensor (TensorOp2Args _ e1 e2) -> addExprs 1 1 <$> compile shape e1 <*> compile shape e2
+  VSubRatTensor (TensorOp2Args _ e1 e2) -> addExprs 1 (-1) <$> compile shape e1 <*> compile shape e2
   VMulRatTensor (TensorOp2Args _ e1 e2) -> do
-    e1' <- compile lookupVar e1
-    e2' <- compile lookupVar e2
+    e1' <- compile shape e1
+    e2' <- compile shape e2
     case (isConstant e1', isConstant e2') of
       (Just (ZeroDimTensor c1), _) -> return $ scaleExpr c1 e2'
       (_, Just (ZeroDimTensor c2)) -> return $ scaleExpr c2 e1'
       _ -> throwError NonLinearity
   VDivRatTensor (TensorOp2Args _ e1 e2) -> do
-    e1' <- compile lookupVar e1
-    e2' <- compile lookupVar e2
+    e1' <- compile shape e1
+    e2' <- compile shape e2
     case isConstant e2' of
       (Just (ZeroDimTensor c2)) -> return $ scaleExpr (1 / c2) e1'
       _ -> throwError NonLinearity

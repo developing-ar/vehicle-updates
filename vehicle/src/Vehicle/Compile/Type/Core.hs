@@ -106,7 +106,8 @@ data ArgInsertionProblem builtin = ArgInsertionProblem
     originalType :: Type builtin,
     checkedArgs :: [Arg builtin],
     currentExpectedType :: Type builtin,
-    uncheckedArgs :: [Arg builtin]
+    uncheckedArgs :: [Arg builtin],
+    contextRelevance :: Relevance
   }
   deriving (Show)
 

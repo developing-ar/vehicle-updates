@@ -9,7 +9,7 @@ import Control.Monad.Identity
 import Data.List.NonEmpty qualified as NonEmpty (toList)
 import Vehicle.Compile.Error (MonadCompile)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrintableBuiltin, prettyFriendly)
+import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal)
 
 -- | Removes all irrelevant code from the program/expression.
 removeIrrelevantCodeFromProg ::
@@ -19,7 +19,7 @@ removeIrrelevantCodeFromProg ::
 removeIrrelevantCodeFromProg x = do
   logCompilerPass MinDetail "removal of irrelevant code" $ do
     result <- remove x
-    logDebug MaxDetail $ prettyFriendly result
+    logDebug MaxDetail $ prettyExternal result
     return result
 
 removeIrrelevantCode :: (RemoveIrrelevantCode Identity a) => a -> a

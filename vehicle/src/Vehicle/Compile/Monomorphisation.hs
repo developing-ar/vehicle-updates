@@ -32,7 +32,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrintableBuiltin, prettyFriendly, prettyFriendlyEmptyCtx, prettyVerbose)
+import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal, prettyFriendly, prettyFriendlyEmptyCtx, prettyVerbose)
 import Vehicle.Data.Hashing ()
 
 --------------------------------------------------------------------------------
@@ -114,7 +114,7 @@ monomorphiseDecls top decl = do
 
 monomorphiseDecl :: (MonadCollect builtin m) => Bool -> Decl builtin -> m [Decl builtin]
 monomorphiseDecl top decl = do
-  logDebug MaxDetail $ prettyVerbose decl
+  logDebug MaxDetail $ prettyExternal decl
   let ident = identifierOf decl
   freeVarApplications <- get
   modify (Map.delete ident)

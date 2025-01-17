@@ -1,5 +1,5 @@
-id : a -> a
-id x = x
+genId : a -> a
+genId x = x
 
 natId : Rat -> Rat
 natId = id

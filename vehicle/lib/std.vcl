@@ -35,7 +35,7 @@ existsInList f xs = fold (\x y -> x or y) False (map f xs)
 
 -- TODO can we replace with?
 -- type Vector A n = Tensor A [n]
-Vector : forallT A . forallT n . {{IsTensorType A [n]}} -> Type
+Vector : forallT A . forallT @0 n . {{IsTensorType A [n]}} -> Type
 Vector A n = Tensor A [n]
 
 {-

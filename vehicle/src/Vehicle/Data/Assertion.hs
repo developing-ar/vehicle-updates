@@ -9,7 +9,7 @@ import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Code.BooleanExpr (MaybeTrivial (..))
 import Vehicle.Data.Code.LinearExpr
 import Vehicle.Data.Hashing ()
-import Vehicle.Data.Tensor (RatTensor, allTensor)
+import Vehicle.Data.Tensor (RatTensor, Tensor (..), TensorShape, allTensor)
 import Vehicle.Prelude
 
 --------------------------------------------------------------------------------
@@ -86,6 +86,9 @@ inequalityToNormRelation r = case relation r of
   NonStrict -> r {relation = OLe}
 
 type Assertion = NormalisedRelation Relation RatTensor
+
+assertionShape :: Assertion -> TensorShape
+assertionShape ass = tensorShape (constantValue $ linearExpr ass)
 
 checkTriviality :: Relation -> RatTensor -> Bool
 checkTriviality op tensor = case op of

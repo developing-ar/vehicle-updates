@@ -69,7 +69,7 @@ typeOfTypeClassOp :: (HasStandardBuiltins builtin, BuiltinHasStandardTypeClasses
 typeOfTypeClassOp b = case b of
   TensorTypeTC ->
     forAllExpl "t" type0 $ \t ->
-      forAllExpl "ds" tDims $ \ds ->
+      pi (Just "ds") Explicit Irrelevant tDims $ \ds ->
         isTensorType t ds ~~~> type0
   FromNatTC -> forAllTypes $ \t -> hasNatLits t ~~~> typeOfFromNat t
   FromRatTC -> forAllTypes $ \t -> hasRatLits t ~~~> typeOfFromRat t
@@ -154,7 +154,6 @@ typeOfBuiltinType = \case
   NatType -> type0
   RatType -> type0
   ListType -> type0 ~> type0
-  VectorType -> type0 ~> tNat .~> type0
   TensorType -> type0 ~> tList tNat .~> type0
   IndexType -> tNat .~> type0
 

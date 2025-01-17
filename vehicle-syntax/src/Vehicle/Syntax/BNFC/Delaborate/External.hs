@@ -212,7 +212,6 @@ delabBuiltinType fun args = case fun of
   V.NatType -> delabApp (B.Nat tokNat) args
   V.ListType -> delabApp (B.List tokList) args
   V.TensorType -> delabApp (B.Tensor tokTensor) args
-  V.VectorType -> delabApp (cheatDelab $ layoutAsText $ pretty fun) args
 
 delabTypeClass :: (MonadDelab m) => V.TypeClass -> [V.Arg] -> m B.Expr
 delabTypeClass tc args = case tc of

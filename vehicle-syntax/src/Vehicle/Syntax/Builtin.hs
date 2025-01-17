@@ -30,7 +30,6 @@ data BuiltinType
   | NatType
   | RatType
   | ListType
-  | VectorType
   | TensorType
   deriving (Eq, Ord, Show, Generic)
 
@@ -48,7 +47,6 @@ instance Pretty BuiltinType where
     NatType -> "Nat"
     RatType -> "Rat"
     ListType -> "List"
-    VectorType -> "Vector"
     TensorType -> "Tensor"
 
 --------------------------------------------------------------------------------

@@ -143,7 +143,7 @@ instance (MetaSubstitutable m builtin constraint) => MetaSubstitutable m builtin
     return $ WithContext newConstraint context
 
 instance MetaSubstitutable m builtin (ArgInsertionProblem builtin) where
-  subst s (ArgInsertionProblem originalFun originalArgs originalType checkedArgs currentExpectedType uncheckedArgs) =
+  subst s (ArgInsertionProblem originalFun originalArgs originalType checkedArgs currentExpectedType uncheckedArgs rel) =
     ArgInsertionProblem
       <$> subst s originalFun
       <*> subst s originalArgs
@@ -151,6 +151,7 @@ instance MetaSubstitutable m builtin (ArgInsertionProblem builtin) where
       <*> subst s checkedArgs
       <*> subst s currentExpectedType
       <*> subst s uncheckedArgs
+      <*> pure rel
 
 instance MetaSubstitutable m builtin (InstanceArgOrigin builtin) where
   subst s (ArgOrigin tcOp tcOpArgs tcOpType tc) =

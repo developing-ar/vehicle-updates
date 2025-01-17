@@ -17,7 +17,7 @@ import GHC.Generics
 import GHC.Stack (HasCallStack)
 import Vehicle.Compile.Context.Bound.Class (MonadBoundContext (..))
 import Vehicle.Compile.Context.Free.Class (MonadFreeContext)
-import Vehicle.Compile.Context.Name (MonadNameContext)
+import Vehicle.Compile.Context.Name (MonadNameContext, getNameContext)
 import Vehicle.Compile.Error
 import Vehicle.Compile.ExpandResources.Core
 import Vehicle.Compile.Prelude
@@ -292,18 +292,8 @@ type MonadQueryStructure m =
     MonadNameContext m
   )
 
-getGlobalNamedBoundCtx :: (MonadQueryStructure m) => m NamedBoundCtx
-getGlobalNamedBoundCtx = gets (fmap Just . globalBoundVarCtx)
-
-prettyFriendlyInCtx :: (MonadQueryStructure m) => Value Builtin -> m (Doc a)
-prettyFriendlyInCtx e = prettyFriendly . WithContext e <$> getGlobalNamedBoundCtx
-
-getTensorVariableShape :: (HasCallStack, MonadState GlobalCtx m) => TensorVariable -> m TensorShape
-getTensorVariableShape var = do
-  GlobalCtx {..} <- get
-  return $ case Map.lookup var tensorVariableInfo of
-    Just info -> tensorShape $ elementVariables info
-    Nothing -> []
+prettyFriendlyInCtx :: (MonadNameContext m, PrettyFriendly (Contextualised a NamedBoundCtx)) => a -> m (Doc b)
+prettyFriendlyInCtx e = prettyFriendly . WithContext e <$> getNameContext
 
 getRationalVariable :: (MonadState GlobalCtx m) => Lv -> m Variable
 getRationalVariable var = do

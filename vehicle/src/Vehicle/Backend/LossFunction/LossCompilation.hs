@@ -139,7 +139,6 @@ convertBuiltinToLoss b spine = case b of
     S.NatType -> unchangedType NatType
     S.ListType -> unchangedType ListType
     S.TensorType -> unchangedType TensorType
-    S.VectorType -> unexpectedExprError currentPass (pretty b)
   S.BuiltinFunction f -> case f of
     --------------
     -- Booleans --

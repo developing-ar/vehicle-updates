@@ -538,7 +538,6 @@ compileBuiltin _p b args = case b of
     UnitType -> return compileUnit
     NatType -> return $ annotateConstant [DataNat] natQualifier
     ListType -> annotateApp [DataList] "List" <$> compileArgs args
-    VectorType -> annotateApp [DataVector] "Vector" <$> compileArgs args
     TensorType -> annotateApp [DataTensor] "Tensor" <$> compileArgs args
     IndexType -> annotateApp [DataFin] "Fin" <$> compileArgs args
   BuiltinConstructor c -> case c of

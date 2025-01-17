@@ -26,6 +26,7 @@ data StdLibFunction
   | StdEqualsBool
   | StdNotEqualsBool
   | StdAppendList
+  | StdVectorType
   deriving (Eq, Ord, Enum, Bounded, Generic)
 
 instance Show StdLibFunction where
@@ -41,6 +42,7 @@ instance Show StdLibFunction where
     StdEqualsBool -> "equalsBool"
     StdNotEqualsBool -> "notEqualsBool"
     StdAppendList -> "appendList"
+    StdVectorType -> "Vector"
 
 instance Pretty StdLibFunction where
   pretty = pretty . show

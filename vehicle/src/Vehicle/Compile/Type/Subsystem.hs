@@ -10,13 +10,14 @@ import Vehicle.Compile.Error
 import Vehicle.Compile.Monomorphisation (monomorphise)
 import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin, findInstanceArg)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal)
+import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal, prettyVerbose)
 import Vehicle.Compile.Print.Builtin (PrintableBuiltin (..))
 import Vehicle.Compile.Type (typeCheckProg)
 import Vehicle.Compile.Type.Core (InstanceDatabase)
 import Vehicle.Compile.Type.Irrelevance (removeIrrelevantCodeFromProg)
 import Vehicle.Compile.Type.System
 import Vehicle.Data.Builtin.Standard
+import Vehicle.Libraries.StandardLibrary.Definitions (StdLibFunction (..))
 
 typeCheckWithSubsystem ::
   forall builtin m.
@@ -44,8 +45,9 @@ resolveInstanceArguments ::
 resolveInstanceArguments prog =
   logCompilerPass MaxDetail "resolution of instance arguments" $ do
     flip traverseDecls prog $ \decl -> do
-      result <- traverse (traverseBuiltinsM builtinUpdateFunction) decl
-      return result
+      decl2 <- traverse (traverseBuiltinsM builtinUpdateFunction) decl
+      decl3 <- traverse (traverseFreeVarsM (const id) freeVarUpdateFunction) decl2
+      return decl3
   where
     builtinUpdateFunction :: BuiltinUpdate m builtin builtin
     builtinUpdateFunction p b args
@@ -53,6 +55,17 @@ resolveInstanceArguments prog =
           (inst, remainingArgs) <- findInstanceArg b args
           return $ substArgs inst remainingArgs
       | otherwise = return $ normAppList (Builtin p b) args
+
+    freeVarUpdateFunction :: FreeVarUpdate m builtin
+    freeVarUpdateFunction recGo p ident args = do
+      args' <- traverse (traverse recGo) args
+      if ident == identifierOf StdVectorType
+        then do
+          logDebug MaxDetail "Hit!!"
+          logDebug MaxDetail $ prettyVerbose args
+          (inst, remainingArgs) <- findInstanceArg ident args
+          return $ substArgs inst remainingArgs
+        else return $ normAppList (FreeVar p ident) args'
 
 removeImplicitAndInstanceArgs ::
   forall m builtin.

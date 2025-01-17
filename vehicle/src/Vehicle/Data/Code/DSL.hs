@@ -23,15 +23,8 @@ tBool = builtinType BoolType
 tRat = builtinType RatType
 
 tTensor :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-tTensor tElem ds = builtinType TensorType @@ [tElem, ds]
+tTensor tElem ds = builtinType TensorType @@ [tElem] .@@ [ds]
 
-{-
-tVector :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-tVector tElem d = builtinType VectorType @@ [tElem] .@@ [d]
-
-tVectorFunctor :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin -> DSLExpr builtin
-tVectorFunctor n = explLam "A" type0 (`tVector` n)
--}
 tListRaw :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
 tListRaw = builtinType ListType
 

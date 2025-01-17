@@ -98,6 +98,9 @@ flipOrder = \case
   Eq -> Eq
   Ne -> Ne
 
+isOrder :: ComparisonOp -> Bool
+isOrder op = not (op == Eq || op == Ne)
+
 chainable :: ComparisonOp -> ComparisonOp -> Bool
 chainable e1 e2 = (e1 == e2 || e1 == flipStrictness e2) && e1 /= Ne
 

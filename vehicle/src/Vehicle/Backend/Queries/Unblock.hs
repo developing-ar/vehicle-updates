@@ -60,24 +60,23 @@ tryPurifyAssertion ::
   UnblockingActions m ->
   ComparisonOp ->
   TensorOp2Args (Value Builtin) ->
-  m (Value Builtin)
+  m (Either (Value Builtin) (TensorOp2Args (Value Builtin)))
 tryPurifyAssertion actions op args = do
-  preCtx <- getNameContext
-  logDebugM MaxDetail $ do
-    let assertion = fromBoolValue $ VCompareRatTensor (op, args)
-    let assertionDoc = prettyFriendly (WithContext assertion preCtx)
-    return $ line <> "Trying to purify" <+> squotes assertionDoc
-  incrCallDepth
+  logCompilerPass MaxDetail "purification" $ do
+    unblockedExpr <- unblockTensorOp2 (unblockRatTensorValue actions VarLevel) (evalCompareRatTensor op) args
 
-  unblockedExpr <- unblockTensorOp2 (unblockRatTensorValue actions VarLevel) (evalCompareRatTensor op) args
+    logDebugM MaxDetail $ do
+      ctx <- getNameContext
+      let unblockedAssertionDoc = prettyFriendly (WithContext unblockedExpr ctx)
+      return ("result:" <+> unblockedAssertionDoc)
 
-  logDebugM MaxDetail $ do
-    postCtx <- getNameContext
-    let unblockedAssertionDoc = prettyFriendly (WithContext unblockedExpr postCtx)
-    return $ "Result" <+> squotes unblockedAssertionDoc
-
-  decrCallDepth
-  return unblockedExpr
+    case toBoolValue unblockedExpr of
+      VCompareRatTensor (_, newArgs) -> do
+        logDebug MaxDetail "status: pure"
+        return $ Right newArgs
+      _ -> do
+        logDebug MaxDetail "status: impure"
+        return $ Left unblockedExpr
 
 --------------------------------------------------------------------------------
 -- Unblocking types

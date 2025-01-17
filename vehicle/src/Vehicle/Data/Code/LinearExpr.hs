@@ -39,10 +39,11 @@ instance Constant RatTensor where
   isZero = allTensor (== 0)
 
 extractRationalConstant :: RatTensor -> Rational
-extractRationalConstant (ZeroDimTensor v) = v
-extractRationalConstant t =
-  developerError $
-    "FM-elimination doesn't yet work over tensors (called on tensor of shape" <+> pretty (tensorShape t) <+> ")"
+extractRationalConstant = \case
+  (ZeroDimTensor v) -> v
+  t ->
+    developerError $
+      "FM-elimination doesn't yet work over tensors (called on tensor of shape" <+> pretty (tensorShape t) <+> ")"
 
 -------------------------------------------------------------------------------
 -- Sparse representations of linear expressions

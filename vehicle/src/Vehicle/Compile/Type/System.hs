@@ -105,15 +105,16 @@ addNewStandardAuxiliaryConstraintUsingDefaults maybeDecl = do
   defaultableConstraints <- getDefaultableConstraints maybeDecl auxiliaryConstraints
   solveDefaultIndexConstraints defaultableConstraints
 
-extractElementType :: (PrintableBuiltin builtin) => Doc () -> [Arg builtin] -> Expr builtin
-extractElementType name args = case args of
+extractElementType :: (PrintableBuiltin builtin1, PrintableBuiltin builtin2) => builtin1 -> [Arg builtin2] -> Expr builtin2
+extractElementType b args = case args of
   [tElem] -> argExpr tElem
-  _ -> monomorphisationError name args
+  _ -> monomorphisationError b args
 
-monomorphisationError :: (PrintableBuiltin builtin) => Doc () -> [Arg builtin] -> a
-monomorphisationError name args =
+monomorphisationError :: (PrintableBuiltin builtin1, PrintableBuiltin builtin2) => builtin1 -> [Arg builtin2] -> a
+monomorphisationError b args = do
+  let exprDoc = prettyVerbose args
   developerError $
-    "Monomorphisation should have got rid of" <+> squotes name <+> "s but found" <+> prettyVerbose args
+    "Monomorphisation should have got rid of" <+> quotePretty (show b) <> "s but found applied to args" <+> squotes exprDoc
 
 -------------------------------------------------------------------------------
 -- Linearity
@@ -145,12 +146,11 @@ convertToLinearityTypes p b args = case b of
     RatType {} -> freshLinearityMeta p
     IndexType -> freshLinearityMeta p
     NatType -> freshLinearityMeta p
-    ListType -> return $ extractElementType "List" args
-    VectorType -> return $ extractElementType "Vector" args
-    TensorType -> return $ extractElementType "Tensor" args
-  TypeClass {} -> monomorphisationError "TypeClass" args
-  TypeClassOp {} -> monomorphisationError "TypeClassOp" args
-  NatInDomainConstraint -> monomorphisationError "IndexConstraints" args
+    ListType -> return $ extractElementType b args
+    TensorType -> return $ extractElementType b args
+  TypeClass {} -> monomorphisationError b args
+  TypeClassOp {} -> monomorphisationError b args
+  NatInDomainConstraint -> monomorphisationError b args
 
 restrictLinearityDeclType ::
   forall m.
@@ -234,12 +234,11 @@ convertToPolarityTypes p b args = case b of
     BoolType {} -> freshPolarityMeta p
     IndexType -> return $ PolarityExpr p Unquantified
     NatType -> return $ PolarityExpr p Unquantified
-    ListType -> return $ extractElementType "List" args
-    VectorType -> return $ extractElementType "Vector" args
-    TensorType -> return $ extractElementType "Tensor" args
-  TypeClass {} -> monomorphisationError "TypeClass" args
-  TypeClassOp {} -> monomorphisationError "TypeClassOp" args
-  NatInDomainConstraint -> monomorphisationError "IndexConstraints" args
+    ListType -> return $ extractElementType b args
+    TensorType -> return $ extractElementType b args
+  TypeClass {} -> monomorphisationError b args
+  TypeClassOp {} -> monomorphisationError b args
+  NatInDomainConstraint -> monomorphisationError b args
 
 restrictDeclPolarityType ::
   forall m.
