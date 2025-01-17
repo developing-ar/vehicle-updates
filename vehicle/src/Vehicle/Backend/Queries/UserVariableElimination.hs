@@ -19,19 +19,18 @@ import Vehicle.Backend.Queries.Unblock (UnblockingActions (..))
 import Vehicle.Backend.Queries.Unblock qualified as Unblocking
 import Vehicle.Backend.Queries.UserVariableElimination.Core
 import Vehicle.Backend.Queries.UserVariableElimination.EliminateExists (solveExists)
-import Vehicle.Compile.Boolean.LiftIf (liftIf, unfoldIf)
+import Vehicle.Compile.Boolean.LiftIf (unfoldIf)
 import Vehicle.Compile.Boolean.LowerNot (lowerNot, notClosure)
-import Vehicle.Compile.Context.Name (runFreshNameContextT)
+import Vehicle.Compile.Context.Name (getNameContext, runFreshNameContextT)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Normalise.Builtin (EvalSimple, evalAt, evalCompareRatTensor, evalStackTensor)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (prettyFriendlyEmptyCtx, prettyVerbose)
-import Vehicle.Compile.Rational.LinearExpr (LinearityError (..), compileTensorLinearRelation)
+import Vehicle.Compile.Print (prettyFriendly, prettyFriendlyEmptyCtx, prettyVerbose)
+import Vehicle.Compile.Rational.LinearExpr (LinearityError (..), compileLinearRelation)
 import Vehicle.Compile.Resource (NetworkTensorType (..), NetworkType (..))
 import Vehicle.Compile.Variable (createUserVar)
 import Vehicle.Data.Assertion
-import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.Interface
@@ -178,7 +177,6 @@ purifyAndCompileAssertion ::
 purifyAndCompileAssertion op args = case op of
   Ne -> compileBoolExpr =<< eliminateNotEqualRatTensor args
   _ -> do
-    logDebug MaxDetail $ prettyVerbose (tensorOp2Dims args)
     result <- Unblocking.tryPurifyAssertion unblockingActions op args
     case toBoolValue result of
       VCompareRatTensor (op', args') -> do
@@ -213,32 +211,25 @@ unblockNetworkApplication ::
   (MonadQuantifierBody m) =>
   NetworkApplication ->
   m (Value Builtin)
-unblockNetworkApplication (networkName, NetworkAppArgs arg) = do
+unblockNetworkApplication networkApp@(networkName, NetworkAppArgs arg) = do
+  globalCtx <- get
   networkContext <- asks networkCtx
+
   networkInfo <- case Map.lookup networkName networkContext of
     Nothing -> compilerDeveloperError $ "Expecting" <+> quotePretty networkName <+> "to be a @network"
     Just info -> return info
 
-  unblockedArg <- Unblocking.unblockRatTensorValue unblockingActions arg
-  liftIf unblockedArg $ \unblockedArg' -> do
-    if unblockedArg' /= unblockedArg
-      then do
-        let ident = Identifier (ModulePath [User]) networkName
-        return $ VFreeVar ident (mkExpr accessSpine (NetworkAppArgs unblockedArg'))
-      else do
-        let networkApp = (networkName, NetworkAppArgs unblockedArg')
-        globalCtx <- get
-
-        case LinkedHashMap.lookup networkApp (networkApplications globalCtx) of
-          Just existingAppInfo -> return $ outputVarExpr existingAppInfo
-          Nothing -> do
-            (inputVarExpr, outputVarExpr, newGlobalCtx) <- addNetworkApplicationToGlobalCtx networkApp networkInfo globalCtx
-            let inputDims = dimensions (inputTensor (networkType networkInfo))
-            let inputDimsExpr = implicitIrrelevant $ mkDims inputDims
-            let inputEquality = fromBoolValue $ VCompareRatTensor (Eq, TensorOp2Args inputDimsExpr inputVarExpr unblockedArg)
-            put newGlobalCtx
-            tell [inputEquality]
-            Unblocking.unblockRatTensorValue unblockingActions outputVarExpr
+  case LinkedHashMap.lookup networkApp (networkApplications globalCtx) of
+    Just existingAppInfo ->
+      return $ outputVarExpr existingAppInfo
+    Nothing -> do
+      (inputVarExpr, outputVarExpr, newGlobalCtx) <- addNetworkApplicationToGlobalCtx networkApp networkInfo globalCtx
+      let inputDims = dimensions (inputTensor (networkType networkInfo))
+      let inputDimsExpr = implicitIrrelevant $ mkDims inputDims
+      let inputEquality = fromBoolValue $ VCompareRatTensor (Eq, TensorOp2Args inputDimsExpr inputVarExpr arg)
+      put newGlobalCtx
+      tell [inputEquality]
+      return outputVarExpr
 
 compileAssertion ::
   (MonadQuantifierBody m) =>
@@ -247,12 +238,16 @@ compileAssertion ::
   TensorOp2Args (Value Builtin) ->
   m (MaybeTrivial Partitions)
 compileAssertion mkAssertion evalRel args@(TensorOp2Args _ xs ys) = do
-  result <- compileTensorLinearRelation getTensorVariableShape xs ys
+  result <- compileLinearRelation getTensorVariableShape xs ys
   case result of
     Right (e1, e2) -> return $ mkTrivialPartition (mkAssertion e1 e2)
     Left NonLinearity -> throwError catchableUnsupportedNonLinearConstraint
-    Left (UnexpectedExpr e) -> compilerDeveloperError ("unexpected expression" <+> prettyVerbose e)
-    Left (UnreducedExpr _e) -> compileBoolExpr =<< eliminateTensorAssertion evalRel args
+    Left (UnexpectedExpr e) ->
+      developerError ("unexpected expression" <+> prettyVerbose e)
+    Left (UnreducedExpr e) -> do
+      ctx <- getNameContext
+      logDebug MaxDetail $ "Eliminating tensor assertion as unreduced expression found:" <+> prettyFriendly (WithContext e ctx)
+      compileBoolExpr =<< eliminateTensorAssertion evalRel args
 
 --------------------------------------------------------------------------------
 -- Elimination operations

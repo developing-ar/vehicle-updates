@@ -1,6 +1,6 @@
 module Vehicle.Compile.Rational.LinearExpr
   ( LinearityError (..),
-    compileTensorLinearRelation,
+    compileLinearRelation,
   )
 where
 
@@ -29,13 +29,13 @@ data LinearityError
 --------------------------------------------------------------------------------
 -- Tensor expression
 
-compileTensorLinearRelation ::
+compileLinearRelation ::
   (MonadLogger m) =>
   (Lv -> ExceptT LinearityError m TensorShape) ->
   Value Builtin ->
   Value Builtin ->
   m (Either LinearityError (LinearExpr RatTensor, LinearExpr RatTensor))
-compileTensorLinearRelation lookupVar x y = do
+compileLinearRelation lookupVar x y = do
   runExceptT $ do
     x' <- compile lookupVar x
     y' <- compile lookupVar y

@@ -69,7 +69,7 @@ tryPurifyAssertion actions op args = do
     return $ line <> "Trying to purify" <+> squotes assertionDoc
   incrCallDepth
 
-  unblockedExpr <- unblockTensorOp2 (unblockRatTensorValue actions) (evalCompareRatTensor op) args
+  unblockedExpr <- unblockTensorOp2 (unblockRatTensorValue actions VarLevel) (evalCompareRatTensor op) args
 
   logDebugM MaxDetail $ do
     postCtx <- getNameContext
@@ -108,33 +108,48 @@ unblockBoolTensorValue expr = do
   where
     unblock = unblockBoolTensorValue
 
-unblockRatTensorValue :: (MonadPurify m) => UnblockingActions m -> Value Builtin -> m (Value Builtin)
-unblockRatTensorValue actions@UnblockingActions {..} expr = do
+data Depth = VarLevel | NonVarLevel
+  deriving (Eq)
+
+unblockRatTensorValue :: (MonadPurify m) => UnblockingActions m -> Depth -> Value Builtin -> m (Value Builtin)
+unblockRatTensorValue actions@UnblockingActions {..} lv expr = do
   showEntry expr
   showExit =<< case toRatTensorValue expr of
     -- Rational operators
     VRatTensorLiteral {} -> return expr
     VIfRatTensor {} -> return expr
+    VMinRatTensor args -> eliminateMinMax args
+    VMaxRatTensor args -> eliminateMinMax args
     -- Recursively purify
-    VNegRatTensor args -> unblockTensorOp1 unblock evalNegRatTensor args
-    VAddRatTensor args -> unblockTensorOp2 unblock evalAddRatTensor args
-    VSubRatTensor args -> unblockTensorOp2 unblock evalSubRatTensor args
-    VMulRatTensor args -> unblockTensorOp2 unblock evalMulRatTensor args
-    VDivRatTensor args -> unblockTensorOp2 unblock evalDivRatTensor args
-    VMinRatTensor args -> unblockTensorOp2 unblock evalMinRatTensor args
-    VMaxRatTensor args -> unblockTensorOp2 unblock evalMaxRatTensor args
-    VReduceAddRatTensor args -> unblockReduceTensor unblock evalReduceAddRatTensor args
-    VReduceMulRatTensor args -> unblockReduceTensor unblock evalReduceMulRatTensor args
-    VReduceMinRatTensor args -> unblockReduceTensor unblock evalReduceMinRatTensor args
-    VReduceMaxRatTensor args -> unblockReduceTensor unblock evalReduceMaxRatTensor args
-    VRatTensorVar v -> unblockRatTensorBoundVar v
-    VNetworkApp n args -> unblockNetworkApp (nameOf n, args)
+    VNegRatTensor args -> unblockTensorOp1 (unblock lv) evalNegRatTensor args
+    VAddRatTensor args -> unblockTensorOp2 (unblock lv) evalAddRatTensor args
+    VSubRatTensor args -> unblockTensorOp2 (unblock lv) evalSubRatTensor args
+    VMulRatTensor args -> unblockTensorOp2 (unblock lv) evalMulRatTensor args
+    VDivRatTensor args -> unblockTensorOp2 (unblock lv) evalDivRatTensor args
+    VReduceAddRatTensor args -> unblockReduceTensor (unblock NonVarLevel) evalReduceAddRatTensor args
+    VReduceMulRatTensor args -> unblockReduceTensor (unblock NonVarLevel) evalReduceMulRatTensor args
+    VReduceMinRatTensor args -> unblockReduceTensor (unblock NonVarLevel) evalReduceMinRatTensor args
+    VReduceMaxRatTensor args -> unblockReduceTensor (unblock NonVarLevel) evalReduceMaxRatTensor args
+    VRatTensorVar v
+      | lv == VarLevel -> return expr
+      | otherwise -> unblockRatTensorBoundVar v
+    VNetworkApp n args -> unblock lv =<< unblockNetworkApp (nameOf n, args)
     VRatConstTensor args -> unblockConstTensor args
-    VRatStackTensor args -> unblockStackTensor unblock args
-    VRatAt args -> unblockAtTensor unblock args
+    VRatStackTensor args -> unblockStackTensor (unblock NonVarLevel) args
+    VRatAt args -> unblockAtTensor (unblock NonVarLevel) args
     VRatForeach args -> unblockForeachTensor args
   where
     unblock = unblockRatTensorValue actions
+
+eliminateMinMax :: (MonadPurify m) => TensorOp2Args (Value Builtin) -> m (Value Builtin)
+eliminateMinMax (TensorOp2Args {}) = developerError "Elimination of min/max not yet implemented"
+
+{-
+case toDimensionsValue (argExpr dims) of
+  VDimsNil -> _
+  VDimsCons d ds -> _
+  _ -> _
+-}
 
 unblockDimensionsValue :: UnblockingFunction m
 unblockDimensionsValue expr = case toDimensionsValue expr of

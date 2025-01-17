@@ -14,6 +14,7 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
 import GHC.Generics
+import GHC.Stack (HasCallStack)
 import Vehicle.Compile.Context.Bound.Class (MonadBoundContext (..))
 import Vehicle.Compile.Context.Free.Class (MonadFreeContext)
 import Vehicle.Compile.Context.Name (MonadNameContext)
@@ -126,6 +127,7 @@ addNetworkApplicationToGlobalCtx app@(networkName, _) networkInfo GlobalCtx {..}
   let inputVar = makeTensorVariable inputLv
   let (reducedInputVarNames, reducedInputVars, reducedInputVarsExpr) = reduceTensorVariable (inputLv + 1) inputVarName inputShape
   let inputVarExpr = VBoundVar inputLv []
+
   let inputVarInfo =
         TensorVariableInfo
           { elementVariables = reducedInputVars,
@@ -296,11 +298,12 @@ getGlobalNamedBoundCtx = gets (fmap Just . globalBoundVarCtx)
 prettyFriendlyInCtx :: (MonadQueryStructure m) => Value Builtin -> m (Doc a)
 prettyFriendlyInCtx e = prettyFriendly . WithContext e <$> getGlobalNamedBoundCtx
 
-getTensorVariableShape :: (MonadState GlobalCtx m) => TensorVariable -> m TensorShape
+getTensorVariableShape :: (HasCallStack, MonadState GlobalCtx m) => TensorVariable -> m TensorShape
 getTensorVariableShape var = do
-  globalCtx <- get
-  let info = getTensorVariableInfo globalCtx var
-  return (tensorShape $ elementVariables info)
+  GlobalCtx {..} <- get
+  return $ case Map.lookup var tensorVariableInfo of
+    Just info -> tensorShape $ elementVariables info
+    Nothing -> []
 
 getRationalVariable :: (MonadState GlobalCtx m) => Lv -> m Variable
 getRationalVariable var = do
@@ -313,13 +316,13 @@ getRationalVariable var = do
         ZeroDimTensor rv -> return rv
         _ -> developerError "Mismatched tensor dimensions!"
 
-getTensorVariableInfo :: GlobalCtx -> TensorVariable -> TensorVariableInfo
+getTensorVariableInfo :: (HasCallStack) => GlobalCtx -> TensorVariable -> TensorVariableInfo
 getTensorVariableInfo GlobalCtx {..} var = do
   case Map.lookup var tensorVariableInfo of
     Just info -> info
     Nothing ->
       developerError $
-        "Network variable" <+> pretty var <+> "has no associated meta-information"
+        "Variable" <+> quotePretty (lookupLvInBoundCtx var globalBoundVarCtx) <+> "has no associated meta-information"
 
 getReducedVariablesFor :: GlobalCtx -> TensorVariable -> Tensor Variable
 getReducedVariablesFor globalCtx var = elementVariables $ getTensorVariableInfo globalCtx var

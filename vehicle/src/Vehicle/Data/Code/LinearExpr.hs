@@ -8,7 +8,7 @@ import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import GHC.Generics (Generic)
 import Vehicle.Data.DeBruijn (Lv)
-import Vehicle.Data.Tensor (RatTensor, allTensor, zipWithTensor, pattern ZeroDimTensor)
+import Vehicle.Data.Tensor (RatTensor, Tensor (..), allTensor, zipWithTensor, pattern ZeroDimTensor)
 import Vehicle.Prelude
 
 -------------------------------------------------------------------------------
@@ -38,14 +38,11 @@ instance Constant RatTensor where
   isZero :: RatTensor -> Bool
   isZero = allTensor (== 0)
 
-{-
-extractTensorConstant :: Maybe RatTensor -> RatTensor
-extractTensorConstant Nothing = 0
-extractTensorConstant (Just v) = v
--}
 extractRationalConstant :: RatTensor -> Rational
 extractRationalConstant (ZeroDimTensor v) = v
-extractRationalConstant _ = developerError "FM-elimination doesn't yet work over tensors"
+extractRationalConstant t =
+  developerError $
+    "FM-elimination doesn't yet work over tensors (called on tensor of shape" <+> pretty (tensorShape t) <+> ")"
 
 -------------------------------------------------------------------------------
 -- Sparse representations of linear expressions
