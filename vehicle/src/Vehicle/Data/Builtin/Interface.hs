@@ -60,13 +60,14 @@ class BuiltinHasIndexLiterals builtin where
 -- HasNat
 
 class BuiltinHasNatLiterals builtin where
-  accessNatTypeBuiltin :: Accessor builtin ()
-
   accessNatLitBuiltin :: Accessor builtin Int
   accessNatTensorLitBuiltin :: Accessor builtin (Tensor Int)
 
   accessAddNatBuiltin :: Accessor builtin ()
   accessMulNatBuiltin :: Accessor builtin ()
+
+class BuiltinHasNatType builtin where
+  accessNatTypeBuiltin :: Accessor builtin ()
 
 --------------------------------------------------------------------------------
 -- HasList

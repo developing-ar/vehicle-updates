@@ -292,7 +292,6 @@ eliminateTensorAssertion ::
 eliminateTensorAssertion evalFn (TensorOp2Args dims xs ys) =
   case argExpr dims of
     ICons _ d@(INatLiteral n) ds -> do
-      logDebug MaxDetail "Hit"
       let tElem = implicit $ fromTypeValue VRatType
       let dsArg = implicitIrrelevant ds
       let mkAt vs i = evalAt (AtArgs tElem (implicitIrrelevant d) dsArg vs (IIndexLiteral i))

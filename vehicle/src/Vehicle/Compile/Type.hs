@@ -216,8 +216,6 @@ solveConstraints d = logCompilerPass MidDetail "constraint solving" $ do
     runSolvers :: (TCM builtin m) => Maybe (Decl builtin) -> m ()
     runSolvers maybeDecl = do
       let proxy = Proxy @builtin
-
-      logUnsolvedUnknowns maybeDecl
       runApplicationSolver proxy
 
       logUnsolvedUnknowns maybeDecl
@@ -228,6 +226,8 @@ solveConstraints d = logCompilerPass MidDetail "constraint solving" $ do
 
       logUnsolvedUnknowns maybeDecl
       runAuxiliarySolver proxy
+
+      logUnsolvedUnknowns maybeDecl
 
     tryToUnstick :: (TCM builtin m) => Maybe (Decl builtin) -> m Bool
     tryToUnstick decl = do

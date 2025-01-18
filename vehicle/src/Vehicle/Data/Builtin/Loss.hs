@@ -159,9 +159,10 @@ instance BuiltinHasIndexLiterals LossBuiltin where
         mkExpr = LossBuiltinConstructor . IndexTensorLiteral
       }
 
-instance BuiltinHasNatLiterals LossBuiltin where
+instance BuiltinHasNatType LossBuiltin where
   accessNatTypeBuiltin = typeAccessor NatType
 
+instance BuiltinHasNatLiterals LossBuiltin where
   accessNatLitBuiltin =
     Access
       { getExpr = \case

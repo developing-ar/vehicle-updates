@@ -70,7 +70,7 @@ trackIfConstraintProgressMade getConstraints action = do
   oldConstraintIDS <- getConstraintIDs
   action
   newConstraintIDS <- getConstraintIDs
-  return $ newConstraintIDS == oldConstraintIDS
+  return $ newConstraintIDS /= oldConstraintIDS
 
 -- | Find the first constraint satisfying `p` appending all the constraints that don't satisfy it to
 -- the end of the list, so we don't search through them again immediately next time.

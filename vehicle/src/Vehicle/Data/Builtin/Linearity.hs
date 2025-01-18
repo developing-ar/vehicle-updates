@@ -143,6 +143,15 @@ instance Pretty LinearityBuiltin where
     Linearity l -> pretty l
     LinearityRelation tc -> pretty tc
 
+functionAccessor :: BuiltinFunction -> Accessor LinearityBuiltin ()
+functionAccessor b =
+  Access
+    { getExpr = \case
+        LinearityFunction b1 | b == b1 -> Just ()
+        _ -> Nothing,
+      mkExpr = \() -> LinearityFunction b
+    }
+
 instance BuiltinHasStandardData LinearityBuiltin where
   accessBuiltinFunction =
     Access
@@ -160,37 +169,29 @@ instance BuiltinHasStandardData LinearityBuiltin where
           _ -> Nothing
       }
 
-{-
-instance BuiltinHasBoolLiterals LinearityBuiltin where
-  getBoolBuiltinTensorLit = \case
-    LinearityConstructor (BoolTensorLiteral b) -> Just b
-    _ -> Nothing
-  mkBoolBuiltinTensorLit b = LinearityConstructor (BoolTensorLiteral b)
-
-instance BuiltinHasIndexLiterals LinearityBuiltin where
-  getIndexBuiltinLit e = case e of
-    LinearityConstructor (IndexLiteral n) -> Just n
-    _ -> Nothing
-  mkIndexBuiltinLit x = LinearityConstructor (IndexLiteral x)
-
 instance BuiltinHasNatLiterals LinearityBuiltin where
-  getNatBuiltinLit e = case e of
-    LinearityConstructor (NatLiteral b) -> Just b
-    _ -> Nothing
-  mkNatBuiltinLit x = LinearityConstructor (NatLiteral x)
+  accessNatLitBuiltin =
+    Access
+      { getExpr = \case
+          LinearityConstructor (NatLiteral n) -> Just n
+          _ -> Nothing,
+        mkExpr = LinearityConstructor . NatLiteral
+      }
 
-instance BuiltinHasRatLiterals LinearityBuiltin where
-  getRatBuiltinTensorLit = \case
-    LinearityConstructor (RatTensorLiteral b) -> Just b
-    _ -> Nothing
-  mkRatBuiltinTensorLit b = LinearityConstructor (RatTensorLiteral b)
+  accessNatTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          LinearityConstructor (NatTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = LinearityConstructor . NatTensorLiteral
+      }
 
-instance BuiltinHasConstTensor LinearityBuiltin where
-  isConstTensorBuiltin e = case e of
-    LinearityFunction ConstTensor -> True
-    _ -> False
-  mkConstTensorBuiltin = LinearityFunction ConstTensor
--}
+  accessAddNatBuiltin = functionAccessor (Add AddNat)
+  accessMulNatBuiltin = functionAccessor (Mul MulNat)
+
+instance BuiltinHasIterate LinearityBuiltin where
+  accessIterateBuiltin = functionAccessor Iterate
+
 --------------------------------------------------------------------------------
 -- DSL
 

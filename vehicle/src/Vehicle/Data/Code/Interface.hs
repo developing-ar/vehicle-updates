@@ -484,10 +484,10 @@ pattern IIndexTensor n <- (getExpr accessIndexTensorLiteral -> Just n)
 --------------------------------------------------------------------------------
 -- Naturals
 
-type HasNatExpr expr builtin = (HasBuiltinConstructor expr, BuiltinHasNatLiterals builtin)
-
-accessNatType :: (HasNatExpr expr builtin) => Accessor (expr builtin) ()
+accessNatType :: (HasBuiltinConstructor expr, BuiltinHasNatType builtin) => Accessor (expr builtin) ()
 accessNatType = accessNoArgs accessNatTypeBuiltin
+
+type HasNatExpr expr builtin = (HasBuiltinConstructor expr, BuiltinHasNatLiterals builtin)
 
 accessNatLiteral :: (HasNatExpr expr builtin) => Accessor (expr builtin) Int
 accessNatLiteral = accessNoArgs accessNatLitBuiltin
@@ -501,7 +501,7 @@ accessAddNat = accessArgs accessAddNatBuiltin
 accessMulNat :: (HasNatExpr expr builtin) => Op2Accessor (expr builtin)
 accessMulNat = accessArgs accessMulNatBuiltin
 
-pattern INatType :: (HasNatExpr expr builtin) => expr builtin
+pattern INatType :: (HasBuiltinConstructor expr, BuiltinHasNatType builtin) => expr builtin
 pattern INatType <- (getExpr accessNatType -> Just ())
   where
     INatType = mkExpr accessNatType ()
@@ -632,7 +632,7 @@ mkListExpr tElem = foldr cons nil
     nil = INil (implicit tElem)
     cons = ICons (implicit tElem)
 
-mkDims :: (HasNatExpr expr builtin, HasListExpr expr builtin) => [Int] -> expr builtin
+mkDims :: (HasNatExpr expr builtin, HasListExpr expr builtin, BuiltinHasNatType builtin) => [Int] -> expr builtin
 mkDims ds = mkListExpr INatType (fmap INatLiteral ds)
 
 getDim :: (HasNatExpr expr builtin) => expr builtin -> Maybe Int

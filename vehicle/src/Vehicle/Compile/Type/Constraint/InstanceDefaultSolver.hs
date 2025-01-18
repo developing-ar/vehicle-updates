@@ -67,7 +67,7 @@ getDefaultableConstraints maybeDecl possibleConstraints = do
 
       logDebugM MaxDetail $ do
         unsolvedMetasInTypeDoc <- prettyMetas (Proxy @builtin) typeMetas
-        return $ "Metas transitively related to type-signature:" <+> unsolvedMetasInTypeDoc
+        return $ "Metas transitively related to type-signature:" <+> line <> indent 2 unsolvedMetasInTypeDoc
 
       flip filterM possibleConstraints $ \tc -> do
         constraintMetas <- metasIn (objectIn tc)

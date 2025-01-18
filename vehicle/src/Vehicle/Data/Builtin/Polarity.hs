@@ -67,7 +67,7 @@ mapPolarityProvenance f = \case
   Unquantified -> Unquantified
   Quantified q pp -> Quantified q (f pp)
   MixedParallel pp1 pp2 -> MixedParallel (f pp1) (f pp2)
-  -- At the moment we don't change non-linear provenance because we
+  -- At the moment we don't change non-Polar provenance because we
   -- want the minimal example.
   MixedSequential q p pp -> MixedSequential q p pp
 
@@ -119,6 +119,15 @@ instance Pretty PolarityBuiltin where
     Polarity l -> pretty l
     PolarityRelation c -> pretty c
 
+functionAccessor :: BuiltinFunction -> Accessor PolarityBuiltin ()
+functionAccessor b =
+  Access
+    { getExpr = \case
+        PolarityFunction b1 | b == b1 -> Just ()
+        _ -> Nothing,
+      mkExpr = \() -> PolarityFunction b
+    }
+
 instance BuiltinHasStandardData PolarityBuiltin where
   accessBuiltinFunction =
     Access
@@ -136,37 +145,28 @@ instance BuiltinHasStandardData PolarityBuiltin where
           _ -> Nothing
       }
 
-{-
-instance BuiltinHasBoolLiterals PolarityBuiltin where
-  getBoolBuiltinTensorLit = \case
-    PolarityConstructor (BoolTensorLiteral b) -> Just b
-    _ -> Nothing
-  mkBoolBuiltinTensorLit b = PolarityConstructor (BoolTensorLiteral b)
-
-instance BuiltinHasIndexLiterals PolarityBuiltin where
-  getIndexBuiltinLit e = case e of
-    PolarityConstructor (IndexLiteral n) -> Just n
-    _ -> Nothing
-  mkIndexBuiltinLit x = PolarityConstructor (IndexLiteral x)
-
 instance BuiltinHasNatLiterals PolarityBuiltin where
-  getNatBuiltinLit e = case e of
-    PolarityConstructor (NatLiteral b) -> Just b
-    _ -> Nothing
-  mkNatBuiltinLit x = PolarityConstructor (NatLiteral x)
+  accessNatLitBuiltin =
+    Access
+      { getExpr = \case
+          PolarityConstructor (NatLiteral n) -> Just n
+          _ -> Nothing,
+        mkExpr = PolarityConstructor . NatLiteral
+      }
 
-instance BuiltinHasRatLiterals PolarityBuiltin where
-  getRatBuiltinTensorLit = \case
-    PolarityConstructor (RatTensorLiteral b) -> Just b
-    _ -> Nothing
-  mkRatBuiltinTensorLit b = PolarityConstructor (RatTensorLiteral b)
+  accessNatTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          PolarityConstructor (NatTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = PolarityConstructor . NatTensorLiteral
+      }
 
-instance BuiltinHasConstTensor PolarityBuiltin where
-  isConstTensorBuiltin e = case e of
-    PolarityFunction ConstTensor -> True
-    _ -> False
-  mkConstTensorBuiltin = PolarityFunction ConstTensor
--}
+  accessAddNatBuiltin = functionAccessor (Add AddNat)
+  accessMulNatBuiltin = functionAccessor (Mul MulNat)
+
+instance BuiltinHasIterate PolarityBuiltin where
+  accessIterateBuiltin = functionAccessor Iterate
 
 -----------------------------------------------------------------------------
 -- DSL

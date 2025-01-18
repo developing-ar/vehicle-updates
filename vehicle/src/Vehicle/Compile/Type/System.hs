@@ -17,7 +17,7 @@ import Vehicle.Compile.Type.Monad.Class (MonadTypeChecker, getActiveAuxiliaryIns
 import Vehicle.Compile.Type.Subsystem.InputOutputInsertion (addFunctionAuxiliaryInputOutputConstraints)
 import Vehicle.Data.Builtin.Linearity
 import Vehicle.Data.Builtin.Polarity
-import Vehicle.Data.Builtin.Standard (Builtin (..), BuiltinType (..), TypeClass (..))
+import Vehicle.Data.Builtin.Standard (Builtin (..), BuiltinConstructor (..), BuiltinFunction (StackTensor), BuiltinType (..), TypeClass (..))
 import Vehicle.Data.Code.Value
 
 -- | The type-checking monad.
@@ -138,7 +138,11 @@ convertToLinearityTypes ::
   (MonadTypeChecker LinearityBuiltin m) =>
   BuiltinUpdate m Builtin LinearityBuiltin
 convertToLinearityTypes p b args = case b of
-  BuiltinFunction f -> return $ normAppList (Builtin p (LinearityFunction f)) args
+  BuiltinFunction f -> do
+    let args' = case f of
+          StackTensor -> implicit (Builtin p (LinearityConstructor (NatLiteral (length args)))) : args
+          _ -> args
+    return $ normAppList (Builtin p (LinearityFunction f)) args'
   BuiltinConstructor c -> return $ normAppList (Builtin p (LinearityConstructor c)) args
   BuiltinType s -> case s of
     UnitType -> return $ Builtin p $ Linearity Constant
@@ -226,8 +230,12 @@ convertToPolarityTypes ::
   (MonadTypeChecker PolarityBuiltin m) =>
   BuiltinUpdate m Builtin PolarityBuiltin
 convertToPolarityTypes p b args = case b of
+  BuiltinFunction f -> do
+    let args' = case f of
+          StackTensor -> implicit (Builtin p (PolarityConstructor (NatLiteral (length args)))) : args
+          _ -> args
+    return $ normAppList (Builtin p (PolarityFunction f)) args'
   BuiltinConstructor c -> return $ normAppList (Builtin p (PolarityConstructor c)) args
-  BuiltinFunction f -> return $ normAppList (Builtin p (PolarityFunction f)) args
   BuiltinType s -> case s of
     UnitType -> return $ PolarityExpr p Unquantified
     RatType {} -> freshPolarityMeta p

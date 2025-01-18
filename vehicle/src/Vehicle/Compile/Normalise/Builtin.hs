@@ -302,10 +302,7 @@ evalFromRatToRat (Op1Args x) = return x
 evalVectorToList ::
   (MonadNormBuiltin m, Show builtin, BuiltinHasNatLiterals builtin, BuiltinHasListLiterals builtin, BuiltinHasCasts builtin) =>
   EvalSimple VectorToListArgs builtin m
-evalVectorToList args@(VectorToListArgs t d xs) = do
-  -- logDebug MaxDetail "Hit8"
-  -- logDebug MaxDetail $ pretty $ show d
-  -- logDebug MaxDetail $ pretty $ length xs
+evalVectorToList args@(VectorToListArgs t d xs) =
   case argExpr d of
     INatLiteral n | n == length xs -> return $ mkListExpr (argExpr t) xs
     _ -> return $ mkExpr accessFromVectorToList args
@@ -783,7 +780,8 @@ instance NormalisableBuiltin LossBuiltin where
 
 instance NormalisableBuiltin LinearityBuiltin where
   evalScheme b = case b of
-    LinearityFunction _ -> normNotImplemented "Linearity" b
+    LinearityFunction Iterate -> NonSimple evalIterate
+    LinearityFunction _ -> None
     _ -> None
 
   blockingArgs = \case
@@ -792,7 +790,8 @@ instance NormalisableBuiltin LinearityBuiltin where
 
 instance NormalisableBuiltin PolarityBuiltin where
   evalScheme b = case b of
-    PolarityFunction _ -> normNotImplemented "Polarity" b
+    PolarityFunction Iterate -> NonSimple evalIterate
+    PolarityFunction _ -> None
     _ -> None
 
   blockingArgs = \case

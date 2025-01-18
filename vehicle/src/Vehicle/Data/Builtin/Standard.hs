@@ -84,9 +84,10 @@ instance BuiltinHasIndexLiterals Builtin where
         mkExpr = BuiltinConstructor . IndexTensorLiteral
       }
 
-instance BuiltinHasNatLiterals Builtin where
+instance BuiltinHasNatType Builtin where
   accessNatTypeBuiltin = typeAccessor NatType
 
+instance BuiltinHasNatLiterals Builtin where
   accessNatLitBuiltin =
     Access
       { getExpr = \case

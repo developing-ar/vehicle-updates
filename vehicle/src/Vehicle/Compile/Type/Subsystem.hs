@@ -10,7 +10,7 @@ import Vehicle.Compile.Error
 import Vehicle.Compile.Monomorphisation (monomorphise)
 import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin, findInstanceArg)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal, prettyVerbose)
+import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal)
 import Vehicle.Compile.Print.Builtin (PrintableBuiltin (..))
 import Vehicle.Compile.Type (typeCheckProg)
 import Vehicle.Compile.Type.Core (InstanceDatabase)
@@ -61,8 +61,6 @@ resolveInstanceArguments prog =
       args' <- traverse (traverse recGo) args
       if ident == identifierOf StdVectorType
         then do
-          logDebug MaxDetail "Hit!!"
-          logDebug MaxDetail $ prettyVerbose args
           (inst, remainingArgs) <- findInstanceArg ident args
           return $ substArgs inst remainingArgs
         else return $ normAppList (FreeVar p ident) args'
