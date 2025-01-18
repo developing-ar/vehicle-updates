@@ -322,8 +322,11 @@ allInstances =
           builtinFunction (Compare CompareNat op),
           True
         ),
-        ( forAllDims $ \dims -> hasCompare op (tRatTensor dims) (tRatTensor dims) (tBoolTensor dims),
-          lamDims $ \dims -> builtinFunction (Compare CompareRatTensor op) .@@@ [dims],
+        ( forAllDims $ \dims ->
+            hasCompare op (tRatTensor dims) (tRatTensor dims) (tBoolTensor dimNil),
+          lamDims $ \dims ->
+            builtinFunction ReduceAndTensor
+              @@ [dims, boolLit True, builtinFunction (Compare CompareRatTensor op) .@@@ [dims]],
           False
         )
       ]

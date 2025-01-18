@@ -7,7 +7,7 @@ module Vehicle.Compile.Boolean.LiftIf
 where
 
 import Vehicle.Compile.Context.Free (MonadFreeContext)
-import Vehicle.Compile.Normalise.NBE
+import Vehicle.Compile.Normalise.Builtin
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.Interface
@@ -49,8 +49,9 @@ unfoldIf ::
   IfArgs (Value Builtin) ->
   m (Value Builtin)
 unfoldIf (IfArgs _ c x y) = do
-  let mkArgs = fmap (Arg mempty Explicit Relevant)
-  cAndX <- normaliseBuiltin (BuiltinFunction And) (mkArgs [c, x])
-  notC <- normaliseBuiltin (BuiltinFunction Not) (mkArgs [c])
-  notCAndY <- normaliseBuiltin (BuiltinFunction And) (mkArgs [notC, y])
-  normaliseBuiltin (BuiltinFunction Or) (mkArgs [cAndX, notCAndY])
+  logDebug MaxDetail "elim-if"
+  let dims = implicitIrrelevant (mkDims [])
+  cAndX <- evalAnd (TensorOp2Args dims c x)
+  notC <- evalNot (TensorOp1Args dims c)
+  notCAndY <- evalAnd (TensorOp2Args dims notC y)
+  evalOr (TensorOp2Args dims cAndX notCAndY)

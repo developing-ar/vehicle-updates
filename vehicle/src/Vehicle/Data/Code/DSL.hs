@@ -70,10 +70,9 @@ cons tElem x xs = builtinConstructor Cons @@@ [tElem] @@ [x, xs]
 natLit :: (BuiltinHasStandardData builtin) => Int -> DSLExpr builtin
 natLit n = builtinConstructor (NatLiteral n)
 
-{-
 boolLit :: (BuiltinHasStandardData builtin) => Bool -> DSLExpr builtin
-boolLit n = builtinConstructor (BoolLiteral n)
--}
+boolLit b = builtinConstructor (BoolTensorLiteral (ZeroDimTensor b))
+
 ratLit :: (BuiltinHasStandardData builtin) => Rational -> DSLExpr builtin
 ratLit r = builtinConstructor (RatTensorLiteral (ZeroDimTensor r))
 

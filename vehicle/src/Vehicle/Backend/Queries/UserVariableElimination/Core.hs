@@ -295,6 +295,9 @@ type MonadQueryStructure m =
 prettyFriendlyInCtx :: (MonadNameContext m, PrettyFriendly (Contextualised a NamedBoundCtx)) => a -> m (Doc b)
 prettyFriendlyInCtx e = prettyFriendly . WithContext e <$> getNameContext
 
+prettyExternalInCtx :: (MonadNameContext m, PrettyExternal (Contextualised a NamedBoundCtx)) => a -> m (Doc b)
+prettyExternalInCtx e = prettyExternal . WithContext e <$> getNameContext
+
 getRationalVariable :: (MonadState GlobalCtx m) => Lv -> m Variable
 getRationalVariable var = do
   ctx <- get

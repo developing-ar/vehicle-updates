@@ -108,11 +108,8 @@ compileQuantifiedQuerySet ::
   VBinder Builtin ->
   Closure Builtin ->
   m (Property QueryMetaData)
-compileQuantifiedQuerySet isPropertyNegated dims binder closure = do
-  let subsectionDoc = do
-        let expr = fromBoolValue $ VQuantifyRatTensor Exists dims binder closure
-        "compilation of set of quantified queries:" <+> prettyFriendlyEmptyCtx expr
-  logCompilerPass MaxDetail subsectionDoc $ do
+compileQuantifiedQuerySet isPropertyNegated _dims binder closure = do
+  logCompilerPass MaxDetail "compilation of query set" $ do
     flip evalStateT emptyGlobalCtx $ do
       maybePartitions <- eliminateExists binder closure
       compileQuerySetPartitions isPropertyNegated maybePartitions
@@ -149,24 +146,26 @@ compileBoolExpr ::
   (MonadQueryStructure m, MonadWriter [Value Builtin] m) =>
   Value Builtin ->
   m (MaybeTrivial Partitions)
-compileBoolExpr expr = case toBoolValue expr of
-  ----------------
-  -- Base cases --
-  ----------------
-  VBoolTensorLiteral bs -> compileTrivial bs
-  VCompareRatTensor (op, args) -> purifyAndCompileAssertion op args
-  VQuantifyRatTensor Forall _ _ _ -> throwError catchableUnsupportedAlternatingQuantifiersError
-  ---------------------
-  -- Recursive cases --
-  ---------------------
-  VNot (TensorOp1Args _ e) -> do
-    lv <- boundCtxLv <$> getNameContext
-    compileBoolExpr =<< lowerNot lv Unblocking.unblockBoolExpr e
-  VBoolIf args -> compileBoolExpr =<< unfoldIf args
-  VAnd (TensorOp2Args _dims x y) -> andTrivial andPartitions <$> compileBoolExpr x <*> compileBoolExpr y
-  VOr (TensorOp2Args _dims x y) -> orTrivial orPartitions <$> compileBoolExpr x <*> compileBoolExpr y
-  VQuantifyRatTensor Exists _ binder closure -> eliminateExists binder closure
-  _ -> compileBoolExpr =<< Unblocking.unblockBoolExpr expr
+compileBoolExpr expr = do
+  showEntry expr
+  showExit =<< case toBoolValue expr of
+    ----------------
+    -- Base cases --
+    ----------------
+    VBoolTensorLiteral bs -> compileTrivial bs
+    VCompareRatTensor (op, args) -> purifyAndCompileAssertion op args
+    VQuantifyRatTensor Forall _ _ _ -> throwError catchableUnsupportedAlternatingQuantifiersError
+    ---------------------
+    -- Recursive cases --
+    ---------------------
+    VNot (TensorOp1Args _ e) -> do
+      lv <- boundCtxLv <$> getNameContext
+      compileBoolExpr =<< lowerNot lv Unblocking.unblockBoolExpr e
+    VBoolIf args -> compileBoolExpr =<< unfoldIf args
+    VAnd (TensorOp2Args _dims x y) -> andTrivial andPartitions <$> compileBoolExpr x <*> compileBoolExpr y
+    VOr (TensorOp2Args _dims x y) -> orTrivial orPartitions <$> compileBoolExpr x <*> compileBoolExpr y
+    VQuantifyRatTensor Exists _ binder closure -> eliminateExists binder closure
+    _ -> compileBoolExpr =<< Unblocking.unblockBoolExpr expr
 
 purifyAndCompileAssertion ::
   (MonadQuantifierBody m) =>
@@ -312,7 +311,7 @@ eliminateExists ::
   m (MaybeTrivial Partitions)
 eliminateExists binder (Closure env body) = do
   let varName = getBinderName binder
-  let subpassDoc = "compilation of quantified variable" <+> quotePretty varName
+  let subpassDoc = "elimination of quantified variable" <+> quotePretty varName
   logCompilerPass MidDetail subpassDoc $ do
     -- Get the shape and name of the quantified variable
     namedCtx <- getNameContext
@@ -377,3 +376,18 @@ catchableUnsupportedNonLinearConstraint =
   UnsupportedNonLinearConstraint x x x
   where
     x = developerError "Evaluating temporary quantifier error"
+
+showEntry :: (MonadQueryStructure m) => Value Builtin -> m ()
+showEntry v = do
+  logDebugM MaxDetail $ do
+    vDoc <- prettyExternalInCtx v
+    return $ "elim-enter" <+> vDoc
+  incrCallDepth
+
+showExit :: (MonadQueryStructure m) => MaybeTrivial Partitions -> m (MaybeTrivial Partitions)
+showExit v = do
+  decrCallDepth
+  logDebugM MaxDetail $ do
+    -- vDoc <- prettyExternalInCtx v
+    return "elim-exit" -- vDoc
+  return v
