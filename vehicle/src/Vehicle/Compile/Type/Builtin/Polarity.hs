@@ -34,8 +34,8 @@ typeOfBuiltinFunction = \case
   Implies -> typeOfOp2 impliesPolarity
   And {} -> typeOfOp2 maxPolarity
   Or {} -> typeOfOp2 maxPolarity
-  ReduceAndTensor -> forAllPolarities $ \p -> p ~> p
-  ReduceOrTensor -> forAllPolarities $ \p -> p ~> p
+  ReduceAndTensor -> typeOfOp2 maxPolarity
+  ReduceOrTensor -> typeOfOp2 maxPolarity
   QuantifyRatTensor q -> typeOfQuantifier q
   If -> typeOfIf
   -- Comparisons
@@ -49,10 +49,10 @@ typeOfBuiltinFunction = \case
   Min {} -> typeOfUnquantifiedOp2
   Max {} -> typeOfUnquantifiedOp2
   PowRat {} -> typeOfUnquantifiedOp2
-  ReduceAddRatTensor -> typeOfUnquantifiedOp1
-  ReduceMulRatTensor -> typeOfUnquantifiedOp1
-  ReduceMinRatTensor -> typeOfUnquantifiedOp1
-  ReduceMaxRatTensor -> typeOfUnquantifiedOp1
+  ReduceAddRatTensor -> typeOfUnquantifiedOp2
+  ReduceMulRatTensor -> typeOfUnquantifiedOp2
+  ReduceMinRatTensor -> typeOfUnquantifiedOp2
+  ReduceMaxRatTensor -> typeOfUnquantifiedOp2
   -- Conversion functions
   FromNat {} -> typeOfUnquantifiedOp1
   FromRat {} -> typeOfUnquantifiedOp1

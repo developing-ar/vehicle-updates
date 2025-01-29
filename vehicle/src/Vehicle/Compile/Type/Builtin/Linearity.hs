@@ -37,8 +37,8 @@ typeOfBuiltinFunction = \case
   Or {} -> typeOfOp2 maxLinearity
   QuantifyRatTensor q -> typeOfQuantifier q
   If -> typeOfIf
-  ReduceAndTensor -> typeOfOp1
-  ReduceOrTensor -> typeOfOp1
+  ReduceAndTensor -> typeOfOp2 maxLinearity
+  ReduceOrTensor -> typeOfOp2 maxLinearity
   -- Arithmetic operations
   Add {} -> typeOfOp2 maxLinearity
   Mul {} -> typeOfOp2 mulLinearity
@@ -48,13 +48,13 @@ typeOfBuiltinFunction = \case
   Min {} -> typeOfOp2 maxLinearity
   Max {} -> typeOfOp2 maxLinearity
   PowRat {} -> typeOfOp2 powLinearity
-  ReduceAddRatTensor -> typeOfOp1
+  ReduceAddRatTensor -> typeOfOp2 maxLinearity
   ReduceMulRatTensor ->
-    forAllLinearities $ \l1 ->
-      forAllLinearities $ \l2 ->
-        mulLinearity l1 l1 l2 .~~~> l1 ~> l2
-  ReduceMinRatTensor -> typeOfOp1
-  ReduceMaxRatTensor -> typeOfOp1
+    forAllLinearityTriples $ \l1 l2 l3 ->
+      forAllLinearities $ \l4 ->
+        mulLinearity l2 l2 l3 .~~~> mulLinearity l1 l3 l4 .~~~> l1 ~> l2 ~> l3
+  ReduceMinRatTensor -> typeOfOp2 maxLinearity
+  ReduceMaxRatTensor -> typeOfOp2 maxLinearity
   -- Comparisons
   Compare {} -> typeOfOp2 maxLinearity
   -- Conversion functions
