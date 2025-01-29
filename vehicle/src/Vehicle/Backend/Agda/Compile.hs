@@ -47,7 +47,9 @@ compileProgToAgda :: (MonadCompile m) => Prog Builtin -> AgdaOptions -> m (Doc a
 compileProgToAgda prog options = logCompilerPass MinDetail currentPhase $
   flip runReaderT (options, BoolLevel) $ do
     monoProg <- monomorphise isPropertyDecl "-" prog
+    logDebug MaxDetail "Hit3"
     prog2 <- capitaliseTypeNames monoProg
+    logDebug MaxDetail "Hit3"
     programDoc <- runFreshNameContextT $ compileProg prog2
     let programStream = layoutPretty defaultLayoutOptions programDoc
     -- Collects dependencies by first discarding precedence info and then
