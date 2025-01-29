@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Vehicle.Compile.Type.Builtin.Linearity
+module Vehicle.Data.Builtin.Linearity.Type
   ( typeLinearityBuiltin,
     isLinearityBuiltinConstructor,
   )
@@ -72,8 +72,8 @@ typeOfBuiltinFunction = \case
 
 typeOfConstructor :: BuiltinConstructor -> LinearityDSLExpr
 typeOfConstructor = \case
-  Nil -> typeOfNil
-  Cons -> typeOfCons
+  Nil -> constant
+  Cons -> typeOfOp2 maxLinearity
   UnitLiteral {} -> constant
   IndexLiteral {} -> constant
   NatLiteral {} -> constant
@@ -112,12 +112,6 @@ typeOfIf =
           ~> lArg1
           ~> lArg2
           ~> lRes
-
-typeOfNil :: LinearityDSLExpr
-typeOfNil = constant
-
-typeOfCons :: LinearityDSLExpr
-typeOfCons = typeOfOp2 maxLinearity
 
 typeOfAt :: LinearityDSLExpr
 typeOfAt = forAllLinearities $ \l -> l ~> constant ~> l

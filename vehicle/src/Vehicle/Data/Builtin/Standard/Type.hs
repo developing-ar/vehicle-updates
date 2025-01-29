@@ -1,4 +1,4 @@
-module Vehicle.Compile.Type.Builtin.Standard
+module Vehicle.Data.Builtin.Standard.Type
   ( isStandardConstructor,
     typeStandardBuiltin,
     typeOfBuiltinConstructor,
@@ -10,6 +10,7 @@ where
 
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Builtin.Interface.Type
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.DSL
 import Vehicle.Data.DSL
@@ -92,31 +93,31 @@ typeOfTypeClassOp b = case b of
 typeOfBuiltinFunction :: (HasStandardBuiltins builtin) => BuiltinFunction -> DSLExpr builtin
 typeOfBuiltinFunction = \case
   -- Boolean operations
-  Not -> typeOfTensorBoolOp1
-  And -> typeOfTensorBoolOp2
-  Or -> typeOfTensorBoolOp2
-  Implies -> typeOfTensorBoolOp2
+  Not -> typeOfTensorOp1 tBool
+  And -> typeOfTensorOp2 tBool
+  Or -> typeOfTensorOp2 tBool
+  Implies -> typeOfTensorOp2 tBool
   QuantifyRatTensor _ -> forAllExpl "A" type0 $ \a -> typeOfQuantifier a
   If -> typeOfIf
   ReduceAndTensor -> typeOfTensorBoolReduceOp
   ReduceOrTensor -> typeOfTensorBoolReduceOp
   -- Arithmetic operations
   Neg dom -> case dom of
-    NegRatTensor -> typeOfTensorRatOp1
+    NegRatTensor -> typeOfTensorOp1 tRat
   Add dom -> case dom of
     AddNat -> tNat ~> tNat ~> tNat
-    AddRatTensor -> typeOfTensorRatOp2
+    AddRatTensor -> typeOfTensorOp2 tRat
   Sub dom -> case dom of
-    SubRatTensor -> typeOfTensorRatOp2
+    SubRatTensor -> typeOfTensorOp2 tRat
   Mul dom -> case dom of
     MulNat -> tNat ~> tNat ~> tNat
-    MulRatTensor -> typeOfTensorRatOp2
+    MulRatTensor -> typeOfTensorOp2 tRat
   Div dom -> case dom of
-    DivRatTensor -> typeOfTensorRatOp2
+    DivRatTensor -> typeOfTensorOp2 tRat
   Min dom -> case dom of
-    MinRatTensor -> typeOfTensorRatOp2
+    MinRatTensor -> typeOfTensorOp2 tRat
   Max dom -> case dom of
-    MaxRatTensor -> typeOfTensorRatOp2
+    MaxRatTensor -> typeOfTensorOp2 tRat
   PowRat -> forAllDims $ \dims -> tRatTensor dims ~> tNat ~> tRatTensor dims
   ReduceAddRatTensor -> typeOfTensorRatReduceOp
   ReduceMulRatTensor -> typeOfTensorRatReduceOp
@@ -177,18 +178,6 @@ typeOfBuiltinConstructor = \case
   IndexTensorLiteral t -> forAllIrrelevantNat "n" $ \n -> foldr (\x r -> natInDomainConstraint (natLit x) n .~~~> r) (tTensor (tIndex n) (shapeOf t)) (tensorToList t)
   RatTensorLiteral t -> tRatTensor (shapeOf t)
 
-typeOfTensorRatOp1 :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
-typeOfTensorRatOp1 = forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims
-
-typeOfTensorRatOp2 :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
-typeOfTensorRatOp2 = forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tRatTensor dims
-
-typeOfTensorBoolOp1 :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
-typeOfTensorBoolOp1 = forAllDims $ \dims -> tBoolTensor dims ~> tBoolTensor dims
-
-typeOfTensorBoolOp2 :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
-typeOfTensorBoolOp2 = forAllDims $ \dims -> tBoolTensor dims ~> tBoolTensor dims ~> tBoolTensor dims
-
 typeOfTensorReduceOp ::
   (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) =>
   DSLExpr builtin ->
@@ -205,19 +194,6 @@ typeOfIf :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) =>
 typeOfIf =
   forAll "A" type0 $ \t ->
     tBoolTensor dimNil ~> t ~> t ~> t
-
-typeOfTCOp1 :: (DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin) -> DSLExpr builtin
-typeOfTCOp1 constraint =
-  forAll "A" type0 $ \t1 ->
-    forAll "B" type0 $ \t2 ->
-      constraint t1 t2 ~~~> t1 ~> t2
-
-typeOfTCOp2 :: (DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin) -> DSLExpr builtin
-typeOfTCOp2 constraint =
-  forAll "A" type0 $ \t1 ->
-    forAll "B" type0 $ \t2 ->
-      forAll "C" type0 $ \t3 ->
-        constraint t1 t2 t3 ~~~> t1 ~> t2 ~> t3
 
 typeOfTCComparisonOp ::
   (BuiltinHasStandardTypes builtin) =>

@@ -1,3 +1,5 @@
+-- | Builtins for deciding whether or not a given expression uses alternating quantifiers
+-- or not during compilation to verifier queries.
 module Vehicle.Data.Builtin.Polarity where
 
 import Control.DeepSeq (NFData (..))

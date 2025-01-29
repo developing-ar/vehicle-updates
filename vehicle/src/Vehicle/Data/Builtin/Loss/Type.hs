@@ -1,4 +1,4 @@
-module Vehicle.Compile.Type.Builtin.Loss where
+module Vehicle.Data.Builtin.Loss.Type where
 
 typeRatSearchRatTensor :: (BuiltinHasDimensionTypes builtin, BuiltinHasDimensionData builtin, BuiltinHasRatTensor builtin) => RatTensorBuiltin -> DSLExpr builtin
 typeRatSearchRatTensor = \case

@@ -1,4 +1,4 @@
-module Vehicle.Compile.Type.Builtin.Polarity
+module Vehicle.Data.Builtin.Polarity.Type
   ( typePolarityBuiltin,
     isPolarityBuiltinConstructor,
   )

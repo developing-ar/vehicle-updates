@@ -3,12 +3,12 @@ module Vehicle.Compile.Type.Builtin where
 import Data.Proxy (Proxy)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (PrintableBuiltin)
-import Vehicle.Compile.Type.Builtin.Linearity (isLinearityBuiltinConstructor, typeLinearityBuiltin)
-import Vehicle.Compile.Type.Builtin.Polarity (isPolarityBuiltinConstructor, typePolarityBuiltin)
-import Vehicle.Compile.Type.Builtin.Standard (isStandardConstructor, typeStandardBuiltin)
 import Vehicle.Data.Builtin.Linearity (LinearityBuiltin)
+import Vehicle.Data.Builtin.Linearity.Type (isLinearityBuiltinConstructor, typeLinearityBuiltin)
 import Vehicle.Data.Builtin.Polarity (PolarityBuiltin)
+import Vehicle.Data.Builtin.Polarity.Type (isPolarityBuiltinConstructor, typePolarityBuiltin)
 import Vehicle.Data.Builtin.Standard (Builtin (..))
+import Vehicle.Data.Builtin.Standard.Type (isStandardConstructor, typeStandardBuiltin)
 
 class (PrintableBuiltin builtin) => TypableBuiltin builtin where
   -- | Construct a type for the builtin

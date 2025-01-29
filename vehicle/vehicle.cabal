@@ -215,9 +215,6 @@ library
     Vehicle.Compile.Rational.LinearExpr
     Vehicle.Compile.Type.Bidirectional
     Vehicle.Compile.Type.Builtin
-    Vehicle.Compile.Type.Builtin.Linearity
-    Vehicle.Compile.Type.Builtin.Polarity
-    Vehicle.Compile.Type.Builtin.Standard
     Vehicle.Compile.Type.Constraint.ApplicationSolver
     Vehicle.Compile.Type.Constraint.Core
     Vehicle.Compile.Type.Constraint.IndexSolver
@@ -245,8 +242,14 @@ library
     Vehicle.Compile.Variable
     Vehicle.Data.Assertion
     Vehicle.Data.Builtin.Core
+    Vehicle.Data.Builtin.Decidable
+    Vehicle.Data.Builtin.Decidable.Type
+    Vehicle.Data.Builtin.Interface.Type
     Vehicle.Data.Builtin.Linearity
+    Vehicle.Data.Builtin.Linearity.Type
     Vehicle.Data.Builtin.Polarity
+    Vehicle.Data.Builtin.Polarity.Type
+    Vehicle.Data.Builtin.Standard.Type
     Vehicle.Data.Code.TypedView
     Vehicle.Data.QuantifiedVariable
     Vehicle.Data.Universe

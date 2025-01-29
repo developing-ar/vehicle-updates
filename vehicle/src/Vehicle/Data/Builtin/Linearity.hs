@@ -1,3 +1,5 @@
+-- | Builtins for deciding whether or not a property is `Constant`, `Linear` or
+-- `NonLinear` during compilation to verifier queries.
 module Vehicle.Data.Builtin.Linearity where
 
 import Control.DeepSeq (NFData (..))
