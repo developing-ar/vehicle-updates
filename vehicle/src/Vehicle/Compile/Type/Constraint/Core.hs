@@ -7,7 +7,6 @@ module Vehicle.Compile.Type.Constraint.Core
     findInstanceGoalHead,
     parseInstanceGoal,
     createInstanceUnification,
-    createSubInstance,
     mkCandidate,
     AuxiliaryConstraintProgress (..),
   )
@@ -16,14 +15,12 @@ where
 import Data.Data (Proxy (..))
 import Data.IntSet qualified as IntSet
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
-import Vehicle.Compile.Type.Monad (MonadTypeChecker, copyContext, freshMetaIdAndExpr)
-import Vehicle.Compile.Type.Monad.Class (getIsUnblockedFn)
+import Vehicle.Compile.Type.Monad.Class (MonadTypeChecker, copyContext, getIsUnblockedFn)
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
 
@@ -118,22 +115,6 @@ createInstanceUnification (ctx, origin) e1 e2 = do
   let unifyOrigin = CheckingInstanceType origin
   WithContext (Unify unifyOrigin e1 e2) <$> copyContext ctx
 
--- | Creates an instance constraint as a subgoal of an existing instance constraint.
-createSubInstance ::
-  (MonadTypeChecker builtin m) =>
-  (ConstraintContext builtin, InstanceConstraintOrigin builtin) ->
-  Relevance ->
-  Value builtin ->
-  m (Expr builtin, WithContext (InstanceConstraint builtin))
-createSubInstance (ctx, origin) r t = do
-  let p = provenanceOf ctx
-  newCtx <- copyContext ctx
-  let dbLevel = contextDBLevel ctx
-  let newTypeClassExpr = quote p dbLevel t
-  (meta, metaExpr) <- freshMetaIdAndExpr p newTypeClassExpr (boundContext ctx)
-  let newConstraint = Resolve origin meta r t
-  return (unnormalised metaExpr, WithContext newConstraint newCtx)
-
 extractHeadFromInstanceCandidate ::
   (PrintableBuiltin builtin) =>
   InstanceCandidate builtin ->
@@ -162,16 +143,16 @@ findInstanceGoalHead = \case
 parseInstanceGoal ::
   forall builtin.
   (PrintableBuiltin builtin) =>
-  WithContext (InstanceConstraint builtin) ->
+  Value builtin ->
   InstanceGoal builtin
-parseInstanceGoal (WithContext c _) = go [] (instanceGoal c)
+parseInstanceGoal originalValue = go [] originalValue
   where
     go :: Telescope builtin -> Value builtin -> InstanceGoal builtin
     go telescope = \case
       VPi binder _body
         | not (isExplicit binder) -> developerError "Instance goals with telescopes not yet supported"
       VBuiltin b spine -> InstanceGoal telescope b spine
-      _ -> developerError $ "Malformed instance goal" <+> prettyVerbose (instanceGoal c)
+      _ -> developerError $ "Malformed instance goal" <+> prettyVerbose originalValue
 
 mkCandidate :: (DSLExpr builtin, DSLExpr builtin, Bool) -> InstanceCandidate builtin
 mkCandidate (expr, solution, defaultInstance) = do

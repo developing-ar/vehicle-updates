@@ -25,6 +25,7 @@ module Vehicle.Compile.Type.Monad
     createFreshUnificationConstraint,
     createFreshInstanceConstraint,
     createFreshApplicationConstraint,
+    createDerivedInstanceConstraint,
     getActiveConstraints,
     getActiveUnificationConstraints,
     getActiveInstanceConstraints,
@@ -43,8 +44,10 @@ import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Context.Free
 import Vehicle.Compile.Error (CompileError (..))
 import Vehicle.Compile.Normalise.NBE
+import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Builtin (TypableBuiltin (..))
+import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Monad.Class
@@ -170,10 +173,27 @@ createFreshInstanceConstraint auxiliaryConstraint boundCtx p origin relevance tc
   let originProvenance = provenanceOf tcExpr
   context <- createFreshConstraintCtx originProvenance p boundCtx
   nTCExpr <- normaliseInEnv env tcExpr
-  let constraint = WithContext (Resolve origin meta relevance nTCExpr) context
+  let goal = parseInstanceGoal nTCExpr
+  let constraint = WithContext (Resolve origin meta relevance goal) context
 
   if auxiliaryConstraint
     then addAuxiliaryInstanceConstraints [constraint]
     else addInstanceConstraints [constraint]
 
   return metaExpr
+
+-- | Creates an instance constraint as a subgoal of an existing instance constraint.
+createDerivedInstanceConstraint ::
+  (MonadTypeChecker builtin m) =>
+  (ConstraintContext builtin, InstanceConstraintOrigin builtin) ->
+  Relevance ->
+  Value builtin ->
+  m (Expr builtin, WithContext (InstanceConstraint builtin))
+createDerivedInstanceConstraint (ctx, origin) r t = do
+  let p = provenanceOf ctx
+  newCtx <- copyContext ctx
+  let dbLevel = contextDBLevel ctx
+  let newTypeClassExpr = quote p dbLevel t
+  (meta, metaExpr) <- freshMetaIdAndExpr p newTypeClassExpr (boundContext ctx)
+  let newConstraint = Resolve origin meta r $ parseInstanceGoal t
+  return (unnormalised metaExpr, WithContext newConstraint newCtx)

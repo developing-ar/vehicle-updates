@@ -3,7 +3,6 @@ module Vehicle.Backend.Queries
   )
 where
 
-import Control.DeepSeq (force)
 import Control.Monad (when)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))
@@ -23,10 +22,11 @@ import Vehicle.Compile.Print.Warning ()
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.Interface
-import Vehicle.Data.Code.TypedView (BoolTensorValue (..), toBoolValue)
+import Vehicle.Data.Code.TypedView (BoolTensorValue (..), fromBoolValue, toBoolValue)
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Tensor (TensorIndices)
 import Vehicle.Prelude.Warning (CompileWarning (..))
+import Vehicle.Syntax.Tensor (Tensor (..), unstack)
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat
 import Vehicle.Verify.Specification
@@ -125,7 +125,7 @@ compilePropertyDecl ::
   Expr Builtin ->
   m (Name, MultiProperty ())
 compilePropertyDecl prog propertyData@(_, _, declProv@(ident, _), _, _) expr = do
-  logCompilerPass MinDetail ("found property" <+> quotePretty ident) $ do
+  logCompilerPass MinDetail ("property" <+> quotePretty ident) $ do
     normalisedExpr <- normaliseInEmptyEnv expr
     multiProperty <-
       compileMultiProperty propertyData normalisedExpr
@@ -154,6 +154,9 @@ compileMultiProperty multiPropertyMetaData = go []
       VBoolStackTensor args -> do
         let es' = zip [0 :: Int ..] $ stackElements args
         MultiProperty <$> traverse (\(i, e) -> go (i : indices) e) es'
+      VBoolTensorLiteral bs | not (null (tensorShape bs)) -> do
+        let es' = zip [0 :: Int ..] (fromBoolValue . VBoolTensorLiteral <$> unstack bs)
+        MultiProperty <$> traverse (\(i, e) -> go (i : indices) e) es'
       _ -> do
         let propertyMetaData@PropertyMetaData {..} = updateMetaData multiPropertyMetaData indices
         flip runReaderT propertyMetaData $ do
@@ -172,7 +175,7 @@ compileSingleProperty expr = do
   PropertyMetaData {..} <- ask
 
   -- Warn if trivial.
-  case force queries of
+  case queries of
     Trivial status -> logWarning (TrivialProperty propertyAddress status)
     _ -> return ()
 

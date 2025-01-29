@@ -189,8 +189,17 @@ restrictAbstractDefType resource decl@(ident, _) defType = do
 -- occur in the type or not.
 solveConstraints :: forall builtin m. (TCM builtin m) => Maybe (Decl builtin) -> m ()
 solveConstraints d = logCompilerPass MidDetail "constraint solving" $ do
+  sortConstraints
   loopOverConstraints 1 d
   where
+    sortConstraints :: m ()
+    sortConstraints = do
+      -- We try and priortise resolving the cast constraints first (e.g. HasTensor, IsNatLiteral)
+      -- as it produces far better error messages for the user.
+      instanceConstraints <- getActiveInstanceConstraints @builtin
+      let sortedInstanceConstraints = sortOn (not . isCastConstraint . goalHead . instanceGoal . objectIn) instanceConstraints
+      setInstanceConstraints sortedInstanceConstraints
+
     loopOverConstraints :: (TCM builtin m) => Int -> Maybe (Decl builtin) -> m ()
     loopOverConstraints loopNumber decl = do
       updatedDecl <- traverse substMetas decl

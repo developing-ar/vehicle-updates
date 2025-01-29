@@ -5,7 +5,7 @@ module Vehicle.Compile.Normalise.Builtin where
 
 import Control.Applicative ((<|>))
 import Control.Monad (foldM, zipWithM)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print.Builtin
 import Vehicle.Data.Builtin.Core
@@ -125,6 +125,8 @@ evalTensorOp2 ::
   (a -> a -> a) ->
   Maybe a ->
   Maybe a ->
+  Maybe a ->
+  Maybe a ->
   EvalSimple TensorOp2Args builtin m
 evalTensorOp2 accessBuiltin accessLit =
   evalHeteroTensorOp2 (mkExpr accessBuiltin ()) accessLit accessLit
@@ -138,8 +140,10 @@ evalHeteroTensorOp2 ::
   (a -> a -> b) ->
   Maybe a ->
   Maybe a ->
+  Maybe a ->
+  Maybe a ->
   EvalSimple TensorOp2Args builtin m
-evalHeteroTensorOp2 b inputLit outputLit op leftUnit rightUnit args =
+evalHeteroTensorOp2 b inputLit outputLit op leftUnit rightUnit leftZero rightZero args =
   evalSimple b eval args
   where
     eval :: EvalSimplePartial TensorOp2Args builtin m
@@ -164,12 +168,14 @@ evalHeteroTensorOp2 b inputLit outputLit op leftUnit rightUnit args =
         Just $ do
           newElements <- zipWithM (evalFull ds) (stackElements xs) (stackElements ys)
           evalStackTensorWithPrimitives [Wrapper outputLit] $ xs {stackElements = newElements}
-      TensorOp2Args _ds (getExpr accessConstTensor -> Just xs) ys -> case (leftUnit, getExpr inputLit (constValue xs)) of
-        (Just lunit, Just (ZeroDimTensor v)) | v == lunit -> Just $ return ys
-        _ -> Nothing
-      TensorOp2Args _ds xs (getExpr accessConstTensor -> Just ys) -> case (rightUnit, getExpr inputLit (constValue ys)) of
-        (Just runit, Just (ZeroDimTensor v)) | v == runit -> Just $ return xs
-        _ -> Nothing
+      TensorOp2Args _ds xs ys
+        | isJust leftUnit && leftUnit == getConstValue xs -> Just $ return ys
+      TensorOp2Args _ds xs ys
+        | isJust rightUnit && rightUnit == getConstValue ys -> Just $ return xs
+      TensorOp2Args _ds xs _ys
+        | isJust leftZero && leftZero == getConstValue xs -> Just $ return xs
+      TensorOp2Args _ds _xs ys
+        | isJust rightZero && rightZero == getConstValue ys -> Just $ return ys
       _ -> Nothing
 
     evalFull :: Value builtin -> Value builtin -> Value builtin -> m (Value builtin)
@@ -177,6 +183,13 @@ evalHeteroTensorOp2 b inputLit outputLit op leftUnit rightUnit args =
 
     unstackExpr :: Tensor a -> [Value builtin]
     unstackExpr xs = mkExpr inputLit <$> unstack xs
+
+    getConstValue :: Value builtin -> Maybe a
+    getConstValue value = case getExpr inputLit value of
+      Just (ConstantTensor _ v) -> Just v
+      _ -> case getExpr accessConstTensor value of
+        Just constTensor -> getConstValue (constValue constTensor)
+        _ -> Nothing
 
 evalReduceTensor ::
   forall builtin a m.
@@ -216,10 +229,10 @@ evalNot :: (MonadNormBuiltin m, HasBoolExpr Value builtin) => EvalSimple TensorO
 evalNot = evalTensorOp1 accessNotBuiltin accessBoolTensorLiteral not
 
 evalAnd :: (MonadNormBuiltin m, HasBoolExpr Value builtin) => EvalSimple TensorOp2Args builtin m
-evalAnd = evalTensorOp2 accessAndBuiltin accessBoolTensorLiteral (&&) (Just True) (Just True)
+evalAnd = evalTensorOp2 accessAndBuiltin accessBoolTensorLiteral (&&) (Just True) (Just True) (Just False) (Just False)
 
 evalOr :: (MonadNormBuiltin m, HasBoolExpr Value builtin) => EvalSimple TensorOp2Args builtin m
-evalOr = evalTensorOp2 accessOrBuiltin accessBoolTensorLiteral (||) (Just False) (Just False)
+evalOr args = evalTensorOp2 accessOrBuiltin accessBoolTensorLiteral (||) (Just False) (Just False) (Just True) (Just True) args
 
 evalImplies :: (MonadNormBuiltin m, HasBoolExpr Value builtin) => EvalSimple TensorOp2Args builtin m
 evalImplies (TensorOp2Args ds xs ys) = do
@@ -356,22 +369,22 @@ evalNegRatTensor :: (MonadNormBuiltin m, HasRatExpr Value builtin) => EvalSimple
 evalNegRatTensor = evalTensorOp1 accessNegRatTensorBuiltin accessRatTensorLiteral (\x -> -x)
 
 evalAddRatTensor :: (MonadNormBuiltin m, HasRatExpr Value builtin) => EvalSimple TensorOp2Args builtin m
-evalAddRatTensor = evalTensorOp2 accessAddRatTensorBuiltin accessRatTensorLiteral (+) (Just 0) (Just 0)
+evalAddRatTensor = evalTensorOp2 accessAddRatTensorBuiltin accessRatTensorLiteral (+) (Just 0) (Just 0) Nothing Nothing
 
 evalMulRatTensor :: (MonadNormBuiltin m, HasRatExpr Value builtin) => EvalSimple TensorOp2Args builtin m
-evalMulRatTensor = evalTensorOp2 accessMulRatTensorBuiltin accessRatTensorLiteral (*) (Just 1) (Just 1)
+evalMulRatTensor = evalTensorOp2 accessMulRatTensorBuiltin accessRatTensorLiteral (*) (Just 1) (Just 1) (Just 0) (Just 0)
 
 evalSubRatTensor :: (MonadNormBuiltin m, HasRatExpr Value builtin) => EvalSimple TensorOp2Args builtin m
-evalSubRatTensor = evalTensorOp2 accessSubRatTensorBuiltin accessRatTensorLiteral (-) Nothing (Just 0)
+evalSubRatTensor = evalTensorOp2 accessSubRatTensorBuiltin accessRatTensorLiteral (-) Nothing (Just 0) Nothing Nothing
 
 evalDivRatTensor :: (MonadNormBuiltin m, HasRatExpr Value builtin) => EvalSimple TensorOp2Args builtin m
-evalDivRatTensor = evalTensorOp2 accessDivRatTensorBuiltin accessRatTensorLiteral (/) Nothing (Just 1)
+evalDivRatTensor args = evalTensorOp2 accessDivRatTensorBuiltin accessRatTensorLiteral (/) Nothing (Just 1) Nothing Nothing args
 
 evalMinRatTensor :: (MonadNormBuiltin m, HasRatExpr Value builtin) => EvalSimple TensorOp2Args builtin m
-evalMinRatTensor = evalTensorOp2 accessMinRatTensorBuiltin accessRatTensorLiteral min Nothing Nothing
+evalMinRatTensor = evalTensorOp2 accessMinRatTensorBuiltin accessRatTensorLiteral min Nothing Nothing Nothing Nothing
 
 evalMaxRatTensor :: (MonadNormBuiltin m, HasRatExpr Value builtin) => EvalSimple TensorOp2Args builtin m
-evalMaxRatTensor = evalTensorOp2 accessMaxRatTensorBuiltin accessRatTensorLiteral max Nothing Nothing
+evalMaxRatTensor = evalTensorOp2 accessMaxRatTensorBuiltin accessRatTensorLiteral max Nothing Nothing Nothing Nothing
 
 evalPowRat ::
   (MonadNormBuiltin m, HasRatExpr Value builtin, BuiltinHasNatLiterals builtin) =>
@@ -402,6 +415,8 @@ evalCompareRatTensor op =
     accessRatTensorLiteral
     accessBoolTensorLiteral
     (comparisonOp op)
+    Nothing
+    Nothing
     Nothing
     Nothing
 

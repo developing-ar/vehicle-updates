@@ -149,11 +149,21 @@ data InstanceConstraintOrigin builtin
   | InstanceTypeRestrictionOrigin (InstanceTypeRestrictionOrigin builtin)
   deriving (Show)
 
+data InstanceGoal builtin = InstanceGoal
+  { goalTelescope :: Telescope builtin,
+    goalHead :: builtin,
+    goalSpine :: Spine builtin
+  }
+  deriving (Show)
+
+goalExpr :: InstanceGoal builtin -> Value builtin
+goalExpr InstanceGoal {..} = VBuiltin goalHead goalSpine
+
 data InstanceConstraint builtin = Resolve
   { instanceOrigin :: InstanceConstraintOrigin builtin,
     instanceSolutionMeta :: MetaID,
     instanceRelevance :: Relevance,
-    instanceGoal :: Value builtin
+    instanceGoal :: InstanceGoal builtin
   }
   deriving (Show)
 
@@ -171,13 +181,6 @@ data InstanceCandidate builtin = InstanceCandidate
 type instance
   WithContext (InstanceCandidate builtin) =
     Contextualised (InstanceCandidate builtin) (BoundCtx (Type builtin))
-
-data InstanceGoal builtin = InstanceGoal
-  { goalTelescope :: Telescope builtin,
-    goalHead :: builtin,
-    goalSpine :: Spine builtin
-  }
-  deriving (Show)
 
 type InstanceConstraintInfo builtin =
   ( ConstraintContext builtin,

@@ -10,7 +10,6 @@ import Data.Maybe (mapMaybe)
 import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (In, NoCtx, PrettyVerbose, PrintableBuiltin, prettyVerbose)
-import Vehicle.Compile.Type.Constraint.Core (parseInstanceGoal)
 import Vehicle.Compile.Type.Constraint.InstanceSolver (acceptCandidate)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
@@ -103,7 +102,7 @@ findDefault ::
   WithContext (InstanceConstraint builtin) ->
   Maybe (DefaultCandidate builtin)
 findDefault database constraint = do
-  let goal = parseInstanceGoal constraint
+  let goal = instanceGoal $ objectIn constraint
   case lookupDefaultInstance database goal of
     Just candidate -> Just $ DefaultCandidate (constraint, goal, candidate)
     Nothing -> Nothing

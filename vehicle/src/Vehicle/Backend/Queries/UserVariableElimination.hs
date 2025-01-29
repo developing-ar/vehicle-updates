@@ -26,7 +26,7 @@ import Vehicle.Compile.Error
 import Vehicle.Compile.Normalise.Builtin (EvalSimple, evalAt, evalCompareRatTensor, evalReduceAndTensor, evalStackTensor)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (prettyFriendlyEmptyCtx, prettyVerbose)
+import Vehicle.Compile.Print (prettyExternal, prettyFriendlyEmptyCtx, prettyVerbose)
 import Vehicle.Compile.Rational.LinearExpr (LinearityError (..), compileLinearRelation)
 import Vehicle.Compile.Resource (NetworkTensorType (..), NetworkType (..))
 import Vehicle.Compile.Variable (createUserVar)
@@ -52,44 +52,46 @@ eliminateUserVariables ::
   (MonadPropertyStructure m, MonadSupply QueryID m, MonadStdIO m) =>
   Value Builtin ->
   m (Property QueryMetaData)
-eliminateUserVariables expr = case toBoolValue expr of
-  ----------------
-  -- Base cases --
-  ----------------
-  VBoolTensorLiteral b -> compileTrivial b
-  VQuantifyRatTensor Exists dims binder closure -> compileQuantifiedQuerySet False dims binder closure
-  VQuantifyRatTensor Forall dims binder closure -> do
-    let negatedClosure = notClosure 0 dims closure
-    compileQuantifiedQuerySet True dims binder negatedClosure
-  ---------------------
-  -- Recursive cases --
-  ---------------------
-  VAnd (TensorOp2Args _dims e1 e2) -> andTrivial andBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
-  VOr (TensorOp2Args _dims e1 e2) -> orTrivial orBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
-  VBoolIf args -> eliminateUserVariables =<< unfoldIf args
-  -------------------------
-  -- Blocked expressions --
-  -------------------------
-  VReduceAndTensor {} -> eliminateUserVariables =<< unblock expr
-  VReduceOrTensor {} -> eliminateUserVariables =<< unblock expr
-  VBoolAt {} -> eliminateUserVariables =<< unblock expr
-  VBoolStackTensor {} -> eliminateUserVariables =<< unblock expr
-  VConstBoolTensor {} -> eliminateUserVariables =<< unblock expr
-  VBoolForeach {} -> eliminateUserVariables =<< unblock expr
-  VCompareIndex {} -> eliminateUserVariables =<< unblock expr
-  VCompareNat {} -> eliminateUserVariables =<< unblock expr
-  VNot {} -> eliminateUserVariables =<< lowerNot 0 unblock expr
-  -----------------
-  -- Mixed cases --
-  -----------------
-  -- We can only fail to unblock these cases because we can't evaluate networks
-  -- applied to constant arguments or because of if statements.
-  --
-  -- (if (forall x . f x > 0) then x else 0) > 0
-  --
-  -- When we have the ability to evaluate networks then this case can be turned to a
-  -- call to purify.
-  VCompareRatTensor {} -> compileUnquantifiedQuerySet expr
+eliminateUserVariables expr = do
+  showTopLevelEntry expr
+  showTopLevelExit =<< case toBoolValue expr of
+    ----------------
+    -- Base cases --
+    ----------------
+    VBoolTensorLiteral b -> compileTrivial b
+    VQuantifyRatTensor Exists dims binder closure -> compileQuantifiedQuerySet False dims binder closure
+    VQuantifyRatTensor Forall dims binder closure -> do
+      let negatedClosure = notClosure 0 dims closure
+      compileQuantifiedQuerySet True dims binder negatedClosure
+    ---------------------
+    -- Recursive cases --
+    ---------------------
+    VAnd (TensorOp2Args _dims e1 e2) -> andTrivial andBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
+    VOr (TensorOp2Args _dims e1 e2) -> orTrivial orBoolExpr <$> eliminateUserVariables e1 <*> eliminateUserVariables e2
+    VBoolIf args -> eliminateUserVariables =<< unfoldIf args
+    -------------------------
+    -- Blocked expressions --
+    -------------------------
+    VReduceAndTensor {} -> eliminateUserVariables =<< unblock expr
+    VReduceOrTensor {} -> eliminateUserVariables =<< unblock expr
+    VBoolAt {} -> eliminateUserVariables =<< unblock expr
+    VBoolStackTensor {} -> eliminateUserVariables =<< unblock expr
+    VConstBoolTensor {} -> eliminateUserVariables =<< unblock expr
+    VBoolForeach {} -> eliminateUserVariables =<< unblock expr
+    VCompareIndex {} -> eliminateUserVariables =<< unblock expr
+    VCompareNat {} -> eliminateUserVariables =<< unblock expr
+    VNot {} -> eliminateUserVariables =<< lowerNot 0 unblock expr
+    -----------------
+    -- Mixed cases --
+    -----------------
+    -- We can only fail to unblock these cases because we can't evaluate networks
+    -- applied to constant arguments or because of if statements.
+    --
+    -- (if (forall x . f x > 0) then x else 0) > 0
+    --
+    -- When we have the ability to evaluate networks then this case can be turned to a
+    -- call to purify.
+    VCompareRatTensor {} -> compileUnquantifiedQuerySet expr
   where
     unblock e = runFreshNameContextT (Unblocking.unblockBoolExpr e)
 
@@ -97,7 +99,7 @@ compileTrivial ::
   (MonadPropertyStructure m) =>
   Tensor Bool ->
   m (MaybeTrivial a)
-compileTrivial bs = case bs of
+compileTrivial x = case x of
   ZeroDimTensor b -> return $ Trivial b
   _ -> developerError "Should not be compiling tensors of booleans"
 
@@ -376,6 +378,21 @@ catchableUnsupportedNonLinearConstraint =
   UnsupportedNonLinearConstraint x x x
   where
     x = developerError "Evaluating temporary quantifier error"
+
+showTopLevelEntry :: (MonadCompile m) => Value Builtin -> m ()
+showTopLevelEntry v = do
+  logDebugM MaxDetail $ do
+    let vDoc = prettyExternal (WithContext v emptyNamedCtx)
+    return $ "top-elim-enter" <+> vDoc
+  incrCallDepth
+
+showTopLevelExit :: (MonadCompile m) => MaybeTrivial a -> m (MaybeTrivial a)
+showTopLevelExit v = do
+  decrCallDepth
+  logDebugM MaxDetail $ do
+    -- vDoc <- prettyExternalInCtx v
+    return "top-elim-exit" -- vDoc
+  return v
 
 showEntry :: (MonadQueryStructure m) => Value Builtin -> m ()
 showEntry v = do

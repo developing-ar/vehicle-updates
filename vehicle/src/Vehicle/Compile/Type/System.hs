@@ -50,6 +50,10 @@ class (Eq builtin, Hashable builtin, NormalisableBuiltin builtin, TypableBuiltin
   isAuxiliaryConstraint ::
     Expr builtin -> Bool
 
+  -- | Is the constraint a casting operation (e.g. of literals, tensors etc.)
+  isCastConstraint ::
+    builtin -> Bool
+
   -- | Solves an auxiliary instance constraint (i.e. a constraint that is
   -- not solvable by the default instance mechanism)
   solveAuxiliaryInstanceConstraint ::
@@ -67,6 +71,10 @@ instance HasTypeSystem Builtin where
   isAuxiliaryConstraint e = case e of
     App (Builtin _ NatInDomainConstraint) _ -> True
     _ -> False
+  isCastConstraint e = case e of
+    TypeClass c -> c `elem` ([IsTensorType, HasNatLits, HasRatLits, HasVecLits] :: [TypeClass])
+    _ -> False
+
   solveAuxiliaryInstanceConstraint = solveIndexConstraint
   addAuxiliaryInputOutputConstraints = return
   generateDefaultAuxiliaryConstraint = addNewStandardAuxiliaryConstraintUsingDefaults
@@ -123,6 +131,7 @@ instance HasTypeSystem LinearityBuiltin where
   convertFromStandardBuiltins = convertToLinearityTypes
   restrictDeclType = restrictLinearityDeclType
   isAuxiliaryConstraint _ = True
+  isCastConstraint _ = False
   solveAuxiliaryInstanceConstraint = solveLinearityConstraint
   addAuxiliaryInputOutputConstraints = addFunctionAuxiliaryInputOutputConstraints (LinearityRelation . FunctionLinearity)
   generateDefaultAuxiliaryConstraint _ = return False
@@ -215,6 +224,7 @@ instance HasTypeSystem PolarityBuiltin where
   convertFromStandardBuiltins = convertToPolarityTypes
   restrictDeclType = restrictDeclPolarityType
   isAuxiliaryConstraint _ = True
+  isCastConstraint _ = False
   solveAuxiliaryInstanceConstraint = solvePolarityConstraint
   addAuxiliaryInputOutputConstraints = addFunctionAuxiliaryInputOutputConstraints (PolarityRelation . FunctionPolarity)
   generateDefaultAuxiliaryConstraint _ = return False

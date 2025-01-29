@@ -65,7 +65,7 @@ solveInstanceConstraint depth constraint = do
   normConstraint <- substMetas constraint
   logDebug MaxDetail $ "Forced:" <+> prettyExternal normConstraint
 
-  let goal = parseInstanceGoal normConstraint
+  let goal = instanceGoal $ objectIn normConstraint
   database <- getInstanceCandidates
   let candidates = lookupInstances database goal
   solveInstanceGoal normConstraint candidates depth goal
@@ -268,7 +268,7 @@ instantiateCandidateTelescope goalCtxExtension (constraintCtx, constraintOrigin)
             let newInfo = (setConstraintBoundCtx constraintCtx boundCtx, constraintOrigin)
             -- WARNING massive hack should be traversing the normalised type here.
             normBinderType <- normaliseInEnv (boundContextToEnv boundCtx) binderType
-            (expr, constraint) <- createSubInstance newInfo (relevanceOf exprBinder) normBinderType
+            (expr, constraint) <- createDerivedInstanceConstraint newInfo (relevanceOf exprBinder) normBinderType
             return (expr, [constraint])
         let exprBodyResult = newArg `substDBInto` exprBody
         let solutionBodyResult = newArg `substDBInto` solutionBody
@@ -279,9 +279,6 @@ instantiateCandidateTelescope goalCtxExtension (constraintCtx, constraintOrigin)
 prettyCandidate :: (PrintableBuiltin builtin) => WithContext (InstanceCandidate builtin) -> Doc a
 prettyCandidate (WithContext candidate ctx) =
   prettyExternal (WithContext (candidateExpr candidate) (toNamedBoundCtx ctx))
-
-goalExpr :: InstanceGoal builtin -> Value builtin
-goalExpr InstanceGoal {..} = VBuiltin goalHead goalSpine
 
 replaceProvenance :: Provenance -> Expr builtin -> Expr builtin
 replaceProvenance p = go

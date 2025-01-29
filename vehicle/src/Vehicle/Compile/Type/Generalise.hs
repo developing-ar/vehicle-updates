@@ -81,9 +81,9 @@ prependConstraint ::
   Decl builtin ->
   WithContext (InstanceConstraint builtin) ->
   m (Decl builtin)
-prependConstraint decl (WithContext (Resolve _origin meta relevance expr) ctx) = do
+prependConstraint decl (WithContext (Resolve _origin meta relevance goal) ctx) = do
   let p = originalProvenance ctx
-  let typeClass = quote p 0 expr
+  let typeClass = quote p 0 $ goalExpr goal
 
   substTypeClass <- substMetas typeClass
   logCompilerPass MaxDetail ("generalisation over" <+> prettyVerbose substTypeClass) $

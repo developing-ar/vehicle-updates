@@ -118,8 +118,12 @@ instance MetaSubstitutable m builtin (UnificationConstraint builtin) where
   subst s (Unify origin e1 e2) = Unify <$> subst s origin <*> subst s e1 <*> subst s e2
 
 instance MetaSubstitutable m builtin (InstanceConstraint builtin) where
-  subst s (Resolve origin m r e) = do
-    Resolve <$> subst s origin <*> substMetaID s m <*> pure r <*> subst s e
+  subst s (Resolve origin m r g) =
+    Resolve <$> subst s origin <*> substMetaID s m <*> pure r <*> subst s g
+
+instance MetaSubstitutable m builtin (InstanceGoal builtin) where
+  subst s (InstanceGoal t h spine) =
+    InstanceGoal t h <$> subst s spine
 
 -- This is a massive hack, and only works because we only have instance resolution
 -- for types in the loss typing subsystem which doesn't use dependently types.

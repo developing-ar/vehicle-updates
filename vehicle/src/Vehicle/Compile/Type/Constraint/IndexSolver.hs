@@ -28,20 +28,18 @@ solveIndexConstraint ::
   WithContext (InstanceConstraint Builtin) ->
   m ()
 solveIndexConstraint constraint = do
-  normConstraint@(WithContext (Resolve _ meta _ expr) ctx) <- substMetas constraint
+  normConstraint@(WithContext (Resolve _ meta _ goal) ctx) <- substMetas constraint
   logDebug MaxDetail $ "Forced:" <+> prettyFriendly normConstraint
 
-  case expr of
-    VBuiltin _ args -> do
-      progress <- solveInDomain normConstraint (mapMaybe getExplicitArg args)
-      case progress of
-        Nothing -> do
-          let solution = Builtin mempty (BuiltinConstructor UnitLiteral)
-          solveMeta meta solution (boundContext ctx)
-        Just metas -> do
-          let blockedConstraint = blockConstraintOn normConstraint metas
-          addAuxiliaryInstanceConstraints [blockedConstraint]
-    _ -> compilerDeveloperError $ "Malformed instance goal" <+> prettyFriendly normConstraint
+  let args = mapMaybe getExplicitArg $ goalSpine goal
+  progress <- solveInDomain normConstraint args
+  case progress of
+    Nothing -> do
+      let solution = Builtin mempty (BuiltinConstructor UnitLiteral)
+      solveMeta meta solution (boundContext ctx)
+    Just metas -> do
+      let blockedConstraint = blockConstraintOn normConstraint metas
+      addAuxiliaryInstanceConstraints [blockedConstraint]
 
 -- | Function signature for constraints solved by type class resolution.
 -- This should eventually be refactored out so all are solved by instance
@@ -119,7 +117,7 @@ solveDefaultIndexConstraint ::
   m Bool
 solveDefaultIndexConstraint (WithContext constraint ctx) = do
   case instanceGoal constraint of
-    (VBuiltin NatInDomainConstraint [n, argExpr -> toTypeValue -> VIndexType size]) -> do
+    (InstanceGoal [] NatInDomainConstraint [n, argExpr -> toTypeValue -> VIndexType size]) -> do
       let succN = fromNatValue $ case argExpr n of
             INatLiteral x -> VNatLiteral (x + 1)
             n' -> VNatAdd (Op2Args n' (INatLiteral 1))

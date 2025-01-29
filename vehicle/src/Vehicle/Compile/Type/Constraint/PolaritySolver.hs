@@ -22,10 +22,10 @@ solvePolarityConstraint ::
   WithContext (InstanceConstraint PolarityBuiltin) ->
   m ()
 solvePolarityConstraint (WithContext constraint ctx) = do
-  normConstraint@(Resolve origin _ _ expr) <- substMetas constraint
+  normConstraint@(Resolve origin _ _ goal) <- substMetas constraint
   logDebug MaxDetail $ "Forced:" <+> prettyFriendly (WithContext normConstraint ctx)
 
-  (tc, spine) <- getTypeClass expr
+  (tc, spine) <- getTypeClass goal
   let maybeProgress = solve tc (ctx, origin) (mapMaybe getExplicitArg spine)
   let nConstraint = WithContext normConstraint ctx
   case maybeProgress of
@@ -77,7 +77,7 @@ solveQuantifierPolarity q info@(ctx, _) [lam, res] = case lam of
     let tc = PolarityRelation $ AddPolarity q
     let lv = contextDBLevel ctx
     resultPolarity <- normaliseClosure lv binder resPol
-    (_, addConstraint) <- createSubInstance info Irrelevant (VBuiltin tc (explicit <$> [resultPolarity, res]))
+    (_, addConstraint) <- createDerivedInstanceConstraint info Irrelevant (VBuiltin tc (explicit <$> [resultPolarity, res]))
     return $ Progress [binderEq] [addConstraint]
   _ -> Nothing
 solveQuantifierPolarity _ _c _ = Nothing
@@ -132,11 +132,11 @@ solveFunctionPolarity functionPosition info@(ctx, _) [arg, res] = case (arg, res
     return $ Progress [resEq] []
   (VPi binder1 closure1, VPi binder2 closure2) -> Just $ do
     let tc = PolarityRelation $ FunctionPolarity functionPosition
-    (_, binderConstraint) <- createSubInstance info Irrelevant (VBuiltin tc (explicit <$> [typeOf binder1, typeOf binder2]))
+    (_, binderConstraint) <- createDerivedInstanceConstraint info Irrelevant (VBuiltin tc (explicit <$> [typeOf binder1, typeOf binder2]))
     let lv = contextDBLevel ctx
     body1 <- normaliseClosure lv binder1 closure1
     body2 <- normaliseClosure lv binder2 closure2
-    (_, bodyConstraint) <- createSubInstance info Irrelevant (VBuiltin tc (explicit <$> [body1, body2]))
+    (_, bodyConstraint) <- createDerivedInstanceConstraint info Irrelevant (VBuiltin tc (explicit <$> [body1, body2]))
     return $ Progress [] [binderConstraint, bodyConstraint]
   _ -> Nothing
 solveFunctionPolarity _ _ _ = Nothing
@@ -220,7 +220,7 @@ handleConstraintProgress originalConstraint@(WithContext (Resolve _ m _ _) ctx) 
     addUnificationConstraints newUnificationConstraints
     addAuxiliaryInstanceConstraints newAuxiliaryConstraints
 
-getTypeClass :: (MonadCompile m) => Value PolarityBuiltin -> m (PolarityRelation, Spine PolarityBuiltin)
+getTypeClass :: (MonadCompile m) => InstanceGoal PolarityBuiltin -> m (PolarityRelation, Spine PolarityBuiltin)
 getTypeClass = \case
-  (VBuiltin (PolarityRelation tc) args) -> return (tc, args)
+  (InstanceGoal _ (PolarityRelation tc) args) -> return (tc, args)
   _ -> compilerDeveloperError "Unexpected non-type-class instance argument found."

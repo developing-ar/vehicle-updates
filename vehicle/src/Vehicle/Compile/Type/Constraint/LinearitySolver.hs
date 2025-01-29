@@ -21,10 +21,10 @@ solveLinearityConstraint ::
   WithContext (InstanceConstraint LinearityBuiltin) ->
   m ()
 solveLinearityConstraint (WithContext constraint ctx) = do
-  normConstraint@(Resolve origin _ _ expr) <- substMetas constraint
+  normConstraint@(Resolve origin _ _ goal) <- substMetas constraint
   logDebug MaxDetail $ "Forced:" <+> prettyFriendly (WithContext normConstraint ctx)
 
-  (tc, spine) <- getTypeClass expr
+  (tc, spine) <- getTypeClass goal
   let nConstraint = WithContext normConstraint ctx
   let maybeProgress = solve tc (ctx, origin) (mapMaybe getExplicitArg spine)
   case maybeProgress of
@@ -160,7 +160,7 @@ handleConstraintProgress originalConstraint@(WithContext (Resolve _ m _ _) ctx) 
     addUnificationConstraints newUnificationConstraints
     addAuxiliaryInstanceConstraints newAuxiliaryConstraints
 
-getTypeClass :: (MonadCompile m) => Value LinearityBuiltin -> m (LinearityRelation, Spine LinearityBuiltin)
+getTypeClass :: (MonadCompile m) => InstanceGoal LinearityBuiltin -> m (LinearityRelation, Spine LinearityBuiltin)
 getTypeClass = \case
-  (VBuiltin (LinearityRelation tc) args) -> return (tc, args)
+  (InstanceGoal [] (LinearityRelation tc) args) -> return (tc, args)
   _ -> compilerDeveloperError "Unexpected non-type-class instance argument found."
