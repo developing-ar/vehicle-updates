@@ -128,8 +128,11 @@ typeOfBuiltinFunction = \case
       forAllIrrelevantNat "n1" $ \n1 ->
         forAllIrrelevantNat "n2" $ \n2 ->
           tIndex n1 ~> tIndex n2 ~> tBoolTensor dimNil
-    CompareNat {} -> tNat ~> tNat ~> tBoolTensor dimNil
-    CompareRatTensor {} -> forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
+    CompareNat {} ->
+      tNat ~> tNat ~> tBoolTensor dimNil
+    CompareRatTensor {} ->
+      forAllDims $ \dims ->
+        tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dimNil
   -- Conversion functions
   FromNat dom -> case dom of
     FromNatToNat -> typeOfFromNat tNat

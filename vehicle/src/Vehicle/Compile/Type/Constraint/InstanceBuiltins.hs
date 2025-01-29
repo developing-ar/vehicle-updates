@@ -325,11 +325,7 @@ allInstances =
         ( forAllDims $ \dims ->
             hasCompare op (tRatTensor dims) (tRatTensor dims) (tBoolTensor dimNil),
           lamDims $ \dims ->
-            explLam "x" (tRatTensor dims) $ \x ->
-              explLam "y" (tRatTensor dims) $ \y ->
-                builtinFunction ReduceAndTensor
-                  .@@@ [dims]
-                  @@ [boolLit True, builtinFunction (Compare CompareRatTensor op) .@@@ [dims] @@ [x, y]],
+            builtinFunction (Compare CompareRatTensor op) .@@@ [dims],
           False
         )
       ]
