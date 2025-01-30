@@ -1,19 +1,14 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Eta reduce" #-}
-module Vehicle.Compile.Normalise.Builtin where
+module Vehicle.Data.Builtin.Interface.Normalise where
 
 import Control.Applicative ((<|>))
 import Control.Monad (foldM, zipWithM)
 import Data.Maybe (fromMaybe, isJust)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print.Builtin
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Interface
-import Vehicle.Data.Builtin.Linearity (LinearityBuiltin (..))
-import Vehicle.Data.Builtin.Loss (LossBuiltin (..))
-import Vehicle.Data.Builtin.Loss qualified as L
-import Vehicle.Data.Builtin.Polarity (PolarityBuiltin (..))
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Tensor (Tensor, at, foldTensor, stack, unstack, zipWithTensor, pattern ConstantTensor, pattern ZeroDimTensor)
@@ -39,19 +34,36 @@ type Eval builtin m =
   Expr builtin ->
   m (Value builtin)
 
------------------------------------------------------------------------------
--- Builtin evaluation
-
 -- | A method for evaluating an application.
 -- Although there is only one implementation of this type, it needs to be
 -- passed around as an argument to avoid dependency cycles between
 -- this module and the module in which the general NBE algorithm lives in.
 type EvalApp builtin m = Value builtin -> [VArg builtin] -> m (Value builtin)
 
+data EvalScheme builtin m
+  = forall args. (IsArgs args) => Simple (args (Value builtin) -> m (Value builtin))
+  | forall args. (IsArgs args) => NonSimple (EvalApp builtin m -> args (Value builtin) -> m (Value builtin))
+  | None
+
+-- | A type-class for builtins that can be normalised compositionally.
+class (PrintableBuiltin builtin) => NormalisableBuiltin builtin where
+  evalScheme :: (MonadLogger m) => builtin -> EvalScheme builtin m
+  blockingArgs :: builtin -> BlockingArgs
+  isTypeClassOp :: builtin -> Bool
+
+evaluateBuiltin ::
+  (MonadLogger m, NormalisableBuiltin builtin) =>
+  EvalApp builtin m ->
+  builtin ->
+  Spine builtin ->
+  m (Value builtin)
+evaluateBuiltin evalApp b spine = case evalScheme b of
+  Simple eval -> maybe (return $ VBuiltin b spine) eval (getExpr accessSpine spine)
+  NonSimple eval -> maybe (return $ VBuiltin b spine) (eval evalApp) (getExpr accessSpine spine)
+  None -> return $ VBuiltin b spine
+
 --------------------------------------------------------------------------------
 -- Evaluation
-
-type BlockingArguments builtin = [Value builtin]
 
 -- | A method for evaluating builtins that takes in an argument allowing the
 -- recursive evaluation of applications. that takes in an argument allowing
@@ -287,39 +299,6 @@ evalCompareNat op = \case
   Op2Args (INatLiteral x) (INatLiteral y) -> return $ IBoolLiteral (comparisonOp op x y)
   args -> return $ mkExpr accessCompareNat (op, args)
 
-evalFromNatToNat ::
-  (MonadNormBuiltin m, BuiltinHasNatLiterals builtin) =>
-  EvalSimple FromNatToSimpleArgs builtin m
-evalFromNatToNat (FromNatToSimpleArgs v _) = return v
-
-evalFromNatToIndex ::
-  (MonadNormBuiltin m, BuiltinHasIndexLiterals builtin, BuiltinHasNatLiterals builtin, BuiltinHasCasts builtin) =>
-  EvalSimple FromNatToIndexArgs builtin m
-evalFromNatToIndex = \case
-  FromNatToIndexArgs _ (INatLiteral v) _ -> return $ IIndexLiteral v
-  args -> return $ mkExpr accessFromNatToIndex args
-
------------------------------------------------------------------------------
--- Rat
-
-evalFromNatToRat ::
-  (MonadNormBuiltin m, HasRatExpr Value builtin, BuiltinHasNatLiterals builtin, BuiltinHasCasts builtin) =>
-  EvalSimple FromNatToSimpleArgs builtin m
-evalFromNatToRat = \case
-  FromNatToSimpleArgs (INatLiteral n) _ -> return $ IRatLiteral $ fromIntegral n
-  args -> return $ mkExpr accessFromNatToRat args
-
-evalFromRatToRat :: (MonadNormBuiltin m) => EvalSimple Op1Args builtin m
-evalFromRatToRat (Op1Args x) = return x
-
-evalVectorToList ::
-  (MonadNormBuiltin m, Show builtin, BuiltinHasNatLiterals builtin, BuiltinHasListLiterals builtin, BuiltinHasCasts builtin) =>
-  EvalSimple VectorToListArgs builtin m
-evalVectorToList args@(VectorToListArgs t d xs) =
-  case argExpr d of
-    INatLiteral n | n == length xs -> return $ mkListExpr (argExpr t) xs
-    _ -> return $ mkExpr accessFromVectorToList args
-
 -----------------------------------------------------------------------------
 -- List
 
@@ -441,50 +420,6 @@ class HasPrimitives builtin where
   tensorOp1s :: (MonadNormBuiltin m) => [TensorOp1EvalData builtin m]
   tensorOp2s :: (MonadNormBuiltin m) => [TensorOp2EvalData builtin m]
 
-instance HasPrimitives Builtin where
-  tensorLiterals =
-    [ Wrapper accessBoolTensorLiteral,
-      Wrapper accessNatTensorLiteral,
-      Wrapper accessRatTensorLiteral,
-      Wrapper accessIndexTensorLiteral
-    ]
-
-  tensorOp1s =
-    [ (accessNegRatTensor, evalNegRatTensor),
-      (accessNotTensor, evalNot)
-    ]
-
-  tensorOp2s =
-    [ (accessAddRatTensor, evalAddRatTensor),
-      (accessMulRatTensor, evalMulRatTensor),
-      (accessSubRatTensor, evalSubRatTensor),
-      (accessDivRatTensor, evalDivRatTensor),
-      (accessMinRatTensor, evalMinRatTensor),
-      (accessMaxRatTensor, evalMaxRatTensor),
-      (accessAndTensor, evalAnd),
-      (accessOrTensor, evalOr)
-    ]
-
-instance HasPrimitives LossBuiltin where
-  tensorLiterals =
-    [ Wrapper accessNatTensorLiteral,
-      Wrapper accessRatTensorLiteral,
-      Wrapper accessIndexTensorLiteral
-    ]
-
-  tensorOp1s =
-    [ (accessNegRatTensor, evalNegRatTensor)
-    ]
-
-  tensorOp2s =
-    [ (accessAddRatTensor, evalAddRatTensor),
-      (accessMulRatTensor, evalMulRatTensor),
-      (accessSubRatTensor, evalSubRatTensor),
-      (accessDivRatTensor, evalDivRatTensor),
-      (accessMinRatTensor, evalMinRatTensor),
-      (accessMaxRatTensor, evalMaxRatTensor)
-    ]
-
 evalAt ::
   forall builtin m.
   (MonadNormBuiltin m, HasPrimitives builtin, BuiltinHasListLiterals builtin, BuiltinHasIndexLiterals builtin, HasTensorExpr Value builtin) =>
@@ -604,6 +539,8 @@ evalIterate evalApp args@(IterateArgs t f n e) = case n of
 -----------------------------------------------------------------------------
 -- Blocking arguments
 
+type BlockingArguments builtin = [Value builtin]
+
 data BlockingArgs
   = Unknown
   | Known [Int]
@@ -671,10 +608,6 @@ functionBlockingArgs = \case
   Max dom -> blockingArgsMax dom
   PowRat -> Known [0, 1]
   Compare dom _op -> blockingArgsCompare dom
-  FromNat FromNatToIndex -> Known [1]
-  FromNat FromNatToNat -> Known [0]
-  FromNat FromNatToRat -> Known [0]
-  FromRat FromRatToRat -> noBlockingArgs
   If -> Known [1]
   At -> Known [3, 4]
   FoldList -> Known [4]
@@ -690,129 +623,11 @@ functionBlockingArgs = \case
   Foreach -> Known [1]
   Iterate -> Known [2]
   StackTensor -> Unknown
+
+castBlockingArgs :: BuiltinCast -> BlockingArgs
+castBlockingArgs = \case
   FromVectorToList -> Known [1]
-
------------------------------------------------------------------------------
--- Type-class
------------------------------------------------------------------------------
-
-data EvalScheme builtin m
-  = forall args. (IsArgs args) => Simple (args (Value builtin) -> m (Value builtin))
-  | forall args. (IsArgs args) => NonSimple (EvalApp builtin m -> args (Value builtin) -> m (Value builtin))
-  | None
-
--- | A type-class for builtins that can be normalised compositionally.
-class (PrintableBuiltin builtin) => NormalisableBuiltin builtin where
-  -- This function takes in the original expression (containing both relevant
-  -- and irrelevant arguments), the builtin that is in the head position
-  -- and the list of computationally relevant arguments.
-  evalScheme :: (MonadLogger m) => builtin -> EvalScheme builtin m
-  blockingArgs :: builtin -> BlockingArgs
-
-evaluateBuiltin ::
-  (MonadLogger m, NormalisableBuiltin builtin) =>
-  EvalApp builtin m ->
-  builtin ->
-  Spine builtin ->
-  m (Value builtin)
-evaluateBuiltin evalApp b spine = case evalScheme b of
-  Simple eval -> maybe (return $ VBuiltin b spine) eval (getExpr accessSpine spine)
-  NonSimple eval -> maybe (return $ VBuiltin b spine) (eval evalApp) (getExpr accessSpine spine)
-  None -> return $ VBuiltin b spine
-
-instance NormalisableBuiltin Builtin where
-  evalScheme = \case
-    BuiltinFunction f -> case f of
-      Compare CompareNat op -> Simple (evalCompareNat op)
-      Compare CompareIndex op -> Simple (evalCompareIndex op)
-      Compare CompareRatTensor op -> Simple (evalCompareRatTensor op)
-      Not -> Simple evalNot
-      And -> Simple evalAnd
-      Or -> Simple evalOr
-      Add AddNat -> Simple evalAddNat
-      Mul MulNat -> Simple evalMulNat
-      Neg NegRatTensor -> Simple evalNegRatTensor
-      Add AddRatTensor -> Simple evalAddRatTensor
-      Sub SubRatTensor -> Simple evalSubRatTensor
-      Mul MulRatTensor -> Simple evalMulRatTensor
-      Div DivRatTensor -> Simple evalDivRatTensor
-      Min MinRatTensor -> Simple evalMinRatTensor
-      Max MaxRatTensor -> Simple evalMaxRatTensor
-      PowRat -> Simple evalPowRat
-      ReduceAddRatTensor -> Simple evalReduceAddRatTensor
-      ReduceMulRatTensor -> Simple evalReduceMulRatTensor
-      ReduceMinRatTensor -> Simple evalReduceMinRatTensor
-      ReduceMaxRatTensor -> Simple evalReduceMaxRatTensor
-      ReduceAndTensor -> Simple evalReduceAndTensor
-      ReduceOrTensor -> Simple evalReduceOrTensor
-      FromNat FromNatToNat -> Simple evalFromNatToNat
-      FromNat FromNatToIndex -> Simple evalFromNatToIndex
-      FromNat FromNatToRat -> Simple evalFromNatToRat
-      FromRat FromRatToRat -> Simple evalFromRatToRat
-      FromVectorToList -> Simple evalVectorToList
-      If -> Simple evalIf
-      Implies -> Simple evalImplies
-      At -> Simple evalAt
-      StackTensor -> Simple evalStackTensor
-      ConstTensor -> Simple evalConstTensor
-      FoldList -> NonSimple evalFoldList
-      MapList -> NonSimple evalMapList
-      Foreach -> NonSimple evalForeach
-      Iterate -> NonSimple evalIterate
-      QuantifyRatTensor {} -> None
-    _ -> None
-
-  blockingArgs = \case
-    BuiltinFunction f -> functionBlockingArgs f
-    _ -> noBlockingArgs
-
-instance NormalisableBuiltin LossBuiltin where
-  evalScheme = \case
-    LossBuiltinFunction f -> case f of
-      L.Add AddNat -> Simple evalAddNat
-      L.Mul MulNat -> Simple evalMulNat
-      L.Neg NegRatTensor -> Simple evalNegRatTensor
-      L.Add AddRatTensor -> Simple evalAddRatTensor
-      L.Sub SubRatTensor -> Simple evalSubRatTensor
-      L.Mul MulRatTensor -> Simple evalMulRatTensor
-      L.Div DivRatTensor -> Simple evalDivRatTensor
-      L.Min MinRatTensor -> Simple evalMinRatTensor
-      L.Max MaxRatTensor -> Simple evalMaxRatTensor
-      L.PowRat -> Simple evalPowRat
-      L.ReduceAddRatTensor -> Simple evalReduceAddRatTensor
-      L.ReduceMulRatTensor -> Simple evalReduceMulRatTensor
-      L.ReduceMinRatTensor -> Simple evalReduceMinRatTensor
-      L.ReduceMaxRatTensor -> Simple evalReduceMaxRatTensor
-      L.At -> Simple evalAt
-      L.StackTensor -> Simple evalStackTensor
-      L.ConstTensor -> Simple evalConstTensor
-      L.FoldList -> NonSimple evalFoldList
-      L.MapList -> NonSimple evalMapList
-      L.SearchRatTensor {} -> None
-    _ -> None
-
-  blockingArgs = developerError "Blocking arguments not yet implemented for LossBuiltin"
-
-instance NormalisableBuiltin LinearityBuiltin where
-  evalScheme b = case b of
-    LinearityFunction Iterate -> NonSimple evalIterate
-    LinearityFunction _ -> None
-    _ -> None
-
-  blockingArgs = \case
-    LinearityFunction f -> functionBlockingArgs f
-    _ -> noBlockingArgs
-
-instance NormalisableBuiltin PolarityBuiltin where
-  evalScheme b = case b of
-    PolarityFunction Iterate -> NonSimple evalIterate
-    PolarityFunction _ -> None
-    _ -> None
-
-  blockingArgs = \case
-    PolarityFunction f -> functionBlockingArgs f
-    _ -> noBlockingArgs
-
-normNotImplemented :: (Pretty fn) => Doc () -> fn -> a
-normNotImplemented typeSystem b =
-  developerError $ "Normalisation of" <+> pretty b <+> "at the type-level not yet supported for" <+> typeSystem <+> "system"
+  FromNat FromNatToIndex -> Known [1]
+  FromNat FromNatToNat -> Known [0]
+  FromNat FromNatToRat -> Known [0]
+  FromRat FromRatToRat -> noBlockingArgs

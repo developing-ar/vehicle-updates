@@ -22,14 +22,13 @@ import Data.List.NonEmpty as NonEmpty (toList)
 import Vehicle.Compile.Context.Bound.Class (MonadBoundContext (..))
 import Vehicle.Compile.Context.Free.Class (MonadFreeContext (..), getFreeEnv)
 import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, getBinderContext)
-import Vehicle.Compile.Normalise.Builtin
-  ( NormalisableBuiltin (..),
-    evaluateBuiltin,
-  )
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
-import Vehicle.Compile.Print.Builtin (PrintableBuiltin (..))
+import Vehicle.Data.Builtin.Interface.Normalise
+  ( NormalisableBuiltin (..),
+    evaluateBuiltin,
+  )
 import Vehicle.Data.Code.Value
 
 -- NOTE: there is no evaluatation to NF in this file. To do it

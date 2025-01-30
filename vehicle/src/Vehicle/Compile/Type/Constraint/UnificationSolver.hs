@@ -20,7 +20,6 @@ import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Normalise.Quote (Quote (..), unnormalise)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyExternal, prettyFriendly, prettyVerbose)
-import Vehicle.Compile.Type.Builtin (TypableBuiltin (..))
 import Vehicle.Compile.Type.Constraint.Core (runConstraintSolver)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Force (forceHead)
@@ -29,6 +28,7 @@ import Vehicle.Compile.Type.Meta.Map qualified as MetaMap (lookup)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet (null, singleton)
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class
+import Vehicle.Data.Builtin.Interface.Type (TypableBuiltin (..))
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DeBruijn
 

@@ -11,7 +11,9 @@ import Vehicle.Compile.Print (prettyVerbose)
 import Vehicle.Compile.Type.Core (emptyInstanceDatabase)
 import Vehicle.Compile.Type.Subsystem (typeCheckWithSubsystem)
 import Vehicle.Data.Builtin.Linearity
+import Vehicle.Data.Builtin.Linearity.Type ()
 import Vehicle.Data.Builtin.Polarity
+import Vehicle.Data.Builtin.Polarity.Type ()
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Verify.QueryFormat.Core (QueryFormatID)
 

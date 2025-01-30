@@ -38,7 +38,7 @@ import Vehicle.Data.Assertion (UnderConstrainedVariableStatus, checkBoundsExist,
 import Data.Set qualified as Set (unions, insert, disjoint)
 import Data.Set (Set)
 import Vehicle.Data.Code.LinearExpr
-import Vehicle.Compile.Normalise.Builtin
+import Vehicle.Data.Builtin.Interface.Normalise
 import Data.List (partition)
 -}
 

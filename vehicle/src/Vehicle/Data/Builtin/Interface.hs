@@ -1,7 +1,10 @@
 module Vehicle.Data.Builtin.Interface where
 
+import Data.Maybe (isJust)
 import Vehicle.Data.Builtin.Core
+import Vehicle.Data.Code.Expr
 import Vehicle.Data.Tensor (Tensor)
+import Vehicle.Prelude
 
 --------------------------------------------------------------------------------
 -- Interface to standard builtins
@@ -16,6 +19,64 @@ import Vehicle.Data.Tensor (Tensor)
 -- of builtins being used, and therefore allows us to define operations
 -- (e.g. normalisation) once, rather than once for each builtin type.
 
+--------------------------------------------------------------------------------
+-- Conversion
+
+class ConvertableBuiltin builtin1 builtin2 where
+  convertBuiltin :: Provenance -> builtin1 -> Expr builtin2
+
+instance ConvertableBuiltin builtin builtin where
+  convertBuiltin = Builtin
+
+instance ConvertableBuiltin BuiltinType Builtin where
+  convertBuiltin p = Builtin p . BuiltinType
+
+instance ConvertableBuiltin TypeClassOp Builtin where
+  convertBuiltin p = Builtin p . TypeClassOp
+
+instance ConvertableBuiltin BuiltinConstructor Builtin where
+  convertBuiltin p = Builtin p . BuiltinConstructor
+
+instance ConvertableBuiltin BuiltinFunction Builtin where
+  convertBuiltin p = Builtin p . BuiltinFunction
+
+instance ConvertableBuiltin ComparisonOp Builtin where
+  convertBuiltin p = convertBuiltin p . CompareTC
+
+convertExprBuiltins ::
+  forall builtin1 builtin2.
+  (ConvertableBuiltin builtin1 builtin2) =>
+  Expr builtin1 ->
+  Expr builtin2
+convertExprBuiltins = mapBuiltins $ \p b args ->
+  normAppList (convertBuiltin p b) args
+
+--------------------------------------------------------------------------------
+-- Printing
+
+class (Show builtin, Pretty builtin, ConvertableBuiltin builtin Builtin) => PrintableBuiltin builtin where
+  -- | Convert expressions with the builtin back to expressions with the standard
+  -- builtin type. Used for printing.
+  coercionArgs :: builtin -> Maybe ([Arg builtin] -> Expr builtin)
+
+isCoercionExpr :: (PrintableBuiltin builtin) => Expr builtin -> Bool
+isCoercionExpr = \case
+  Builtin _ b -> isJust $ coercionArgs b
+  App (Builtin _ b) _ -> isJust $ coercionArgs b
+  _ -> False
+
+-- | Use to convert builtins for printing that have no representation in the
+-- standard `Builtin` type.
+cheatConvertBuiltin :: Provenance -> Doc a -> Expr builtin
+cheatConvertBuiltin p b = FreeVar p $ stdlibIdentifier $ layoutAsText b
+
+--------------------------------------------------------------------------------
+-- In these classes we need to separate out the types from the literals, as
+-- various sets of builtins may have the literals but not the types (e.g.
+-- `LinearityBuiltin`)
+--------------------------------------------------------------------------------
+-- HasBool
+
 type Destruct expr v = expr -> Maybe v
 
 type Construct expr v = v -> expr
@@ -24,13 +85,6 @@ data Accessor expr v = Access
   { getExpr :: Destruct expr v,
     mkExpr :: Construct expr v
   }
-
---------------------------------------------------------------------------------
--- In these classes we need to separate out the types from the literals, as
--- various sets of builtins may have the literals but not the types (e.g.
--- `LinearityBuiltin`)
---------------------------------------------------------------------------------
--- HasBool
 
 class BuiltinHasBoolLiterals builtin where
   accessBoolTensorLitBuiltin :: Accessor builtin (Tensor Bool)
@@ -49,15 +103,9 @@ class BuiltinHasBoolLiterals builtin where
 
   accessQuantifyRatTensorBuiltin :: Accessor builtin Quantifier
 
---------------------------------------------------------------------------------
--- HasIndex
-
 class BuiltinHasIndexLiterals builtin where
   accessIndexLitBuiltin :: Accessor builtin Int
   accessIndexTensorLitBuiltin :: Accessor builtin (Tensor Int)
-
---------------------------------------------------------------------------------
--- HasNat
 
 class BuiltinHasNatLiterals builtin where
   accessNatLitBuiltin :: Accessor builtin Int
@@ -69,18 +117,12 @@ class BuiltinHasNatLiterals builtin where
 class BuiltinHasNatType builtin where
   accessNatTypeBuiltin :: Accessor builtin ()
 
---------------------------------------------------------------------------------
--- HasList
-
 class BuiltinHasListLiterals builtin where
   accessNilBuiltin :: Accessor builtin ()
   accessConsBuiltin :: Accessor builtin ()
 
   accessMapListBuiltin :: Accessor builtin ()
   accessFoldListBuiltin :: Accessor builtin ()
-
---------------------------------------------------------------------------------
--- HasTensors
 
 class BuiltinHasTensors builtin where
   accessStackTensorBuiltin :: Accessor builtin ()
@@ -89,9 +131,6 @@ class BuiltinHasTensors builtin where
 
 class BuiltinHasForeach builtin where
   accessForeachTensorBuiltin :: Accessor builtin ()
-
---------------------------------------------------------------------------------
--- HasRat
 
 class (BuiltinHasTensors builtin) => BuiltinHasRatLiterals builtin where
   accessRatTensorLitBuiltin :: Accessor builtin (Tensor Rational)
@@ -109,41 +148,23 @@ class (BuiltinHasTensors builtin) => BuiltinHasRatLiterals builtin where
   accessReduceMinRatBuiltin :: Accessor builtin ()
   accessReduceMaxRatBuiltin :: Accessor builtin ()
 
---------------------------------------------------------------------------------
--- BuiltinHasStandardData
-
 -- | Indicates that this set of builtins has the standard builtin constructors
 -- and functions.
 class BuiltinHasStandardData builtin where
   accessBuiltinConstructor :: Accessor builtin BuiltinConstructor
   accessBuiltinFunction :: Accessor builtin BuiltinFunction
 
-class BuiltinHasCasts builtin where
-  accessFromNatToIndexBuiltin :: Accessor builtin ()
-  accessFromNatToRatBuiltin :: Accessor builtin ()
-  accessFromVectorToListBuiltin :: Accessor builtin ()
-
---------------------------------------------------------------------------------
--- BuiltinHasStandardTypes
-
 -- | Indicates that this set of builtins has the standard set of types.
 class BuiltinHasStandardTypes builtin where
   accessBuiltinType :: Accessor builtin BuiltinType
-  mkNatInDomainConstraint :: builtin
 
 class BuiltinHasIterate builtin where
   accessIterateBuiltin :: Accessor builtin ()
-
---------------------------------------------------------------------------------
--- HasStandardBuiltins
 
 -- | Indicates that this set of builtins has the standard set of constructors,
 -- functions and types.
 class BuiltinHasStandardTypeClasses builtin where
   mkBuiltinTypeClass :: TypeClass -> builtin
-
---------------------------------------------------------------------------------
--- HasStandardBuiltins
 
 -- | Indicates that this set of builtins has the standard set of constructors,
 -- functions and types.

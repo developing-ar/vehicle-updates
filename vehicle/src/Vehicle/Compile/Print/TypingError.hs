@@ -11,13 +11,13 @@ import Data.List.NonEmpty qualified as NonEmpty
 import Data.Monoid (Endo (..))
 import Data.Text (Text, pack)
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin)
 import Vehicle.Compile.Normalise.NBE (eval, evalClosure)
 import Vehicle.Compile.Normalise.Quote (Quote (..), unnormalise)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
-import Vehicle.Compile.Print.Builtin
 import Vehicle.Compile.Type.Core
+import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin)
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
 import Vehicle.Prelude.Logging (SilentLoggerT, runSilentLoggerT)

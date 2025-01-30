@@ -2,11 +2,20 @@
 
 module Vehicle.Data.Builtin.Standard
   ( module Syntax,
+    builtinCast,
+    accessFromNatToIndex,
+    accessFromNatToRat,
+    accessFromVectorToList,
   )
 where
 
 import Vehicle.Data.Builtin.Core as Syntax
 import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Builtin.Interface.Normalise
+import Vehicle.Data.Code.Expr
+import Vehicle.Data.Code.Interface
+import Vehicle.Data.DSL
+import Vehicle.Prelude (GenericArg (..))
 
 -----------------------------------------------------------------------------
 -- Classes
@@ -27,6 +36,15 @@ functionAccessor b =
         BuiltinFunction b1 | b == b1 -> Just ()
         _ -> Nothing,
       mkExpr = \() -> BuiltinFunction b
+    }
+
+castAccessor :: BuiltinCast -> Accessor Builtin ()
+castAccessor c =
+  Access
+    { getExpr = \case
+        BuiltinCast b1 | c == b1 -> Just ()
+        _ -> Nothing,
+      mkExpr = \() -> BuiltinCast c
     }
 
 compareAccessor :: ComparisonDomain -> Accessor Builtin ComparisonOp
@@ -169,8 +187,6 @@ instance BuiltinHasStandardTypes Builtin where
           _ -> Nothing
       }
 
-  mkNatInDomainConstraint = NatInDomainConstraint
-
 instance BuiltinHasStandardData Builtin where
   accessBuiltinFunction =
     Access
@@ -188,10 +204,139 @@ instance BuiltinHasStandardData Builtin where
           _ -> Nothing
       }
 
-instance BuiltinHasCasts Builtin where
-  accessFromNatToRatBuiltin = functionAccessor (FromNat FromNatToRat)
-  accessFromNatToIndexBuiltin = functionAccessor (FromNat FromNatToIndex)
-  accessFromVectorToListBuiltin = functionAccessor FromVectorToList
-
 instance BuiltinHasIterate Builtin where
   accessIterateBuiltin = functionAccessor Iterate
+
+---------------------------------------------------------------------------------
+-- Printing
+
+instance PrintableBuiltin Builtin where
+  coercionArgs b = case b of
+    BuiltinCast FromNat {} -> Just $ \args -> argExpr $ last args
+    BuiltinCast FromRat {} -> Just $ \args -> argExpr $ last args
+    TypeClassOp FromNatTC {} -> Just $ \args -> argExpr $ last args
+    TypeClassOp FromRatTC {} -> Just $ \args -> argExpr $ last args
+    TypeClassOp VecLiteralTC {} -> Just $ \args -> normAppList (Builtin mempty b) args
+    _ -> Nothing
+
+---------------------------------------------------------------------------------
+--- Casts
+
+builtinCast :: BuiltinCast -> DSLExpr Builtin
+builtinCast = builtin . BuiltinCast
+
+accessFromNatToIndex ::
+  (HasBuiltinConstructor expr) =>
+  Accessor (expr Builtin) (FromNatToIndexArgs (expr Builtin))
+accessFromNatToIndex = accessArgs (castAccessor (FromNat FromNatToRat))
+
+accessFromNatToRat ::
+  (HasBuiltinConstructor expr) =>
+  Accessor (expr Builtin) (FromNatToSimpleArgs (expr Builtin))
+accessFromNatToRat = accessArgs (castAccessor (FromNat FromNatToIndex))
+
+accessFromVectorToList ::
+  (HasBuiltinConstructor expr) =>
+  Accessor (expr Builtin) (VectorToListArgs (expr Builtin))
+accessFromVectorToList = accessArgs (castAccessor FromVectorToList)
+
+---------------------------------------------------------------------------------
+--- Normalisation
+
+instance HasPrimitives Builtin where
+  tensorLiterals =
+    [ Wrapper accessBoolTensorLiteral,
+      Wrapper accessNatTensorLiteral,
+      Wrapper accessRatTensorLiteral,
+      Wrapper accessIndexTensorLiteral
+    ]
+
+  tensorOp1s =
+    [ (accessNegRatTensor, evalNegRatTensor),
+      (accessNotTensor, evalNot)
+    ]
+
+  tensorOp2s =
+    [ (accessAddRatTensor, evalAddRatTensor),
+      (accessMulRatTensor, evalMulRatTensor),
+      (accessSubRatTensor, evalSubRatTensor),
+      (accessDivRatTensor, evalDivRatTensor),
+      (accessMinRatTensor, evalMinRatTensor),
+      (accessMaxRatTensor, evalMaxRatTensor),
+      (accessAndTensor, evalAnd),
+      (accessOrTensor, evalOr)
+    ]
+
+instance NormalisableBuiltin Builtin where
+  evalScheme = \case
+    BuiltinFunction f -> case f of
+      Compare CompareNat op -> Simple (evalCompareNat op)
+      Compare CompareIndex op -> Simple (evalCompareIndex op)
+      Compare CompareRatTensor op -> Simple (evalCompareRatTensor op)
+      Not -> Simple evalNot
+      And -> Simple evalAnd
+      Or -> Simple evalOr
+      Add AddNat -> Simple evalAddNat
+      Mul MulNat -> Simple evalMulNat
+      Neg NegRatTensor -> Simple evalNegRatTensor
+      Add AddRatTensor -> Simple evalAddRatTensor
+      Sub SubRatTensor -> Simple evalSubRatTensor
+      Mul MulRatTensor -> Simple evalMulRatTensor
+      Div DivRatTensor -> Simple evalDivRatTensor
+      Min MinRatTensor -> Simple evalMinRatTensor
+      Max MaxRatTensor -> Simple evalMaxRatTensor
+      PowRat -> Simple evalPowRat
+      ReduceAddRatTensor -> Simple evalReduceAddRatTensor
+      ReduceMulRatTensor -> Simple evalReduceMulRatTensor
+      ReduceMinRatTensor -> Simple evalReduceMinRatTensor
+      ReduceMaxRatTensor -> Simple evalReduceMaxRatTensor
+      ReduceAndTensor -> Simple evalReduceAndTensor
+      ReduceOrTensor -> Simple evalReduceOrTensor
+      If -> Simple evalIf
+      Implies -> Simple evalImplies
+      At -> Simple evalAt
+      StackTensor -> Simple evalStackTensor
+      ConstTensor -> Simple evalConstTensor
+      FoldList -> NonSimple evalFoldList
+      MapList -> NonSimple evalMapList
+      Foreach -> NonSimple evalForeach
+      Iterate -> NonSimple evalIterate
+      QuantifyRatTensor {} -> None
+    BuiltinCast c -> case c of
+      FromNat FromNatToNat -> Simple evalFromNatToNat
+      FromNat FromNatToIndex -> Simple evalFromNatToIndex
+      FromNat FromNatToRat -> Simple evalFromNatToRat
+      FromRat FromRatToRat -> Simple evalFromRatToRat
+      FromVectorToList -> Simple evalVectorToList
+    _ -> None
+
+  blockingArgs = \case
+    BuiltinFunction f -> functionBlockingArgs f
+    BuiltinCast c -> castBlockingArgs c
+    _ -> noBlockingArgs
+
+  isTypeClassOp = \case
+    TypeClassOp {} -> True
+    _ -> False
+
+evalFromNatToNat :: (MonadNormBuiltin m) => EvalSimple FromNatToSimpleArgs Builtin m
+evalFromNatToNat (FromNatToSimpleArgs v _) = return v
+
+evalFromNatToIndex :: (MonadNormBuiltin m) => EvalSimple FromNatToIndexArgs Builtin m
+evalFromNatToIndex = \case
+  FromNatToIndexArgs _ (INatLiteral v) _ -> return $ IIndexLiteral v
+  args -> return $ mkExpr accessFromNatToIndex args
+
+evalFromNatToRat :: (MonadNormBuiltin m) => EvalSimple FromNatToSimpleArgs Builtin m
+evalFromNatToRat = \case
+  FromNatToSimpleArgs (INatLiteral n) _ -> return $ IRatLiteral $ fromIntegral n
+  args -> return $ mkExpr accessFromNatToRat args
+
+evalFromRatToRat :: (MonadNormBuiltin m) => EvalSimple Op1Args Builtin m
+evalFromRatToRat (Op1Args x) = return x
+
+evalVectorToList :: (MonadNormBuiltin m) => EvalSimple VectorToListArgs Builtin m
+evalVectorToList args@(VectorToListArgs t d xs) =
+  case argExpr d of
+    INatLiteral n | n == length xs -> return $ mkListExpr (argExpr t) xs
+    _ -> return $ mkExpr accessFromVectorToList args

@@ -7,8 +7,8 @@ module Vehicle.Compile.Boolean.LiftIf
 where
 
 import Vehicle.Compile.Context.Free (MonadFreeContext)
-import Vehicle.Compile.Normalise.Builtin
 import Vehicle.Compile.Prelude
+import Vehicle.Data.Builtin.Interface.Normalise
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.Value

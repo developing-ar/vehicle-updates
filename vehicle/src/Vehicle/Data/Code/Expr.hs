@@ -13,11 +13,10 @@ import Data.Serialize (Serialize)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import GHC.Generics (Generic)
-import Vehicle.Data.Builtin.Standard (Builtin (..))
 import Vehicle.Data.DeBruijn (Ix (..), Lv, Substitutable (..), Substitution, shiftDBIndex, unLv)
 import Vehicle.Data.Universe (UniverseLevel (..))
 import Vehicle.Prelude
-import Vehicle.Syntax.Builtin (BuiltinFunction (..))
+import Vehicle.Syntax.Builtin (Builtin (..), BuiltinFunction (..))
 import Vehicle.Syntax.Sugar (BinderType (..), HasBinders (..))
 
 --------------------------------------------------------------------------------
@@ -182,6 +181,9 @@ getFreeVarApp = \case
 -- | Function for updating a builtin application
 type BuiltinUpdate m builtin1 builtin2 =
   Provenance -> builtin1 -> [Arg builtin2] -> m (Expr builtin2)
+
+noOpBuiltinUpdate :: (Monad m) => BuiltinUpdate m builtin builtin
+noOpBuiltinUpdate p b args = return $ normAppList (Builtin p b) args
 
 -- | Traverses all the auxiliary type arguments in the provided element,
 -- applying the provided update function when it finds them (or a space

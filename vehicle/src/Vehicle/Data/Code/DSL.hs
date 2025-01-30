@@ -52,9 +52,6 @@ forAllIrrelevantNat name = pi (Just name) (Implicit False) Irrelevant tNat
 irrelImplNatLam :: (BuiltinHasStandardTypes builtin) => Name -> (DSLExpr builtin -> DSLExpr builtin) -> DSLExpr builtin
 irrelImplNatLam n = lam n (Implicit False) Irrelevant tNat
 
-natInDomainConstraint :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-natInDomainConstraint n t = builtin mkNatInDomainConstraint @@ [n, t]
-
 --------------------------------------------------------------------------------
 -- Constructors DSL
 

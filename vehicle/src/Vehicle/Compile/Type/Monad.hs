@@ -46,12 +46,12 @@ import Vehicle.Compile.Error (CompileError (..))
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Type.Builtin (TypableBuiltin (..))
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.Monad.Instance
+import Vehicle.Data.Builtin.Interface.Type (TypableBuiltin (..))
 import Vehicle.Data.Code.Value
 
 runTypeCheckerTInitially ::

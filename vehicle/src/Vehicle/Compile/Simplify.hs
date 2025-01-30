@@ -86,8 +86,8 @@ removeInsertedCasts fun args
   | null args = fun
   | otherwise = case fun of
       Builtin p b -> case b of
-        BuiltinFunction FromNat {} -> argExpr $ last $ simplifyArgs args
-        BuiltinFunction FromRat {} -> argExpr $ last $ simplifyArgs args
+        BuiltinCast FromNat {} -> argExpr $ last $ simplifyArgs args
+        BuiltinCast FromRat {} -> argExpr $ last $ simplifyArgs args
         BuiltinFunction StackTensor -> normAppList (Builtin p (TypeClassOp VecLiteralTC)) $ simplifyArgs args
         BuiltinConstructor Cons -> delabList fun args
         BuiltinType TensorType -> delabTensorType $ simplifyArgs args

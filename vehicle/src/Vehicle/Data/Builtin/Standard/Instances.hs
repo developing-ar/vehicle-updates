@@ -3,14 +3,12 @@
 {-# HLINT ignore "Use const" #-}
 {-# HLINT ignore "Use id" #-}
 
-module Vehicle.Compile.Type.Constraint.InstanceBuiltins
+module Vehicle.Data.Builtin.Standard.Instances
   ( standardBuiltinInstances,
   )
 where
 
-import Data.Bifunctor (Bifunctor (..))
 import Data.HashMap.Strict (HashMap)
-import Data.HashMap.Strict qualified as Map
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Core (InstanceCandidate (..), InstanceDatabase (..), InstanceSearchDepth)
 import Vehicle.Data.Builtin.Standard
@@ -20,14 +18,7 @@ import Vehicle.Libraries.StandardLibrary.Definitions
 import Vehicle.Prelude
 
 standardBuiltinInstances :: InstanceDatabase Builtin
-standardBuiltinInstances = do
-  let tcAndCandidates = fmap (second (: []) . extractHeadFromInstanceCandidate) allInstances
-  let instances = Map.fromListWith (<>) tcAndCandidates
-  let defaults = Map.mapMaybeWithKey findDefault instances
-  InstanceDatabase instances defaults searchDepth
-
---------------------------------------------------------------------------------
--- Builtin instances
+standardBuiltinInstances = makeInstanceDatabase allInstances searchDepth
 
 searchDepth :: HashMap Builtin InstanceSearchDepth
 searchDepth =
@@ -161,7 +152,7 @@ allInstances =
           -- HasRatLits --
           ----------------
           ( hasRatLits (tRatTensor dimNil),
-            builtinFunction (FromRat FromRatToRat),
+            builtinCast (FromRat FromRatToRat),
             False
           ),
           ----------------
@@ -170,15 +161,15 @@ allInstances =
           ( forAllIrrelevantNat "n" $ \n ->
               hasNatLits (tIndex n),
             irrelImplNatLam "n" $ \n ->
-              builtinFunction (FromNat FromNatToIndex) .@@@ [n],
+              builtinCast (FromNat FromNatToIndex) .@@@ [n],
             False
           ),
           ( hasNatLits tNat,
-            builtinFunction (FromNat FromNatToNat),
+            builtinCast (FromNat FromNatToNat),
             True
           ),
           ( hasNatLits (tRatTensor dimNil),
-            builtinFunction (FromNat FromNatToRat),
+            builtinCast (FromNat FromNatToRat),
             False
           ),
           ----------------
@@ -199,7 +190,7 @@ allInstances =
                 hasVecLits (tList t) t d,
             implLam "t" type0 $ \t ->
               lamDim $ \d ->
-                builtinFunction FromVectorToList @@@ [t, d],
+                builtinCast FromVectorToList @@@ [t, d],
             False
           ),
           ------------------
@@ -308,7 +299,7 @@ allInstances =
       <> quantifierCandidates Forall StdForallIndex
       <> quantifierCandidates Exists StdExistsIndex
   where
-    comparisonCandidates :: ComparisonOp -> [(StandardDSLExpr, StandardDSLExpr, Bool)]
+    comparisonCandidates :: ComparisonOp -> [(DSLExpr Builtin, DSLExpr Builtin, Bool)]
     comparisonCandidates op =
       [ ( forAll "n1" tNat $ \n1 ->
             forAll "n2" tNat $ \n2 ->
@@ -333,7 +324,7 @@ allInstances =
     quantifierCandidates ::
       Quantifier ->
       StdLibFunction ->
-      [(StandardDSLExpr, StandardDSLExpr, Bool)]
+      [(DSLExpr Builtin, DSLExpr Builtin, Bool)]
     quantifierCandidates q indexOp =
       [ ( forAllNat $ \n ->
             hasQuantifier q (tIndex n),
@@ -348,13 +339,3 @@ allInstances =
           False
         )
       ]
-
-type StandardDSLExpr = DSLExpr Builtin
-
-findDefault :: Builtin -> [InstanceCandidate builtin] -> Maybe (InstanceCandidate builtin)
-findDefault b instances = do
-  let defaultInstances = filter defaultInstance instances
-  case defaultInstances of
-    [] -> Nothing
-    [inst] -> Just inst
-    _ -> developerError $ "Multiple default instances found for" <+> quotePretty b

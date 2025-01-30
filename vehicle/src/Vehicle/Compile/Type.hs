@@ -11,7 +11,6 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Context.Free
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
 import Vehicle.Compile.Type.Bidirectional
@@ -27,6 +26,7 @@ import Vehicle.Compile.Type.Meta.Substitution qualified as MetaSubstitution
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.System (HasTypeSystem (..), TCM)
+import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.Value
 

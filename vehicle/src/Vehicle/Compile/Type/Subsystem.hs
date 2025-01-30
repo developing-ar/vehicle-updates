@@ -11,11 +11,11 @@ import Vehicle.Compile.Monomorphisation (monomorphise)
 import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin, findInstanceArg)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal)
-import Vehicle.Compile.Print.Builtin (PrintableBuiltin (..))
 import Vehicle.Compile.Type (typeCheckProg)
 import Vehicle.Compile.Type.Core (InstanceDatabase)
 import Vehicle.Compile.Type.Irrelevance (removeIrrelevantCodeFromProg)
 import Vehicle.Compile.Type.System
+import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin (..))
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Libraries.StandardLibrary.Definitions (StdLibFunction (..))
 
@@ -39,7 +39,7 @@ typeCheckWithSubsystem instanceCandidates errorHandler prog = do
 
 resolveInstanceArguments ::
   forall m builtin.
-  (MonadCompile m, PrintableBuiltin builtin, Show builtin) =>
+  (MonadCompile m, NormalisableBuiltin builtin, Show builtin) =>
   Prog builtin ->
   m (Prog builtin)
 resolveInstanceArguments prog =

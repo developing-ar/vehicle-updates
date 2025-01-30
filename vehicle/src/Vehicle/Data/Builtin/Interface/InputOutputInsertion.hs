@@ -1,4 +1,4 @@
-module Vehicle.Compile.Type.Subsystem.InputOutputInsertion
+module Vehicle.Data.Builtin.Interface.InputOutputInsertion
   ( addFunctionAuxiliaryInputOutputConstraints,
   )
 where

@@ -1,4 +1,4 @@
-module Vehicle.Compile.Type.Constraint.PolaritySolver
+module Vehicle.Data.Builtin.Polarity.Solver
   ( solvePolarityConstraint,
   )
 where

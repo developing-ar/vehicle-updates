@@ -12,7 +12,7 @@ where
 
 import Vehicle.Compile.Context.Name
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print.Builtin
+import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Standard (Builtin)
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Universe (UniverseLevel)

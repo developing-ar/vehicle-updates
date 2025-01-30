@@ -5,7 +5,6 @@ module Vehicle.Compile.Type.Force where
 
 import Data.Data (Proxy (..))
 import Data.Maybe (fromMaybe)
-import Vehicle.Compile.Normalise.Builtin (BlockingArgs (..), NormalisableBuiltin (..))
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyExternal)
@@ -14,6 +13,7 @@ import Vehicle.Compile.Type.Meta.Map qualified as MetaMap (lookup)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet (singleton, unions)
 import Vehicle.Compile.Type.Monad (MonadTypeChecker)
 import Vehicle.Compile.Type.Monad.Class (getMetaSubstitution)
+import Vehicle.Data.Builtin.Interface.Normalise (BlockingArgs (..), NormalisableBuiltin (..))
 import Vehicle.Data.Code.Value
 
 -----------------------------------------------------------------------------

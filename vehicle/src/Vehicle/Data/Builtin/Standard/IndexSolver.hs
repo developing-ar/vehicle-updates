@@ -1,4 +1,4 @@
-module Vehicle.Compile.Type.Constraint.IndexSolver
+module Vehicle.Data.Builtin.Standard.IndexSolver
   ( solveIndexConstraint,
     solveDefaultIndexConstraints,
   )

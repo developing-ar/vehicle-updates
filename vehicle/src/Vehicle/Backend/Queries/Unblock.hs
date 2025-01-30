@@ -12,10 +12,10 @@ import Vehicle.Compile.Boolean.LiftIf
 import Vehicle.Compile.Context.Free (MonadFreeContext, getFreeEnv)
 import Vehicle.Compile.Context.Name (MonadNameContext, getNameContext)
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Builtin
 import Vehicle.Compile.Normalise.NBE (evalApp)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
+import Vehicle.Data.Builtin.Interface.Normalise
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.Code.TypedView

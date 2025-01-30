@@ -115,10 +115,6 @@ data BuiltinFunction
   | ReduceMinRatTensor
   | ReduceMaxRatTensor
   | Foreach
-  | -- Cast operations
-    FromNat FromNatDomain
-  | FromRat FromRatDomain
-  | FromVectorToList
   | -- Generic tensor operations
     At
   | StackTensor
@@ -159,9 +155,6 @@ instance Pretty BuiltinFunction where
     ReduceMulRatTensor -> "reduceMulRatTensor"
     ReduceMinRatTensor -> "reduceMinRatTensor"
     ReduceMaxRatTensor -> "reduceMaxRatTensor"
-    FromNat dom -> "fromNatTo" <> pretty dom
-    FromRat dom -> "fromRatTo" <> pretty dom
-    FromVectorToList -> "fromVectorToList"
     Compare dom op -> comparisonOpName op <> pretty dom
     FoldList -> "foldList"
     MapList -> "mapList"
@@ -171,11 +164,31 @@ instance Pretty BuiltinFunction where
     StackTensor {} -> "stack"
     ConstTensor -> "const"
 
+data BuiltinCast
+  = -- Cast operations
+    FromNat FromNatDomain
+  | FromRat FromRatDomain
+  | FromVectorToList
+  deriving (Eq, Ord, Show, Generic)
+
+instance NFData BuiltinCast
+
+instance Hashable BuiltinCast
+
+instance Serialize BuiltinCast
+
+instance Pretty BuiltinCast where
+  pretty = \case
+    FromNat dom -> "fromNatTo" <> pretty dom
+    FromRat dom -> "fromRatTo" <> pretty dom
+    FromVectorToList -> "fromVectorToList"
+
 -- | Builtins in the Vehicle language
 data Builtin
   = BuiltinConstructor BuiltinConstructor
   | BuiltinFunction BuiltinFunction
   | BuiltinType BuiltinType
+  | BuiltinCast BuiltinCast
   | TypeClass TypeClass
   | TypeClassOp TypeClassOp
   | NatInDomainConstraint
@@ -194,6 +207,7 @@ instance Pretty Builtin where
     BuiltinFunction f -> pretty f
     BuiltinType t -> pretty t
     BuiltinConstructor c -> pretty c
+    BuiltinCast c -> pretty c
     TypeClass tc -> pretty tc
     TypeClassOp o -> pretty o
     NatInDomainConstraint {} -> "NatInDomainConstraint"

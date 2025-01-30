@@ -8,8 +8,9 @@ import Data.List.NonEmpty
 import Data.Serialize (Serialize)
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Vehicle.Data.Builtin.Core hiding (Builtin (BuiltinConstructor, BuiltinFunction))
+import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Builtin.Interface.Normalise
 import Vehicle.Data.Code.Expr
 import Vehicle.Data.DSL
 import Vehicle.Prelude
@@ -193,6 +194,33 @@ instance BuiltinHasNatLiterals LinearityBuiltin where
 
 instance BuiltinHasIterate LinearityBuiltin where
   accessIterateBuiltin = functionAccessor Iterate
+
+--------------------------------------------------------------------------------
+-- Printing
+
+instance ConvertableBuiltin LinearityBuiltin Builtin where
+  convertBuiltin p = \case
+    LinearityConstructor c -> convertBuiltin p c
+    LinearityFunction f -> convertBuiltin p f
+    b -> cheatConvertBuiltin p $ pretty b
+
+instance PrintableBuiltin LinearityBuiltin where
+  coercionArgs _ = Nothing
+
+--------------------------------------------------------------------------------
+-- Normalisation
+
+instance NormalisableBuiltin LinearityBuiltin where
+  evalScheme b = case b of
+    LinearityFunction Iterate -> NonSimple evalIterate
+    LinearityFunction _ -> None
+    _ -> None
+
+  blockingArgs = \case
+    LinearityFunction f -> functionBlockingArgs f
+    _ -> noBlockingArgs
+
+  isTypeClassOp _ = False
 
 --------------------------------------------------------------------------------
 -- DSL

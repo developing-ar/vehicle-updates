@@ -1,4 +1,4 @@
-module Vehicle.Compile.Type.Constraint.LinearitySolver
+module Vehicle.Data.Builtin.Linearity.Solver
   ( solveLinearityConstraint,
   )
 where

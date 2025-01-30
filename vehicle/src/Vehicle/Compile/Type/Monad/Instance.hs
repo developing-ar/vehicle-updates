@@ -20,12 +20,12 @@ import Control.Monad.Trans.Class (lift)
 import Data.Hashable (Hashable)
 import Vehicle.Compile.Context.Free
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Builtin (NormalisableBuiltin)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print.Builtin
-import Vehicle.Compile.Type.Builtin (TypableBuiltin)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad.Class
+import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin)
+import Vehicle.Data.Builtin.Interface.Type
 
 --------------------------------------------------------------------------------
 -- Implementation

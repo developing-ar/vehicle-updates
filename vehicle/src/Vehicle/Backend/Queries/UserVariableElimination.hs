@@ -23,7 +23,6 @@ import Vehicle.Compile.Boolean.LiftIf (unfoldIf)
 import Vehicle.Compile.Boolean.LowerNot (lowerNot, notClosure)
 import Vehicle.Compile.Context.Name (getNameContext, runFreshNameContextT)
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.Builtin (EvalSimple, evalAt, evalCompareRatTensor, evalReduceAndTensor, evalStackTensor)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyExternal, prettyFriendlyEmptyCtx, prettyVerbose)
@@ -31,6 +30,7 @@ import Vehicle.Compile.Rational.LinearExpr (LinearityError (..), compileLinearRe
 import Vehicle.Compile.Resource (NetworkTensorType (..), NetworkType (..))
 import Vehicle.Compile.Variable (createUserVar)
 import Vehicle.Data.Assertion
+import Vehicle.Data.Builtin.Interface.Normalise (EvalSimple, evalAt, evalCompareRatTensor, evalReduceAndTensor, evalStackTensor)
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.Interface

@@ -4,8 +4,7 @@ module Vehicle.Backend.Agda.Compile
   )
 where
 
-import Control.Monad.Reader (MonadReader (..), runReaderT)
-import Data.Bifunctor (Bifunctor (..))
+import Control.Monad.Reader (runReaderT)
 import Data.Foldable (fold)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -24,9 +23,9 @@ import Vehicle.Compile.Context.Bound (getNamedBoundCtx)
 import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, ixToProperName, runFreshNameContextT)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Monomorphisation
-import Vehicle.Compile.Normalise.NBE (findInstanceArg)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
+import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Builtin.Standard (BuiltinType (..))
 import Vehicle.Data.Builtin.Standard hiding (TensorType)
 import Vehicle.Data.Universe (UniverseLevel (..))
@@ -43,14 +42,12 @@ data AgdaOptions = AgdaOptions
     moduleName :: Maybe String
   }
 
-compileProgToAgda :: (MonadCompile m) => Prog Builtin -> AgdaOptions -> m (Doc a)
+compileProgToAgda :: (MonadCompile m) => Prog DecidabilityBuiltin -> AgdaOptions -> m (Doc a)
 compileProgToAgda prog options = logCompilerPass MinDetail currentPhase $
   flip runReaderT (options, BoolLevel) $ do
     monoProg <- monomorphise isPropertyDecl "-" prog
-    logDebug MaxDetail "Hit3"
     prog2 <- capitaliseTypeNames monoProg
-    logDebug MaxDetail "Hit3"
-    programDoc <- runFreshNameContextT $ compileProg prog2
+    programDoc <- runFreshNameContextT $ compileProg options prog2
     let programStream = layoutPretty defaultLayoutOptions programDoc
     -- Collects dependencies by first discarding precedence info and then
     -- folding using Set Monoid
@@ -75,7 +72,12 @@ compileProgToAgda prog options = logCompilerPass MinDetail currentPhase $
 --------------------------------------------------------------------------------
 -- Debug functions
 
-logEntry :: (MonadAgdaCompile m) => Expr Builtin -> m ()
+type MonadAgdaCompile m =
+  ( MonadCompile m,
+    MonadNameContext m
+  )
+
+logEntry :: (MonadAgdaCompile m) => Expr DecidabilityBuiltin -> m ()
 logEntry e = do
   incrCallDepth
   ctx <- getNamedBoundCtx (Proxy @())
@@ -234,122 +236,77 @@ getPrecedence e = maybe maxPrecedence snd (docAnn e)
 annotateConstant :: [Dependency] -> Code -> Code
 annotateConstant dependencies = annotate (Set.fromList dependencies, maxPrecedence)
 
-annotateApp :: [Dependency] -> Code -> [Code] -> Code
-annotateApp dependencies fun [] =
-  let precedence = getPrecedence fun
-   in annotate (Set.fromList dependencies, precedence) fun
-annotateApp dependencies fun args =
-  let precedence = 20
-   in let bracketedArgs = map (bracketIfRequired precedence) args
-       in annotate (Set.fromList dependencies, precedence) (hsep (fun : bracketedArgs))
+annotateApp :: (MonadAgdaCompile m) => [Dependency] -> Code -> [Arg DecidabilityBuiltin] -> m Code
+annotateApp dependencies fun = \case
+  [] -> return $ annotate (Set.fromList dependencies, getPrecedence fun) fun
+  args -> do
+    let precedence = 20
+    bracketedArgs <- compileArgs precedence args
+    return $ annotate (Set.fromList dependencies, precedence) (hsep (fun : bracketedArgs))
 
-annotateInfixOp1 ::
+annotateInfixApp ::
+  (MonadAgdaCompile m) =>
   [Dependency] ->
   Precedence ->
   Maybe Code ->
-  Code ->
-  [Code] ->
-  Code
-annotateInfixOp1 dependencies precedence qualifier op args = result
-  where
-    bracketedArgs = map (bracketIfRequired precedence) args
-    qualifierDoc = maybe "" (<> ".") qualifier
-    doc = case bracketedArgs of
-      [] -> qualifierDoc <> op <> "_"
-      [e1] -> qualifierDoc <> op <+> e1
-      _ ->
-        developerError $
-          "was expecting no more than 1 argument for"
-            <+> op
-            <+> "but found the following arguments:"
-            <+> list args
-    result = annotate (Set.fromList dependencies, precedence) doc
+  Text ->
+  [Arg DecidabilityBuiltin] ->
+  m Code
+annotateInfixApp dependencies precedence qualifier op args
+  | not (all isExplicit args) =
+      annotateApp dependencies _ args
+  | otherwise = do
+      bracketedArgs <- compileArgs precedence args
+      let doc = insertInfixArgs True (Text.split "_" op) bracketedArgs
+      return $ annotate (Set.fromList dependencies, precedence) doc
 
-annotateInfixOp2 ::
-  [Dependency] ->
-  Precedence ->
-  (Code -> Code) ->
-  Maybe Code ->
-  Code ->
-  [Code] ->
-  Code
-annotateInfixOp2 dependencies precedence opBraces qualifier op args = result
-  where
-    bracketedArgs = map (bracketIfRequired precedence) args
-    qualifierDoc = maybe "" (<> ".") qualifier
-    doc = case bracketedArgs of
-      [] -> qualifierDoc <> "_" <> op <> "_"
-      [e1] -> e1 <+> qualifierDoc <> op <> "_"
-      [e1, e2] -> e1 <+> qualifierDoc <> op <+> e2
-      allArgs -> annotateApp [] ("_" <> op <> "_") allArgs
-    result = annotate (Set.fromList dependencies, precedence) (opBraces doc)
+insertInfixArgs :: Bool -> [Text] -> [Code] -> Code
+insertInfixArgs first fragments args = case (fragments, args) of
+  ([], _ : _) ->
+    developerError $
+      "was expecting no more than 1 argument for"
+        <+> op
+        <+> "but found the following arguments:"
+        <+> list args
+  a : as -> do
+    let qualifierDoc = maybe "" (<> ".") qualifier
+    _
 
-bracketIfRequired :: Precedence -> Code -> Code
-bracketIfRequired parentPrecedence expr =
-  if getPrecedence expr <= parentPrecedence
-    then parens expr
-    else expr
-
-argBrackets :: Visibility -> Code -> Code
-argBrackets Explicit {} = id
-argBrackets Implicit {} = braces
-argBrackets Instance {} = braces . braces
+argBrackets :: Precedence -> Visibility -> Code -> Code
+argBrackets parentPrecedence v e = case v of
+  Explicit {}
+    | getPrecedence e > parentPrecedence -> e
+    | otherwise -> parens e
+  Implicit {} -> braces e
+  Instance {} -> braces (braces e)
 
 binderBrackets :: Bool -> Visibility -> Code -> Code
-binderBrackets True Explicit {} = id
-binderBrackets False Explicit {} = parens
-binderBrackets _topLevel Implicit {} = braces
-binderBrackets _topLevel Instance {} = braces . braces
-
-boolBraces :: Code -> Code
-boolBraces c = annotateConstant [RelNullaryDecidable] "⌊" <+> c <+> "⌋"
-
-arrow :: Code
-arrow = "→" -- <> softline'
-
---------------------------------------------------------------------------------
--- Monad stack
-
-type MonadAgdaCompile m =
-  ( MonadCompile m,
-    MonadReader (AgdaOptions, BoolLevel) m,
-    MonadNameContext m
-  )
-
-getVerificationCache :: (MonadAgdaCompile m) => m (Maybe FilePath)
-getVerificationCache = do
-  (options, _) <- ask
-  return $ verificationCache options
-
-getBoolLevel :: (MonadAgdaCompile m) => m BoolLevel
-getBoolLevel = do
-  (_, boolLevel) <- ask
-  return boolLevel
-
-setBoolLevel :: (MonadAgdaCompile m) => BoolLevel -> m a -> m a
-setBoolLevel level = local (second (const level))
+binderBrackets topLevel = \case
+  Explicit {} | topLevel -> id
+  Explicit {} | otherwise -> parens
+  Implicit {} -> braces
+  Instance {} -> braces . braces
 
 --------------------------------------------------------------------------------
 -- Program Compilation
 
-compileProg :: (MonadAgdaCompile m) => Prog Builtin -> m Code
-compileProg (Main ds) = vsep2 <$> traverse compileDecl ds
+compileProg :: (MonadAgdaCompile m) => AgdaOptions -> Prog DecidabilityBuiltin -> m Code
+compileProg opts (Main ds) = vsep2 <$> traverse (compileDecl opts) ds
 
-compileDecl :: (MonadAgdaCompile m) => Decl Builtin -> m Code
-compileDecl = \case
+compileDecl :: (MonadAgdaCompile m) => AgdaOptions -> Decl DecidabilityBuiltin -> m Code
+compileDecl opts = \case
   DefAbstract _ n _ t ->
     compilePostulate (compileIdentifier n) <$> compileExpr t
   DefFunction _ n anns t e -> do
     let (binders, body) = foldDeclBinders e
-    setBoolLevel TypeLevel $ do
-      if isProperty anns
-        then compileProperty (compileIdentifier n) =<< compileExpr e
-        else do
-          let binders' = mapMaybe compileTopLevelBinder binders
-          (_, cbody) <- compileBinders binders (compileExpr body)
-          compileFunDef (compileIdentifier n) <$> compileExpr t <*> pure binders' <*> pure cbody
+    if isProperty anns
+      then compileProperty opts (compileIdentifier n) =<< compileExpr e
+      else do
+        let binders' = mapMaybe compileTopLevelBinder binders
+        (_, cbody) <- compileBinders binders (compileExpr body)
+        compileFunDef (compileIdentifier n) <$> compileExpr t <*> pure binders' <*> pure cbody
 
-compileExpr :: (MonadAgdaCompile m) => Expr Builtin -> m Code
+compileExpr :: (MonadAgdaCompile m) => Expr DecidabilityBuiltin -> m Code
 compileExpr expr = do
   logEntry expr
   result <- case expr of
@@ -364,7 +321,7 @@ compileExpr expr = do
       OnlyType -> do
         cInput <- compileBinder binder
         cOutput <- addNameToContext binder $ compileExpr result
-        return $ annotateInfixOp2 [] minPrecedence id Nothing arrow [cInput, cOutput]
+        return $ cInput <+> "→" <+> cOutput
       _ -> do
         let (binders, body) = foldBinders PiBinder binder result
         compileTypeLevelQuantifier Forall (binder :| binders) body
@@ -373,78 +330,34 @@ compileExpr expr = do
       cBody <- addNameToContext binder $ compileExpr body
       return $ "let" <+> cBoundExpr <+> "in" <+> cBody
     Lam _ binder body -> compileLam binder body
-    Builtin p b -> compileBuiltin p b []
+    Builtin _ b -> compileBuiltin b []
     App fun args -> compileApp fun args
 
   logExit result
   return result
 
-compileApp :: (MonadAgdaCompile m) => Expr Builtin -> NonEmpty (Arg Builtin) -> m Code
-compileApp fun args = do
-  specialResult <- case fun of
-    Builtin p b -> Just <$> compileBuiltin p b (NonEmpty.toList args)
-    FreeVar _ ident -> case findStdLibFunction ident of
-      Nothing -> return Nothing
-      Just stdlibFn -> compileStdLibFunction stdlibFn args
-    _ -> return Nothing
+compileArg :: (MonadAgdaCompile m) => Precedence -> Arg DecidabilityBuiltin -> m Code
+compileArg precedence arg = do
+  body <- compileExpr (argExpr arg)
+  return $ argBrackets precedence (visibilityOf arg) body
 
-  case specialResult of
-    Just v -> return v
-    Nothing -> do
-      cFun <- compileExpr fun
-      cArgs <- traverse compileExpr (filterOutNonExplicitArgs $ NonEmpty.toList args)
-      return $ annotateApp [] cFun cArgs
-
-compileStdLibFunction :: (MonadAgdaCompile m) => StdLibFunction -> NonEmpty (Arg Builtin) -> m (Maybe Code)
-compileStdLibFunction fn args = case fn of
-  -- StdVectorToVector -> Just <$> compileExpr (argExpr $ NonEmpty.last args)
-  -- StdVectorToList -> case args of
-  --   [_, _, RelevantExplicitArg _ (IVecLiteral tElem xs)] ->
-  --     Just <$> compileExpr (mkListExpr (argExpr tElem) (fmap argExpr xs))
-  --   _ -> return Nothing
-  StdForallIn -> case args of
-    [_, RelevantImplicitArg _ tCont, _, _, RelevantExplicitArg _ lam, RelevantExplicitArg _ cont] ->
-      Just <$> compileQuantIn Forall tCont lam cont
-    _ -> return Nothing
-  StdExistsIn -> case args of
-    [RelevantImplicitArg _ tCont, _, _, RelevantExplicitArg _ lam, RelevantExplicitArg _ cont] ->
-      Just <$> compileQuantIn Exists tCont lam cont
-    _ -> return Nothing
-  StdTypeAnn -> case args of
-    [RelevantExplicitArg _ t, RelevantExplicitArg _ e] -> do
-      e' <- compileExpr e
-      t' <- compileExpr t
-      return (Just (annotateInfixOp2 [FunctionBase] 0 id Nothing "∋" [t', e']))
-    _ -> return Nothing
-  _ -> return Nothing
+compileArgs :: (MonadAgdaCompile m) => Precedence -> [Arg DecidabilityBuiltin] -> m [Code]
+compileArgs precedence = traverse (compileArg precedence)
 
 compileLetBinder ::
   (MonadAgdaCompile m) =>
-  LetBinder (Expr Builtin) ->
+  LetBinder (Expr DecidabilityBuiltin) ->
   m Code
 compileLetBinder (binder, expr) = do
   let binderName = pretty (getBinderName binder)
   cExpr <- compileExpr expr
   return $ binderName <+> "=" <+> cExpr
 
-compileLam :: (MonadAgdaCompile m) => Binder Builtin -> Expr Builtin -> m Code
+compileLam :: (MonadAgdaCompile m) => Binder DecidabilityBuiltin -> Expr DecidabilityBuiltin -> m Code
 compileLam binder expr = do
   let (binders, body) = foldBinders LamBinder binder expr
   (cBinders, cBody) <- compileBinders (binder : binders) (compileExpr body)
-  return $ annotate (mempty, minPrecedence) ("λ" <+> hsep cBinders <+> arrow <+> cBody)
-
-compileArg :: (MonadAgdaCompile m) => Arg Builtin -> m Code
-compileArg arg = argBrackets (visibilityOf arg) <$> compileExpr (argExpr arg)
-
-compileArgs :: (MonadAgdaCompile m) => [Arg Builtin] -> m [Code]
-compileArgs args = traverse compileArg (filter (not . wasInsertedByCompiler) args)
-
-compileBooleanType :: (MonadAgdaCompile m) => m Code
-compileBooleanType = do
-  boolLevel <- getBoolLevel
-  return $ case boolLevel of
-    TypeLevel -> compileType (UniverseLevel 0)
-    BoolLevel -> annotateConstant [DataBool] "Bool"
+  return $ annotate (mempty, minPrecedence) ("λ" <+> hsep cBinders <+> "→" <+> cBody)
 
 compileIdentifier :: Identifier -> Code
 compileIdentifier ident = pretty (nameOf ident :: Name)
@@ -454,7 +367,7 @@ compileType (UniverseLevel l)
   | l == 0 = "Set"
   | otherwise = annotateConstant [] ("Set" <> pretty l)
 
-compileTopLevelBinder :: Binder Builtin -> Maybe Code
+compileTopLevelBinder :: Binder DecidabilityBuiltin -> Maybe Code
 compileTopLevelBinder binder
   | visibilityOf binder /= Explicit = Nothing
   | otherwise = do
@@ -462,187 +375,161 @@ compileTopLevelBinder binder
       let addBrackets = binderBrackets True (visibilityOf binder)
       Just $ addBrackets binderName
 
-compileBinders :: (MonadAgdaCompile m) => [Binder Builtin] -> m Code -> m ([Code], Code)
+compileBinders :: (MonadAgdaCompile m) => [Binder DecidabilityBuiltin] -> m Code -> m ([Code], Code)
 compileBinders [] c = ([],) <$> c
 compileBinders (b : bs) c = do
   (cbs, cc) <- addNameToContext b $ compileBinders bs c
   cb <- compileBinder b
   return (cb : cbs, cc)
 
-compileBinder :: (MonadAgdaCompile m) => Binder Builtin -> m Code
+compileBinder :: (MonadAgdaCompile m) => Binder DecidabilityBuiltin -> m Code
 compileBinder binder = do
   binderType <- compileExpr (typeOf binder)
   (binderDoc, noExplicitBrackets) <- case binderNamingForm binder of
     OnlyName name -> return (pretty name, True)
     OnlyType -> return (binderType, True)
     NameAndType name -> do
-      let annName = annotateInfixOp2 [] minPrecedence id Nothing ":" [pretty name, binderType]
+      let annName = "(" <> pretty name <+> ":" <+> binderType <> ")"
       return (annName, False)
 
   return $ binderBrackets noExplicitBrackets (visibilityOf binder) binderDoc
 
-agdaNegInt :: [Code] -> Code
-agdaNegInt = annotateInfixOp1 [DataInteger] 6 (Just intQualifier) "-"
+compileApp :: (MonadAgdaCompile m) => Expr DecidabilityBuiltin -> NonEmpty (Arg DecidabilityBuiltin) -> m Code
+compileApp fun args = do
+  let userArgs = NonEmpty.filter (not . wasInsertedByCompiler) args
+  case fun of
+    Builtin _p b ->
+      compileBuiltin b userArgs
+    FreeVar _ (findStdLibFunction -> Just stdlibFn) ->
+      compileStdLibFunction stdlibFn userArgs
+    _ -> do
+      cFun <- compileExpr fun
+      annotateApp [] cFun userArgs
 
-agdaPosInt :: [Code] -> Code
-agdaPosInt = annotateInfixOp1 [DataInteger] 8 (Just intQualifier) "+"
+compileStdLibFunction :: (MonadAgdaCompile m) => StdLibFunction -> [Arg DecidabilityBuiltin] -> m Code
+compileStdLibFunction fn args = case fn of
+  StdId -> annotateApp [FunctionBase] "id" args
+  StdBigAnd -> _
+  StdBigOr -> _
+  StdExistsIndex -> _
+  StdForallIndex -> _
+  StdEqualsBool -> _
+  StdNotEqualsBool -> _
+  StdAppendList -> _
+  StdVectorType -> _
+  StdForallIn -> case args of
+    [_, RelevantImplicitArg _ tCont, _, _, RelevantExplicitArg _ lam, RelevantExplicitArg _ cont] ->
+      compileQuantIn Forall tCont lam cont
+    _ -> developerError ""
+  StdExistsIn -> case args of
+    [RelevantImplicitArg _ tCont, _, _, RelevantExplicitArg _ lam, RelevantExplicitArg _ cont] ->
+      Just <$> compileQuantIn Exists tCont lam cont
+    _ -> return Nothing
+  StdTypeAnn -> annotateInfixApp [FunctionBase] 0 Nothing "_∋_" args
 
-agdaDivRat :: [Code] -> Code
-agdaDivRat = annotateInfixOp2 [DataRat] 7 id (Just ratQualifier) "/"
-
-agdaNatToFin :: [Code] -> Code
-agdaNatToFin = annotateInfixOp1 [DataFin] 10 Nothing "#"
-
-compileBuiltin :: (MonadAgdaCompile m) => Provenance -> Builtin -> [Arg Builtin] -> m Code
-compileBuiltin _p b args = case b of
-  TypeClass c -> case c of
-    HasCompare {} -> annotateApp [] "HasCompare" <$> compileArgs args
-    HasAdd -> annotateApp [] "HasAdd" <$> compileArgs args
-    HasSub -> annotateApp [] "HasSub" <$> compileArgs args
-    HasMul -> annotateApp [] "HasMul" <$> compileArgs args
-    HasDiv -> annotateApp [] "HasDiv" <$> compileArgs args
-    HasNeg -> annotateApp [] "HasNeg" <$> compileArgs args
-    HasNatLits -> annotateApp [] "HasNatLits" <$> compileArgs args
-    HasRatLits -> annotateApp [] "HasRatLits" <$> compileArgs args
-    HasQuantifier {} -> unsupportedError
-    HasVecLits -> unsupportedError
-    HasFold -> unsupportedError
-    HasMap -> unsupportedError
-    HasQuantifierIn {} -> unsupportedError
-    IsTensorType {} -> unsupportedError
-    ValidPropertyType -> unsupportedError
-    ValidParameterType {} -> unsupportedError
-    ValidNetworkType {} -> unsupportedError
-    ValidNetworkTensorType {} -> unsupportedError
-    ValidDatasetType {} -> unsupportedError
-    ValidDatasetListElementType {} -> unsupportedError
-    ValidDatasetTensorElementType {} -> unsupportedError
-  TypeClassOp op -> case op of
-    QuantifierTC q -> case reverse args of
-      (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
-      _ -> unsupportedArgsError
-    CompareTC {} -> resolveInstance b args
-    FromNatTC {} -> resolveInstance b args
-    FromRatTC {} -> resolveInstance b args
-    VecLiteralTC {} -> resolveInstance b args
-    TensorTypeTC {} -> resolveInstance b args
-    AddTC {} -> annotateInfixOp2 [VehicleUtils] 6 id Nothing "⊕" <$> compileArgs args
-    SubTC {} -> annotateInfixOp2 [VehicleUtils] 6 id Nothing "⊖" <$> compileArgs args
-    -- TODO we should really have our own Agda type-classes for all of these
-    NegTC {} -> resolveInstance b args
-    MulTC {} -> resolveInstance b args
-    DivTC {} -> resolveInstance b args
-    MapTC {} -> resolveInstance b args
-    FoldTC {} -> resolveInstance b args
-  BuiltinType t -> case t of
-    BoolType -> compileBooleanType
-    RatType -> return $ annotateConstant [DataRat] ratQualifier
-    UnitType -> return compileUnit
-    NatType -> return $ annotateConstant [DataNat] natQualifier
-    ListType -> annotateApp [DataList] "List" <$> compileArgs args
-    TensorType -> annotateApp [DataTensor] "Tensor" <$> compileArgs args
-    IndexType -> annotateApp [DataFin] "Fin" <$> compileArgs args
-  BuiltinConstructor c -> case c of
-    Nil -> return compileNil
-    Cons -> compileCons <$> compileArgs args
-    UnitLiteral -> return $ annotateConstant [DataUnit] "tt"
-    IndexLiteral n -> return $ compileIndexLiteral (toInteger n)
-    NatLiteral n -> return $ compileNatLiteral (toInteger n)
-    NatTensorLiteral {} -> unsupportedError
-    BoolTensorLiteral t -> compileBoolTensor t
-    IndexTensorLiteral {} -> unsupportedError
-    RatTensorLiteral t -> compileRatTensor t
-  BuiltinFunction f -> case f of
-    And -> compileAnd =<< compileArgs args
-    Or -> compileOr =<< compileArgs args
-    Not -> compileNot =<< compileArgs args
-    Implies -> compileImplies =<< compileArgs args
-    Add dom -> compileAdd dom <$> compileArgs args
-    Sub dom -> compileSub dom <$> compileArgs args
-    Mul dom -> compileMul dom <$> compileArgs args
-    Div dom -> compileDiv dom <$> compileArgs args
-    Neg dom -> compileNeg dom <$> compileArgs args
-    Min dom -> compileMin dom <$> compileArgs args
-    Max dom -> compileMax dom <$> compileArgs args
-    PowRat -> unsupportedError
-    Compare dom ord -> compileComparison ord dom =<< compileArgs args
-    FoldList -> annotateApp [DataList] (listQualifier <> ".foldr") <$> compileArgs args
-    MapList -> annotateApp [DataList] (listQualifier <> ".map") <$> compileArgs args
-    ReduceAndTensor -> annotateApp [DataTensor] "reduceAnd" <$> compileArgs args
-    ReduceOrTensor -> annotateApp [DataTensor] "reduceOr" <$> compileArgs args
-    ReduceAddRatTensor -> annotateApp [DataTensor] "reduceAdd" <$> compileArgs args
-    ReduceMinRatTensor -> annotateApp [DataTensor] "reduceMin" <$> compileArgs args
-    ReduceMaxRatTensor -> annotateApp [DataTensor] "reduceMax" <$> compileArgs args
-    ReduceMulRatTensor -> annotateApp [DataTensor] "reduceMul" <$> compileArgs args
-    StackTensor {} -> unsupportedError
-    ConstTensor -> annotateApp [DataTensor] "constTensor" <$> compileArgs args
+compileBuiltin :: (MonadAgdaCompile m) => DecidabilityBuiltin -> [Arg DecidabilityBuiltin] -> m Code
+compileBuiltin b args = case b of
+  StandardBuiltinType t -> case t of
+    BoolType -> compileType (UniverseLevel 0)
+    RatType -> annotateConstant [DataRat] ratQualifier
+    UnitType -> annotateConstant [DataUnit] "⊤"
+    NatType -> annotateConstant [DataNat] natQualifier
+    ListType -> annotateApp [DataList] "List" args
+    TensorType -> annotateApp [DataTensor] "Tensor" args
+    IndexType -> annotateApp [DataFin] "Fin" args
+  DecidabilityBuiltinType t -> case t of
+    DecBoolType -> annotateConstant [DataBool] "Bool"
+  StandardBuiltinConstructor c -> case c of
+    Nil -> annotateConstant [DataList] "[]"
+    Cons -> annotateInfixApp [DataList] 5 Nothing "_∷_" args
+    UnitLiteral -> annotateConstant [DataUnit] "tt"
+    IndexLiteral n -> compileIndexLiteral (toInteger n)
+    NatLiteral n -> compileNatLiteral (toInteger n)
+    NatTensorLiteral t -> compileTensorLiteral compileIntLiteral t
+    BoolTensorLiteral t -> compileTensorLiteral compileBoolLiteral t
+    RatTensorLiteral t -> compileTensorLiteral compileRatLiteral t
+    IndexTensorLiteral t -> compileTensorLiteral compileIndexLiteral t
+  DecidabilityBuiltinConstructor c -> case c of
+    DecBoolTensor t -> compileTensorLiteral compileDecBoolLiteral t
+  StandardBuiltinFunction f -> case f of
+    And -> annotateInfixApp [DataProduct] 2 Nothing "_×_" args
+    Or -> annotateInfixApp [DataSum] 1 Nothing "_⊎_" args
+    Not -> annotateInfixApp [RelNullary] 3 Nothing "¬_" args
+    Implies -> annotateInfixOp2 [] minPrecedence Nothing arrow args "→"
+    Add dom -> compileAdd dom args
+    Sub SubRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_-_" args
+    Mul MulNat -> annotateInfixApp [DataNat] 7 (Just natQualifier) "_*_" args
+    Mul MulRatTensor -> annotateInfixApp [DataRat] 7 (Just tensorQualifier) "_*_" args
+    Div DivRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_÷_" args
+    Neg NegRatTensor -> annotateInfixApp [DataTensor] 8 (Just tensorQualifier) "-_" args
+    Min MinRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊓_" args
+    Max MaxRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_⊔_" args
+    Compare dom ord -> compileComparison False ord dom args
+    FoldList -> annotateApp [DataList] (listQualifier <> ".foldr") args
+    MapList -> annotateApp [DataList] (listQualifier <> ".map") args
+    ReduceAndTensor -> annotateApp [DataTensor] "reduceAnd" args
+    ReduceOrTensor -> annotateApp [DataTensor] "reduceOr" args
+    ReduceAddRatTensor -> annotateApp [DataTensor] "reduceAdd" args
+    ReduceMinRatTensor -> annotateApp [DataTensor] "reduceMin" args
+    ReduceMaxRatTensor -> annotateApp [DataTensor] "reduceMax" args
+    ReduceMulRatTensor -> annotateApp [DataTensor] "reduceMul" args
+    ConstTensor -> annotateApp [DataTensor] "constTensor" args
     QuantifyRatTensor q -> case reverse args of
       (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
       _ -> unsupportedArgsError
-    FromNat dom -> compileFromNat dom args
-    FromRat dom -> case reverse args of
-      (value : _) -> compileFromRat dom <$> compileArg value
-      _ -> unsupportedArgsError
-    FromVectorToList -> case args of
-      _d : _tElem : xs -> compileListElements xs
-      _ -> unsupportedArgsError
     -- Needs to be special cased as `At` in Agda is simply function application.
-    At -> case args of
-      [_tElem, _d, _ds, xs, index] -> annotateApp [] <$> compileExpr (argExpr xs) <*> compileArgs [index]
-      _ -> annotateInfixOp2 [FunctionBase] (-1) id Nothing "$" <$> compileArgs args
-    -- Needs to be special cased as we need to enforce that the decision
-    -- procedure is decidable. Would be fixed by
-    -- https://github.com/vehicle-lang/vehicle/issues/694.
-    If -> case args of
-      [_, e1, e2, e3] -> do
-        ce1 <- setBoolLevel BoolLevel $ compileArg e1
-        ce2 <- compileArg e2
-        ce3 <- compileArg e3
-        return $
-          annotate
-            (Set.singleton DataBool, 0)
-            ("if" <+> ce1 <+> "then" <+> ce2 <+> "else" <+> ce3)
-      _ -> unsupportedArgsError
+    At -> annotateInfixApp [FunctionBase] (-1) Nothing "_$_" args
+    If -> annotateInfixApp [DataBool] 0 Nothing "if_then_else_" args
     Foreach -> unsupportedError
     Iterate -> unsupportedError
-  NatInDomainConstraint -> unsupportedError
+    StackTensor {} -> unsupportedError
+    PowRat -> unsupportedError
+  DecidabilityBuiltinFunction f -> case f of
+    DecNot -> annotateApp [DataBool] "not" args
+    DecAnd -> annotateInfixApp [DataBool] 6 Nothing "_∧_" args
+    DecOr -> annotateInfixApp [DataBool] 5 Nothing "_∨_" args
+    DecImplies -> annotateInfixApp [VehicleUtils] 4 Nothing "_⇒_" args
+    DecCompare dom ord -> compileComparison True ord dom args
+    DecReduceAndTensor -> _
+    DecReduceOrTensor -> _
+  DecidabilityBuiltinTypeClass {} -> monoError
+  DecidabilityBuiltinTypeClassOp {} -> monoError
   where
-    unsupportedError :: (MonadAgdaCompile m) => m a
+    unsupportedError :: a
     unsupportedError =
-      compilerDeveloperError $
+      developerError $
         "compilation of builtin" <+> quotePretty b <+> "to Agda unsupported"
 
-    unsupportedArgsError :: (MonadAgdaCompile m) => m a
+    unsupportedArgsError :: a
     unsupportedArgsError = do
-      compilerDeveloperError $
+      developerError $
         "compilation of"
           <+> quotePretty b
           <+> "with args"
           <+> prettyVerbose args
           <+> "to Agda unsupported"
 
-    resolveInstance :: (MonadAgdaCompile m) => Builtin -> [Arg Builtin] -> m Code
-    resolveInstance op as = do
-      (fn, newArgs) <- findInstanceArg op as
-      compileExpr (normAppList fn newArgs)
+    monoError :: a
+    monoError =
+      developerError $
+        "Monomorphisation should have got rid of"
+          <+> quotePretty (show b)
 
 compileTypeLevelQuantifier ::
   (MonadAgdaCompile m) =>
   Quantifier ->
-  NonEmpty (Binder Builtin) ->
-  Expr Builtin ->
+  NonEmpty (Binder DecidabilityBuiltin) ->
+  Expr DecidabilityBuiltin ->
   m Code
 compileTypeLevelQuantifier q binders body = do
   (cBinders, cBody) <- compileBinders (NonEmpty.toList binders) (compileExpr body)
   quant <- case q of
     Forall -> return "∀"
     Exists -> return $ annotateConstant [DataProduct] "∃ λ"
-  return $ quant <+> hsep cBinders <+> arrow <+> cBody
+  return $ quant <+> hsep cBinders <+> "→" <+> cBody
 
-compileQuantIn :: (MonadAgdaCompile m) => Quantifier -> Expr Builtin -> Expr Builtin -> Expr Builtin -> m Code
-compileQuantIn q tCont fn cont = do
-  boolLevel <- getBoolLevel
-
+compileQuantIn :: Bool -> Quantifier -> Expr DecidabilityBuiltin -> Expr DecidabilityBuiltin -> Expr DecidabilityBuiltin -> Code
+compileQuantIn bool q tCont fn cont = do
   (quant, qualifier, dep) <- case tCont of
     (Builtin _ (BuiltinType ListType)) -> case (boolLevel, q) of
       (TypeLevel, Forall) -> return ("All", listQualifier, DataListAll)
@@ -658,170 +545,55 @@ compileQuantIn q tCont fn cont = do
   annotateApp [dep] (qualifier <> "." <> quant) <$> traverse compileExpr [fn, cont]
 
 compileIndexLiteral :: Integer -> Code
-compileIndexLiteral i = agdaNatToFin [pretty i]
+compileIndexLiteral i = annotateInfixApp [DataFin] 10 Nothing "#_" [pretty i]
 
 compileNatLiteral :: Integer -> Code
 compileNatLiteral = pretty
 
 compileIntLiteral :: Integer -> Code
 compileIntLiteral i
-  | i >= 0 = agdaPosInt [pretty i]
-  | otherwise = agdaNegInt [compileIntLiteral (-i)]
+  | i >= 0 = annotateInfixApp [DataInteger] 8 (Just intQualifier) "+_" [pretty i]
+  | otherwise = annotateInfixApp [DataInteger] 6 (Just intQualifier) "-_" [compileIntLiteral (-i)]
 
 compileRatLiteral :: Rational -> Code
-compileRatLiteral r = agdaDivRat [num, denom]
+compileRatLiteral r = annotateInfixApp [DataRat] 7 (Just ratQualifier) "_/_" [num, denom]
   where
     num = compileIntLiteral (numerator r)
     denom = compileNatLiteral (denominator r)
 
-compileBoolTensor :: (MonadAgdaCompile m) => Tensor Bool -> m Code
-compileBoolTensor t = do
-  tCode <- traverse compileBoolOp0 t
-  return $ foldMapTensor id compileTensorLayer tCode
+compileTensorLiteral :: (a -> Code) -> Tensor a -> Code
+compileTensorLiteral compileElement =
+  foldMapTensor compileElement compileTensorLayer
+  where
+    -- \| Compiling vector literals. No literals in Agda so have to go via cons.
+    compileTensorLayer :: TensorShape -> [Code] -> Code
+    compileTensorLayer _shape = _ -- foldr (\x xs -> annotateInfixApp [] 5 Nothing "_∷ᵥ_" [x, xs]) "[]ᵥ"
 
-compileRatTensor :: (MonadAgdaCompile m) => Tensor Rational -> m Code
-compileRatTensor t =
-  return $ foldMapTensor compileRatLiteral compileTensorLayer t
+compileBoolLiteral :: Bool -> Code
+compileBoolLiteral = \case
+  True -> annotateConstant [DataUnit] "⊤"
+  False -> annotateConstant [DataEmpty] "⊥"
 
--- | Compiling vector literals. No literals in Agda so have to go via cons.
-compileTensorLayer :: TensorShape -> [Code] -> Code
-compileTensorLayer _shape = foldr (\x xs -> annotateInfixOp2 [] 5 id Nothing "∷ᵥ" [x, xs]) "[]ᵥ"
+compileDecBoolLiteral :: Bool -> Code
+compileDecBoolLiteral = \case
+  True -> annotateConstant [DataBool] "true"
+  False -> annotateConstant [DataBool] "false"
 
-compileUnit :: Code
-compileUnit = annotateConstant [DataUnit] "⊤"
-
-compileNil :: Code
-compileNil = annotateConstant [DataList] "[]"
-
-compileCons :: [Code] -> Code
-compileCons = annotateInfixOp2 [DataList] 5 id Nothing "∷"
-
--- | Compiling boolean constants
-compileBoolOp0 :: (MonadAgdaCompile m) => Bool -> m Code
-compileBoolOp0 value = do
-  boolLevel <- getBoolLevel
-  let (deps, code) = case (value, boolLevel) of
-        (True, BoolLevel) -> ([DataBool], "true")
-        (True, TypeLevel) -> ([DataUnit], "⊤")
-        (False, BoolLevel) -> ([DataBool], "false")
-        (False, TypeLevel) -> ([DataEmpty], "⊥")
-  return $ annotateConstant deps code
-
--- | Compiling boolean negation
-compileNot :: (MonadAgdaCompile m) => [Code] -> m Code
-compileNot args = do
-  boolLevel <- getBoolLevel
-  return $ case boolLevel of
-    BoolLevel -> annotateApp [DataBool] "not" args
-    TypeLevel -> annotateInfixOp1 [RelNullary] 3 Nothing "¬" args
-
-compileAnd :: (MonadAgdaCompile m) => [Code] -> m Code
-compileAnd args = do
-  boolLevel <- getBoolLevel
-  let (opDoc, precedence, dependencies) = case boolLevel of
-        BoolLevel -> ("∧", 6, [DataBool])
-        TypeLevel -> ("×", 2, [DataProduct])
-  return $ annotateInfixOp2 dependencies precedence id Nothing opDoc args
-
-compileOr :: (MonadAgdaCompile m) => [Code] -> m Code
-compileOr args = do
-  boolLevel <- getBoolLevel
-  let (opDoc, precedence, dependencies) = case boolLevel of
-        BoolLevel -> ("∨", 5, [DataBool])
-        TypeLevel -> ("⊎", 1, [DataSum])
-  return $ annotateInfixOp2 dependencies precedence id Nothing opDoc args
-
-compileImplies :: (MonadAgdaCompile m) => [Code] -> m Code
-compileImplies args = do
-  boolLevel <- getBoolLevel
-  let (opDoc, precedence, dependencies) = case boolLevel of
-        BoolLevel -> ("⇒", 4, [VehicleUtils])
-        TypeLevel -> (arrow, minPrecedence, [])
-  return $ annotateInfixOp2 dependencies precedence id Nothing opDoc args
-
--- | Compiling numeric unary operations
-compileNeg :: NegDomain -> [Code] -> Code
-compileNeg dom args = do
-  let (qualifier, dependency) = case dom of
-        -- NegRat -> (ratQualifier, DataRat)
-        NegRatTensor -> (tensorQualifier, DataTensor)
-
-  annotateInfixOp1 [dependency] 8 (Just qualifier) "-" args
-
-compileFromNat :: (MonadAgdaCompile m) => FromNatDomain -> [Arg Builtin] -> m Code
-compileFromNat dom args = case (dom, args) of
-  (FromNatToRat, [value, _]) -> do
-    v <- compileExpr $ argExpr value
-    return $ agdaDivRat [agdaPosInt [v], "1"]
-  (FromNatToIndex, [_inst, value, _]) -> do
-    v <- compileExpr $ argExpr value
-    return $ agdaNatToFin [v]
-  _ -> do
-    compilerDeveloperError $
-      "compilation of"
-        <+> quotePretty (FromNat dom)
-        <+> "with args"
-        <+> prettyVerbose args
-        <+> "to Agda unsupported"
-
-compileFromRat :: FromRatDomain -> Code -> Code
-compileFromRat dom arg = case dom of
-  FromRatToRat -> arg
-
-compileAdd :: AddDomain -> [Code] -> Code
+compileAdd :: AddDomain -> [Arg DecidabilityBuiltin] -> Code
 compileAdd dom args = do
   let (qualifier, dependency) = case dom of
         AddNat -> (natQualifier, DataNat)
         -- AddRat -> (ratQualifier, DataRat)
         AddRatTensor -> (tensorQualifier, DataTensor)
 
-  annotateInfixOp2 [dependency] 6 id (Just qualifier) "+" args
+  annotateInfixApp [dependency] 6 (Just qualifier) "_+_" args
 
-compileSub :: SubDomain -> [Code] -> Code
-compileSub dom args = do
-  let (qualifier, dependency) = case dom of
-        -- SubRat -> (ratQualifier, DataRat)
-        SubRatTensor -> (tensorQualifier, DataTensor)
-
-  annotateInfixOp2 [dependency] 6 id (Just qualifier) "-" args
-
-compileMul :: MulDomain -> [Code] -> Code
-compileMul mul args = do
-  let (qualifier, dependency) = case mul of
-        MulNat -> (natQualifier, DataNat)
-        -- MulRat -> (ratQualifier, DataRat)
-        MulRatTensor -> (tensorQualifier, DataTensor)
-
-  annotateInfixOp2 [dependency] 7 id (Just qualifier) "*" args
-
-compileDiv :: DivDomain -> [Code] -> Code
-compileDiv dom args = do
-  let (qualifier, dependency) = case dom of
-        -- DivRat -> (ratQualifier, DataRat)
-        DivRatTensor -> (tensorQualifier, DataTensor)
-
-  annotateInfixOp2 [dependency] 7 id (Just qualifier) "÷" args
-
-compileMin :: MinDomain -> [Code] -> Code
-compileMin dom args = case dom of
-  MinRatTensor -> annotateInfixOp2 [DataTensor] 6 id (Just ratQualifier) "⊓" args
-
-compileMax :: MaxDomain -> [Code] -> Code
-compileMax dom args = case dom of
-  MaxRatTensor -> annotateInfixOp2 [DataTensor] 7 id (Just ratQualifier) "⊔" args
-
-compileComparison :: (MonadAgdaCompile m) => ComparisonOp -> ComparisonDomain -> [Code] -> m Code
-compileComparison order dom args = do
-  boolLevel <- getBoolLevel
-
+compileComparison :: Bool -> ComparisonOp -> ComparisonDomain -> [Arg DecidabilityBuiltin] -> Code
+compileComparison decidable order dom args = do
   (qualifier, elemDep) <- return $ case dom of
     CompareIndex -> (finQualifier, DataFin)
     CompareNat -> (natQualifier, DataNat)
     CompareRatTensor -> (tensorQualifier, DataTensor)
-
-  let (boolDecDoc, boolDeps, opBraces) = case boolLevel of
-        BoolLevel -> ("?", [RelNullary], boolBraces)
-        TypeLevel -> ("", [], id)
 
   let orderDoc = case order of
         Le -> "≤"
@@ -829,19 +601,10 @@ compileComparison order dom args = do
         Ge -> "≥"
         Gt -> ">"
         Eq -> "≡"
-        Ne -> "≟"
+        Ne -> "≢"
+  let opDoc = "_" <> orderDoc <> (if decidable then "ᵇ" else "") <> "_"
 
-  let dependencies = [elemDep] <> boolDeps
-  let opDoc = orderDoc <> boolDecDoc
-  return $ annotateInfixOp2 dependencies 4 opBraces (Just qualifier) opDoc args
-
-compileListElements :: (MonadAgdaCompile m) => [Arg Builtin] -> m Code
-compileListElements = \case
-  [] -> return compileNil
-  x : xs -> do
-    x' <- compileExpr $ argExpr x
-    xs' <- compileListElements xs
-    return $ compileCons [x', xs']
+  annotateInfixApp [elemDep] 4 (Just qualifier) opDoc args
 
 compileFunDef :: Code -> Code -> [Code] -> Code -> Code
 compileFunDef n t ns e =
@@ -856,12 +619,11 @@ compileFunDef n t ns e =
 
 -- | Compile a `network` declaration
 compilePostulate :: Code -> Code -> Code
-compilePostulate name t =
-  "postulate" <+> name <+> ":" <+> align t
+compilePostulate name t = "postulate" <+> name <+> ":" <+> align t
 
-compileProperty :: (MonadAgdaCompile m) => Code -> Code -> m Code
-compileProperty propertyName propertyBody = do
-  maybeVerificationCache <- getVerificationCache
+compileProperty :: (MonadAgdaCompile m) => AgdaOptions -> Code -> Code -> m Code
+compileProperty options propertyName propertyBody = do
+  let maybeVerificationCache = verificationCache options
   return $
     case maybeVerificationCache of
       Nothing ->

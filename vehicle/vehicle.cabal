@@ -207,22 +207,15 @@ library
     Vehicle.Compile.ExpandResources.Dataset.IDX
     Vehicle.Compile.FourierMotzkinElimination
     Vehicle.Compile.FunctionaliseResources
-    Vehicle.Compile.Normalise.Builtin
     Vehicle.Compile.ObjectFile
     Vehicle.Compile.Prelude.Utils
-    Vehicle.Compile.Print.Builtin
     Vehicle.Compile.Print.Warning
     Vehicle.Compile.Rational.LinearExpr
     Vehicle.Compile.Type.Bidirectional
-    Vehicle.Compile.Type.Builtin
     Vehicle.Compile.Type.Constraint.ApplicationSolver
     Vehicle.Compile.Type.Constraint.Core
-    Vehicle.Compile.Type.Constraint.IndexSolver
-    Vehicle.Compile.Type.Constraint.InstanceBuiltins
     Vehicle.Compile.Type.Constraint.InstanceDefaultSolver
     Vehicle.Compile.Type.Constraint.InstanceSolver
-    Vehicle.Compile.Type.Constraint.LinearitySolver
-    Vehicle.Compile.Type.Constraint.PolaritySolver
     Vehicle.Compile.Type.Constraint.UnificationSolver
     Vehicle.Compile.Type.Core
     Vehicle.Compile.Type.Force
@@ -237,18 +230,24 @@ library
     Vehicle.Compile.Type.Monad.Class
     Vehicle.Compile.Type.Monad.Instance
     Vehicle.Compile.Type.Subsystem
-    Vehicle.Compile.Type.Subsystem.InputOutputInsertion
     Vehicle.Compile.Type.System
     Vehicle.Compile.Variable
     Vehicle.Data.Assertion
     Vehicle.Data.Builtin.Core
-    Vehicle.Data.Builtin.Decidable
-    Vehicle.Data.Builtin.Decidable.Type
+    Vehicle.Data.Builtin.Decidability
+    Vehicle.Data.Builtin.Decidability.Instances
+    Vehicle.Data.Builtin.Decidability.Type
+    Vehicle.Data.Builtin.Interface.InputOutputInsertion
+    Vehicle.Data.Builtin.Interface.Normalise
     Vehicle.Data.Builtin.Interface.Type
     Vehicle.Data.Builtin.Linearity
+    Vehicle.Data.Builtin.Linearity.Solver
     Vehicle.Data.Builtin.Linearity.Type
     Vehicle.Data.Builtin.Polarity
+    Vehicle.Data.Builtin.Polarity.Solver
     Vehicle.Data.Builtin.Polarity.Type
+    Vehicle.Data.Builtin.Standard.IndexSolver
+    Vehicle.Data.Builtin.Standard.Instances
     Vehicle.Data.Builtin.Standard.Type
     Vehicle.Data.Code.TypedView
     Vehicle.Data.QuantifiedVariable

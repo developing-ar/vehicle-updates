@@ -223,9 +223,6 @@ isLiftableOp = \case
   Implies -> False
   QuantifyRatTensor {} -> False
   If -> False
-  FromNat {} -> False
-  FromRat {} -> False
-  FromVectorToList {} -> False
   Add {} -> False
   Mul {} -> False
   PowRat -> False
@@ -260,9 +257,6 @@ reduceOp = \case
   Implies -> Nothing
   QuantifyRatTensor {} -> Nothing
   If -> Nothing
-  FromNat {} -> Nothing
-  FromRat {} -> Nothing
-  FromVectorToList -> Nothing
   Add _ -> Nothing
   Mul _ -> Nothing
   PowRat -> Nothing

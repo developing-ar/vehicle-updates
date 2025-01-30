@@ -6,12 +6,33 @@ module Vehicle.Data.Builtin.Linearity.Type
   )
 where
 
+import Vehicle.Compile.Context.Free (getFreeEnv)
 import Vehicle.Compile.Prelude
+import Vehicle.Compile.Type.Core
+import Vehicle.Compile.Type.Monad
+import Vehicle.Compile.Type.System
 import Vehicle.Data.Builtin.Core hiding (Builtin (..))
+import Vehicle.Data.Builtin.Interface.InputOutputInsertion
+import Vehicle.Data.Builtin.Interface.Type (TypableBuiltin (..))
 import Vehicle.Data.Builtin.Linearity
+import Vehicle.Data.Builtin.Linearity.Solver
+import Vehicle.Data.Builtin.Standard (Builtin (..))
 import Vehicle.Data.Code.DSL (iterate)
+import Vehicle.Data.Code.Expr
+import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
+import Vehicle.Prelude
 import Prelude hiding (iterate)
+
+--------------------------------------------------------------------------------
+-- Typing
+--------------------------------------------------------------------------------
+
+instance TypableBuiltin LinearityBuiltin where
+  typeBuiltin = typeLinearityBuiltin
+  useDependentMetas _ = False
+  couldBeEqual b1 b2 =
+    not (isLinearityBuiltinConstructor b1 && isLinearityBuiltinConstructor b2)
 
 isLinearityBuiltinConstructor :: LinearityBuiltin -> Bool
 isLinearityBuiltinConstructor = \case
@@ -21,8 +42,8 @@ isLinearityBuiltinConstructor = \case
   LinearityRelation {} -> True
 
 -- | Return the type of the provided builtin.
-typeLinearityBuiltin :: Provenance -> LinearityBuiltin -> Type LinearityBuiltin
-typeLinearityBuiltin p b = fromDSL p $ case b of
+typeLinearityBuiltin :: LinearityBuiltin -> LinearityDSLExpr
+typeLinearityBuiltin = \case
   LinearityConstructor c -> typeOfConstructor c
   LinearityFunction f -> typeOfBuiltinFunction f
   Linearity {} -> tLin
@@ -57,10 +78,6 @@ typeOfBuiltinFunction = \case
   ReduceMaxRatTensor -> typeOfOp2 maxLinearity
   -- Comparisons
   Compare {} -> typeOfOp2 maxLinearity
-  -- Conversion functions
-  FromNat {} -> constant ~> constant
-  FromRat {} -> constant ~> constant
-  FromVectorToList -> typeOfVectorToList
   -- Container functions
   FoldList -> typeOfFold
   MapList -> typeOfMap
@@ -152,5 +169,98 @@ typeOfVectorLiteral =
 typeOfStack :: LinearityDSLExpr
 typeOfStack = typeOfVectorLiteral
 
-typeOfVectorToList :: LinearityDSLExpr
-typeOfVectorToList = typeOfVectorLiteral
+--------------------------------------------------------------------------------
+-- Type system
+--------------------------------------------------------------------------------
+
+instance HasTypeSystem LinearityBuiltin where
+  convertFromStandardBuiltins = convertToLinearityTypes
+  restrictDeclType = restrictLinearityDeclType
+  isAuxiliaryConstraint _ = True
+  isCastConstraint _ = False
+  solveAuxiliaryInstanceConstraint = solveLinearityConstraint
+  addAuxiliaryInputOutputConstraints = addFunctionAuxiliaryInputOutputConstraints (LinearityRelation . FunctionLinearity)
+  generateDefaultAuxiliaryConstraint _ = return False
+
+pattern LinearityExpr :: Provenance -> Linearity -> Expr LinearityBuiltin
+pattern LinearityExpr p lin = Builtin p (Linearity lin)
+
+freshLinearityMeta :: (MonadTypeChecker LinearityBuiltin m) => Provenance -> m (Expr LinearityBuiltin)
+freshLinearityMeta p = unnormalised <$> freshMetaExpr p (TypeUniverse p 0) mempty
+
+convertToLinearityTypes ::
+  forall m.
+  (MonadTypeChecker LinearityBuiltin m) =>
+  BuiltinUpdate m Builtin LinearityBuiltin
+convertToLinearityTypes p b args = case b of
+  BuiltinFunction f -> do
+    let args' = case f of
+          StackTensor -> implicit (Builtin p (LinearityConstructor (NatLiteral (length args)))) : args
+          _ -> args
+    return $ normAppList (Builtin p (LinearityFunction f)) args'
+  BuiltinConstructor c ->
+    return $ normAppList (Builtin p (LinearityConstructor c)) args
+  BuiltinType s -> case s of
+    UnitType -> return $ Builtin p $ Linearity Constant
+    BoolType {} -> freshLinearityMeta p
+    RatType {} -> freshLinearityMeta p
+    IndexType -> freshLinearityMeta p
+    NatType -> freshLinearityMeta p
+    ListType -> return $ extractElementType b args
+    TensorType -> return $ extractElementType b args
+  TypeClass {} -> monomorphisationError b args
+  TypeClassOp {} -> monomorphisationError b args
+  NatInDomainConstraint -> monomorphisationError b args
+  BuiltinCast {} -> monomorphisationError b args
+
+restrictLinearityDeclType ::
+  forall m.
+  (MonadTypeChecker LinearityBuiltin m) =>
+  RestrictedDecl ->
+  DeclProvenance ->
+  Type LinearityBuiltin ->
+  m (Type LinearityBuiltin)
+restrictLinearityDeclType rDecl declProv declType = do
+  freeEnv <- getFreeEnv
+  let origin = InstanceTypeRestrictionOrigin $ TypeRestrictionOrigin freeEnv declProv rDecl declType
+  case rDecl of
+    RestrictedNetwork -> restrictLinearityNetworkType origin declProv declType
+    RestrictedDataset -> assertConstantLinearity origin declProv declType
+    RestrictedParameter {} -> assertConstantLinearity origin declProv declType
+    RestrictedProperty {} -> return declType
+
+restrictLinearityNetworkType ::
+  forall m.
+  (MonadTypeChecker LinearityBuiltin m) =>
+  InstanceConstraintOrigin LinearityBuiltin ->
+  DeclProvenance ->
+  Type LinearityBuiltin ->
+  m (Type LinearityBuiltin)
+restrictLinearityNetworkType origin (ident, p) networkType = do
+  inputLin <- freshLinearityMeta p
+  outputLin <- freshLinearityMeta p
+
+  let inputLinBinder = Binder p (BinderDisplayForm OnlyType False) Explicit Relevant inputLin
+  let functionNetworkType = Pi p inputLinBinder outputLin
+  createFreshUnificationConstraint p mempty (CheckingInstanceType origin) networkType functionNetworkType
+
+  -- The linearity of the output of a network is the max of 1) Linear (as outputs
+  -- are also variables) and 2) the linearity of its input. So prepend this
+  -- constraint to the front of the type.
+  logDebug MaxDetail "Appending `MaxLinearity` constraint to network type"
+  let outputLinProvenance = Linear $ NetworkOutputProvenance p (nameOf ident)
+  let linConstraintArgs = [LinearityExpr p outputLinProvenance, inputLin, outputLin]
+  let linConstraint = App (Builtin p (LinearityRelation MaxLinearity)) (Arg p Explicit Relevant <$> linConstraintArgs)
+  let linConstraintBinder = Binder p (BinderDisplayForm OnlyType False) (Instance True) Irrelevant linConstraint
+
+  return $ Pi p linConstraintBinder functionNetworkType
+
+assertConstantLinearity ::
+  (MonadTypeChecker LinearityBuiltin m) =>
+  InstanceConstraintOrigin LinearityBuiltin ->
+  DeclProvenance ->
+  Type LinearityBuiltin ->
+  m (Type LinearityBuiltin)
+assertConstantLinearity origin (_, p) t = do
+  createFreshUnificationConstraint p mempty (CheckingInstanceType origin) (LinearityExpr p Constant) t
+  return t

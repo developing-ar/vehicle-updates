@@ -10,7 +10,7 @@ import Data.Vector.Internal.Check (HasCallStack)
 import Vehicle.Compile.Context.Bound
 import Vehicle.Compile.Context.Free.Core
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print.Builtin
+import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Code.Value
 
 --------------------------------------------------------------------------------

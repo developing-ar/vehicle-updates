@@ -7,8 +7,9 @@ import Data.Hashable (Hashable (..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Serialize (Serialize)
 import GHC.Generics (Generic)
-import Vehicle.Data.Builtin.Core hiding (Builtin (BuiltinConstructor, BuiltinFunction))
+import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Builtin.Interface.Normalise
 import Vehicle.Data.DSL
 import Vehicle.Prelude
 
@@ -169,6 +170,33 @@ instance BuiltinHasNatLiterals PolarityBuiltin where
 
 instance BuiltinHasIterate PolarityBuiltin where
   accessIterateBuiltin = functionAccessor Iterate
+
+-----------------------------------------------------------------------------
+-- Printing
+
+instance ConvertableBuiltin PolarityBuiltin Builtin where
+  convertBuiltin p = \case
+    PolarityConstructor c -> convertBuiltin p c
+    PolarityFunction f -> convertBuiltin p f
+    b -> cheatConvertBuiltin p $ pretty b
+
+instance PrintableBuiltin PolarityBuiltin where
+  coercionArgs _ = Nothing
+
+-----------------------------------------------------------------------------
+-- Normalisation
+
+instance NormalisableBuiltin PolarityBuiltin where
+  evalScheme b = case b of
+    PolarityFunction Iterate -> NonSimple evalIterate
+    PolarityFunction _ -> None
+    _ -> None
+
+  blockingArgs = \case
+    PolarityFunction f -> functionBlockingArgs f
+    _ -> noBlockingArgs
+
+  isTypeClassOp _ = False
 
 -----------------------------------------------------------------------------
 -- DSL

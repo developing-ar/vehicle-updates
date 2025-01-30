@@ -17,14 +17,15 @@ import Vehicle.Compile.Normalise.NBE (normaliseInEnv)
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
-import Vehicle.Compile.Type.Builtin (TypableBuiltin (..))
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Force (forceHead)
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.System (HasTypeSystem (..), TCM)
+import Vehicle.Data.Builtin.Interface.Type (TypableBuiltin (..))
 import Vehicle.Data.Code.Value
+import Vehicle.Data.DSL (fromDSL)
 import Vehicle.Data.Universe (UniverseLevel (..))
 import Prelude hiding (pi)
 
@@ -228,7 +229,7 @@ inferExpr e = do
       let t' = Pi p checkedBinder typeOfBody
       return (Lam p checkedBinder checkedBody, t')
     Builtin p op -> do
-      return (Builtin p op, typeBuiltin p op)
+      return (Builtin p op, fromDSL p $ typeBuiltin op)
 
   showInferExit res
   return res

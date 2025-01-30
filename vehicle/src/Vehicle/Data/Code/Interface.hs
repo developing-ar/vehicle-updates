@@ -3,7 +3,6 @@ module Vehicle.Data.Code.Interface where
 import Control.Monad.Except (MonadError (..))
 import Data.Hashable (Hashable)
 import GHC.Generics (Generic)
-import Vehicle.Compile.Print.Builtin (PrintableBuiltin)
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Tensor
 import Vehicle.Prelude
@@ -680,21 +679,3 @@ accessIterate ::
   (HasBuiltinConstructor expr, BuiltinHasIterate builtin) =>
   Accessor (expr builtin) (IterateArgs (expr builtin))
 accessIterate = accessArgs accessIterateBuiltin
-
---------------------------------------------------------------------------------
--- Casts
-
-accessFromNatToIndex ::
-  (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>
-  Accessor (expr builtin) (FromNatToIndexArgs (expr builtin))
-accessFromNatToIndex = accessArgs accessFromNatToIndexBuiltin
-
-accessFromNatToRat ::
-  (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>
-  Accessor (expr builtin) (FromNatToSimpleArgs (expr builtin))
-accessFromNatToRat = accessArgs accessFromNatToRatBuiltin
-
-accessFromVectorToList ::
-  (HasBuiltinConstructor expr, BuiltinHasCasts builtin) =>
-  Accessor (expr builtin) (VectorToListArgs (expr builtin))
-accessFromVectorToList = accessArgs accessFromVectorToListBuiltin

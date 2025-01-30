@@ -164,7 +164,16 @@ delabBuiltin fun args = case fun of
   V.BuiltinFunction f -> delabBuiltinFunction f args
   V.BuiltinType t -> delabBuiltinType t args
   V.BuiltinConstructor c -> delabConstructor c args
+  V.BuiltinCast c -> delabCast c args
   V.NatInDomainConstraint -> delabApp (cheatDelab $ layoutAsText $ pretty fun) args
+
+delabCast :: (MonadDelab m) => V.BuiltinCast -> [V.Arg] -> m B.Expr
+delabCast fun args = case fun of
+  V.FromNat {} -> rawDelab
+  V.FromRat {} -> rawDelab
+  V.FromVectorToList {} -> rawDelab
+  where
+    rawDelab = delabApp (cheatDelab $ layoutAsText $ pretty fun) args
 
 delabBuiltinFunction :: (MonadDelab m) => V.BuiltinFunction -> [V.Arg] -> m B.Expr
 delabBuiltinFunction fun args = case fun of
@@ -187,9 +196,6 @@ delabBuiltinFunction fun args = case fun of
   V.ReduceAndTensor -> delabApp (B.ReduceAnd tokReduceAnd) args
   V.ReduceOrTensor -> delabApp (B.ReduceOr tokReduceOr) args
   -- Builtins not in the surface syntax.
-  V.FromNat {} -> rawDelab
-  V.FromRat {} -> rawDelab
-  V.FromVectorToList {} -> rawDelab
   V.PowRat -> rawDelab
   V.Min _dom -> rawDelab
   V.Max _dom -> rawDelab

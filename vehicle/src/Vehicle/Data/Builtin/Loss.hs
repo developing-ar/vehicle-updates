@@ -6,8 +6,12 @@ where
 
 import GHC.Generics (Generic)
 import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Builtin.Interface.Normalise
+import Vehicle.Data.Builtin.Standard (Builtin)
+import Vehicle.Data.Builtin.Standard qualified as S
+import Vehicle.Data.Code.Interface
 import Vehicle.Data.Tensor (Tensor)
-import Vehicle.Prelude (Pretty (..))
+import Vehicle.Prelude (Pretty (..), developerError)
 import Vehicle.Syntax.Builtin.BasicOperations
 
 --------------------------------------------------------------------------------
@@ -228,3 +232,110 @@ instance BuiltinHasRatLiterals LossBuiltin where
   accessReduceMulRatBuiltin = functionAccessor ReduceMulRatTensor
   accessReduceMinRatBuiltin = functionAccessor ReduceMinRatTensor
   accessReduceMaxRatBuiltin = functionAccessor ReduceMaxRatTensor
+
+--------------------------------------------------------------------------------
+-- Normalisation
+
+instance HasPrimitives LossBuiltin where
+  tensorLiterals =
+    [ Wrapper accessNatTensorLiteral,
+      Wrapper accessRatTensorLiteral,
+      Wrapper accessIndexTensorLiteral
+    ]
+
+  tensorOp1s =
+    [ (accessNegRatTensor, evalNegRatTensor)
+    ]
+
+  tensorOp2s =
+    [ (accessAddRatTensor, evalAddRatTensor),
+      (accessMulRatTensor, evalMulRatTensor),
+      (accessSubRatTensor, evalSubRatTensor),
+      (accessDivRatTensor, evalDivRatTensor),
+      (accessMinRatTensor, evalMinRatTensor),
+      (accessMaxRatTensor, evalMaxRatTensor)
+    ]
+
+instance NormalisableBuiltin LossBuiltin where
+  evalScheme = \case
+    LossBuiltinFunction f -> case f of
+      Add AddNat -> Simple evalAddNat
+      Mul MulNat -> Simple evalMulNat
+      Neg NegRatTensor -> Simple evalNegRatTensor
+      Add AddRatTensor -> Simple evalAddRatTensor
+      Sub SubRatTensor -> Simple evalSubRatTensor
+      Mul MulRatTensor -> Simple evalMulRatTensor
+      Div DivRatTensor -> Simple evalDivRatTensor
+      Min MinRatTensor -> Simple evalMinRatTensor
+      Max MaxRatTensor -> Simple evalMaxRatTensor
+      PowRat -> Simple evalPowRat
+      ReduceAddRatTensor -> Simple evalReduceAddRatTensor
+      ReduceMulRatTensor -> Simple evalReduceMulRatTensor
+      ReduceMinRatTensor -> Simple evalReduceMinRatTensor
+      ReduceMaxRatTensor -> Simple evalReduceMaxRatTensor
+      At -> Simple evalAt
+      StackTensor -> Simple evalStackTensor
+      ConstTensor -> Simple evalConstTensor
+      FoldList -> NonSimple evalFoldList
+      MapList -> NonSimple evalMapList
+      SearchRatTensor {} -> None
+    _ -> None
+
+  blockingArgs = developerError "Blocking arguments not yet implemented for LossBuiltin"
+
+  isTypeClassOp _ = False
+
+--------------------------------------------------------------------------------
+-- Printing
+
+instance ConvertableBuiltin LossBuiltinType Builtin where
+  convertBuiltin p =
+    convertBuiltin p . \case
+      UnitType -> S.UnitType
+      IndexType -> S.IndexType
+      NatType -> S.NatType
+      RatType -> S.RatType
+      ListType -> S.ListType
+      TensorType -> S.TensorType
+
+instance ConvertableBuiltin LossBuiltinConstructor Builtin where
+  convertBuiltin p =
+    convertBuiltin p . \case
+      Nil -> S.Nil
+      Cons -> S.Cons
+      UnitLiteral -> S.UnitLiteral
+      IndexLiteral x -> S.IndexLiteral x
+      IndexTensorLiteral x -> S.IndexTensorLiteral x
+      NatLiteral x -> S.NatLiteral x
+      NatTensorLiteral x -> S.NatTensorLiteral x
+      RatTensorLiteral x -> S.RatTensorLiteral x
+
+instance ConvertableBuiltin LossBuiltinFunction Builtin where
+  convertBuiltin p b = case b of
+    Neg dom -> convertBuiltin p (Neg dom)
+    Sub dom -> convertBuiltin p (Sub dom)
+    Div dom -> convertBuiltin p (Div dom)
+    Min dom -> convertBuiltin p (Min dom)
+    Max dom -> convertBuiltin p (Max dom)
+    Add dom -> convertBuiltin p (Add dom)
+    Mul dom -> convertBuiltin p (Mul dom)
+    PowRat -> convertBuiltin p PowRat
+    ReduceAddRatTensor -> convertBuiltin p ReduceAddRatTensor
+    ReduceMulRatTensor -> convertBuiltin p ReduceMulRatTensor
+    ReduceMinRatTensor -> convertBuiltin p ReduceMinRatTensor
+    ReduceMaxRatTensor -> convertBuiltin p ReduceMaxRatTensor
+    At -> convertBuiltin p At
+    StackTensor -> convertBuiltin p StackTensor
+    ConstTensor -> convertBuiltin p ConstTensor
+    SearchRatTensor -> cheatConvertBuiltin p $ pretty b
+    MapList -> convertBuiltin p MapList
+    FoldList -> convertBuiltin p FoldList
+
+instance ConvertableBuiltin LossBuiltin Builtin where
+  convertBuiltin p b = case b of
+    LossBuiltinType op -> convertBuiltin p op
+    LossBuiltinConstructor op -> convertBuiltin p op
+    LossBuiltinFunction op -> convertBuiltin p op
+
+instance PrintableBuiltin LossBuiltin where
+  coercionArgs _ = Nothing

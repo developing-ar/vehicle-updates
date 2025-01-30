@@ -182,16 +182,14 @@ convertBuiltinToLoss b spine = case b of
     -----------------
     -- Unsupported --
     -----------------
-    S.FromNat {} -> unsupportedBuiltin
-    S.FromRat {} -> unsupportedBuiltin
-    S.FromVectorToList -> unsupportedBuiltin
     S.Compare {} -> unsupportedBuiltin
     S.FoldList -> unsupportedBuiltin
     S.MapList -> unsupportedBuiltin
     S.Iterate -> unsupportedBuiltin
-    ----------------------
-    -- Other operations --
-    ----------------------
+  S.BuiltinCast {} -> unsupportedBuiltin
+  ----------------------
+  -- Other operations --
+  ----------------------
   where
     changedBuiltin :: TensorDifferentiableLogicField -> m (Value LossBuiltin)
     changedBuiltin field = substField field =<< traverseSpine convertValue spine

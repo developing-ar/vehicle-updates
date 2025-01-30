@@ -22,13 +22,15 @@ import Vehicle.Compile.Print
 import Vehicle.Compile.Print.Error
 import Vehicle.Compile.Scope (scopeCheck, scopeCheckClosedExpr)
 import Vehicle.Compile.Type (typeCheckProg, typeCheckSolitaryExpr)
-import Vehicle.Compile.Type.Constraint.InstanceBuiltins
 import Vehicle.Compile.Type.Core (emptyInstanceDatabase)
 import Vehicle.Compile.Type.Subsystem
-import Vehicle.Compile.Type.System (convertToTypingBuiltins)
 import Vehicle.Data.Builtin.Linearity (LinearityBuiltin)
+import Vehicle.Data.Builtin.Linearity.Type ()
 import Vehicle.Data.Builtin.Polarity (PolarityBuiltin)
+import Vehicle.Data.Builtin.Polarity.Type ()
 import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Builtin.Standard.Instances
+import Vehicle.Data.Builtin.Standard.Type ()
 import Vehicle.Libraries (Library (..), LibraryInfo (..), findLibraryContentFile)
 import Vehicle.Libraries.StandardLibrary (standardLibrary)
 import Vehicle.Prelude.Logging.Instance
@@ -165,8 +167,7 @@ createFreeCtx ::
   m (FreeCtx Builtin)
 createFreeCtx imports = do
   let decls = [d | imp <- imports, let Main ds = imp, d <- ds]
-  convertedDecls <- traverse (traverse (traverseBuiltinsM convertToTypingBuiltins)) decls
-  runFreshFreeContextT (Proxy @Builtin) (calculateCtx convertedDecls)
+  runFreshFreeContextT (Proxy @Builtin) (calculateCtx decls)
   where
     calculateCtx ::
       (MonadFreeContext Builtin m) =>

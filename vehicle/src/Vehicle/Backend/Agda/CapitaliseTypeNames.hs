@@ -11,9 +11,9 @@ import Vehicle.Compile.Context.Free (MonadFreeContext, addDeclToContext, runFres
 import Vehicle.Compile.Error (MonadCompile)
 import Vehicle.Compile.Normalise.NBE (normaliseClosure, normaliseInEmptyEnv)
 import Vehicle.Compile.Prelude
+import Vehicle.Data.Builtin.Decidability (DecidabilityBuiltin (..))
 import Vehicle.Data.Code.TypedView
-import Vehicle.Data.Code.Value (Value)
-import Vehicle.Syntax.Builtin (Builtin (..))
+import Vehicle.Data.Code.Value (Value (..))
 
 --------------------------------------------------------------------------------
 -- Capitalise type names
@@ -22,8 +22,8 @@ import Vehicle.Syntax.Builtin (Builtin (..))
 -- convention. This pass identifies all such defined functions and capitalises
 -- all references to them. Cannot be done during the main compilation pass as we
 -- need to be able to distinguish between free and bound variables.
-capitaliseTypeNames :: (MonadCompile m) => Prog Builtin -> m (Prog Builtin)
-capitaliseTypeNames prog = runFreshFreeContextT (Proxy @Builtin) $ evalStateT (cap prog) mempty
+capitaliseTypeNames :: (MonadCompile m) => Prog DecidabilityBuiltin -> m (Prog DecidabilityBuiltin)
+capitaliseTypeNames prog = runFreshFreeContextT (Proxy @DecidabilityBuiltin) $ evalStateT (cap prog) mempty
 
 --------------------------------------------------------------------------------
 -- Algorithm
@@ -31,16 +31,16 @@ capitaliseTypeNames prog = runFreshFreeContextT (Proxy @Builtin) $ evalStateT (c
 type MonadCapitalise m =
   ( MonadCompile m,
     MonadState (Set Identifier) m,
-    MonadFreeContext Builtin m
+    MonadFreeContext DecidabilityBuiltin m
   )
 
 class CapitaliseTypes a where
   cap :: (MonadCapitalise m) => a -> m a
 
-instance CapitaliseTypes (Prog Builtin) where
+instance CapitaliseTypes (Prog DecidabilityBuiltin) where
   cap (Main ds) = Main <$> cap ds
 
-instance CapitaliseTypes [Decl Builtin] where
+instance CapitaliseTypes [Decl DecidabilityBuiltin] where
   cap = \case
     [] -> return []
     d : ds -> do
@@ -57,7 +57,7 @@ instance CapitaliseTypes [Decl Builtin] where
       ds' <- addDeclToContext d (cap ds)
       return $ d' : ds'
 
-instance CapitaliseTypes (Expr Builtin) where
+instance CapitaliseTypes (Expr DecidabilityBuiltin) where
   cap = \case
     Universe p l -> return $ Universe p l
     Hole p n -> return $ Hole p n
@@ -70,12 +70,12 @@ instance CapitaliseTypes (Expr Builtin) where
     BoundVar p v -> return $ BoundVar p v
     FreeVar p ident -> FreeVar p <$> capitaliseIdentifier ident
 
-instance CapitaliseTypes (Arg Builtin) where
+instance CapitaliseTypes (Arg DecidabilityBuiltin) where
   cap Arg {..} = do
     argExpr' <- cap argExpr
     return $ Arg {argExpr = argExpr', ..}
 
-instance CapitaliseTypes (Binder Builtin) where
+instance CapitaliseTypes (Binder DecidabilityBuiltin) where
   cap Binder {..} = do
     binderValue' <- cap binderValue
     return $ Binder {binderValue = binderValue', ..}
@@ -89,16 +89,16 @@ capitaliseIdentifier ident@(Identifier m s) = do
         then capitaliseFirstLetter s
         else s
 
-isTypeDef :: forall m. (MonadCapitalise m) => Value Builtin -> m Bool
-isTypeDef t = case toTypeValue t of
+isTypeDef :: forall m. (MonadCapitalise m) => Value DecidabilityBuiltin -> m Bool
+isTypeDef t = case t of
   -- We don't capitalise things of type `Bool` because they will be lifted
   -- to the type level, only things of type `X -> Bool`.
-  v@VPiType {} -> go 0 v
+  VPi {} -> go 0 t
   _ -> return False
   where
-    go :: Lv -> TypeValue -> m Bool
+    go :: Lv -> Value DecidabilityBuiltin -> m Bool
     go _ VBoolTensorType {} = return True
-    go lv (VPiType binder closure) = do
+    go lv (VPi binder closure) = do
       result <- normaliseClosure lv binder closure
-      go (lv + 1) (toTypeValue result)
+      go (lv + 1) result
     go _ _ = return False

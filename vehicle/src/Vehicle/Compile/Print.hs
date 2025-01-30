@@ -30,11 +30,11 @@ import Prettyprinter (fill)
 import Vehicle.Compile.Descope
 import Vehicle.Compile.Normalise.Quote (unnormalise)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print.Builtin (ConvertableBuiltin, PrintableBuiltin)
 import Vehicle.Compile.Simplify
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta.Map (MetaMap (..))
 import Vehicle.Data.Assertion (Bounds (..), Inequality, NormalisedRelation (..))
+import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr (Constant (..), LinearExpr, prettyLinearExpr)

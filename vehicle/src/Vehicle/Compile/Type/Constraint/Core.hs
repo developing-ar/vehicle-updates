@@ -8,11 +8,15 @@ module Vehicle.Compile.Type.Constraint.Core
     parseInstanceGoal,
     createInstanceUnification,
     mkCandidate,
+    makeInstanceDatabase,
     AuxiliaryConstraintProgress (..),
   )
 where
 
+import Data.Bifunctor (Bifunctor (..))
 import Data.Data (Proxy (..))
+import Data.HashMap.Strict (HashMap, fromListWith, mapMaybeWithKey)
+import Data.Hashable (Hashable)
 import Data.IntSet qualified as IntSet
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
@@ -160,3 +164,18 @@ mkCandidate (expr, solution, defaultInstance) = do
   let expr' = fromDSL p expr
   let solution' = fromDSL p solution
   InstanceCandidate expr' solution' defaultInstance
+
+makeInstanceDatabase :: (PrintableBuiltin builtin, Hashable builtin) => [InstanceCandidate builtin] -> HashMap builtin InstanceSearchDepth -> InstanceDatabase builtin
+makeInstanceDatabase allInstances searchDepth = do
+  let tcAndCandidates = fmap (second (: []) . extractHeadFromInstanceCandidate) allInstances
+  let instances = fromListWith (<>) tcAndCandidates
+  let defaults = mapMaybeWithKey findDefault instances
+  InstanceDatabase instances defaults searchDepth
+  where
+    findDefault :: (Pretty builtin) => builtin -> [InstanceCandidate builtin] -> Maybe (InstanceCandidate builtin)
+    findDefault b instances = do
+      let defaultInstances = filter defaultInstance instances
+      case defaultInstances of
+        [] -> Nothing
+        [inst] -> Just inst
+        _ -> developerError $ "Multiple default instances found for" <+> quotePretty b
