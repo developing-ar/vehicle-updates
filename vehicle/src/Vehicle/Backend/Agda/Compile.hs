@@ -262,15 +262,17 @@ annotateInfixApp dependencies precedence qualifier op args
 
 insertInfixArgs :: Bool -> [Text] -> [Code] -> Code
 insertInfixArgs first fragments args = case (fragments, args) of
-  ([], _ : _) ->
-    developerError $
-      "was expecting no more than 1 argument for"
-        <+> op
-        <+> "but found the following arguments:"
-        <+> list args
+  ([], _ : _) -> invalidError
   a : as -> do
     let qualifierDoc = maybe "" (<> ".") qualifier
     _
+  where
+    invalidError =
+      developerError $
+        "was expecting no more than 1 argument for"
+          <+> op
+          <+> "but found the following arguments:"
+          <+> list args
 
 argBrackets :: Precedence -> Visibility -> Code -> Code
 argBrackets parentPrecedence v e = case v of
@@ -415,7 +417,7 @@ compileStdLibFunction fn args = case fn of
   StdForallIndex -> _
   StdEqualsBool -> _
   StdNotEqualsBool -> _
-  StdAppendList -> _
+  StdAppendList -> annotateInfixApp [DataList] 5 Nothing "_++_" args
   StdVectorType -> _
   StdForallIn -> case args of
     [_, RelevantImplicitArg _ tCont, _, _, RelevantExplicitArg _ lam, RelevantExplicitArg _ cont] ->
@@ -430,41 +432,44 @@ compileStdLibFunction fn args = case fn of
 compileBuiltin :: (MonadAgdaCompile m) => DecidabilityBuiltin -> [Arg DecidabilityBuiltin] -> m Code
 compileBuiltin b args = case b of
   StandardBuiltinType t -> case t of
-    BoolType -> compileType (UniverseLevel 0)
-    RatType -> annotateConstant [DataRat] ratQualifier
-    UnitType -> annotateConstant [DataUnit] "⊤"
-    NatType -> annotateConstant [DataNat] natQualifier
+    BoolType -> return $ compileType (UniverseLevel 0)
+    RatType -> return $ annotateConstant [DataRat] ratQualifier
+    UnitType -> return $ annotateConstant [DataUnit] "⊤"
+    NatType -> return $ annotateConstant [DataNat] natQualifier
     ListType -> annotateApp [DataList] "List" args
     TensorType -> annotateApp [DataTensor] "Tensor" args
     IndexType -> annotateApp [DataFin] "Fin" args
   DecidabilityBuiltinType t -> case t of
-    DecBoolType -> annotateConstant [DataBool] "Bool"
+    DecBoolType -> return $ annotateConstant [DataBool] "Bool"
   StandardBuiltinConstructor c -> case c of
-    Nil -> annotateConstant [DataList] "[]"
+    Nil -> return $ annotateConstant [DataList] "[]"
     Cons -> annotateInfixApp [DataList] 5 Nothing "_∷_" args
-    UnitLiteral -> annotateConstant [DataUnit] "tt"
-    IndexLiteral n -> compileIndexLiteral (toInteger n)
-    NatLiteral n -> compileNatLiteral (toInteger n)
-    NatTensorLiteral t -> compileTensorLiteral compileIntLiteral t
-    BoolTensorLiteral t -> compileTensorLiteral compileBoolLiteral t
-    RatTensorLiteral t -> compileTensorLiteral compileRatLiteral t
-    IndexTensorLiteral t -> compileTensorLiteral compileIndexLiteral t
+    UnitLiteral -> return $ annotateConstant [DataUnit] "tt"
+    IndexLiteral n -> return $ compileIndexLiteral (toInteger n)
+    NatLiteral n -> return $ compileNatLiteral (toInteger n)
+    NatTensorLiteral t -> return $ compileTensorLiteral compileIntLiteral t
+    BoolTensorLiteral t -> return $ compileTensorLiteral compileBoolLiteral t
+    RatTensorLiteral t -> return $ compileTensorLiteral compileRatLiteral t
+    IndexTensorLiteral t -> return $ compileTensorLiteral compileIndexLiteral t
   DecidabilityBuiltinConstructor c -> case c of
-    DecBoolTensor t -> compileTensorLiteral compileDecBoolLiteral t
+    DecBoolTensor t -> return $ compileTensorLiteral compileDecBoolLiteral t
   StandardBuiltinFunction f -> case f of
     And -> annotateInfixApp [DataProduct] 2 Nothing "_×_" args
     Or -> annotateInfixApp [DataSum] 1 Nothing "_⊎_" args
     Not -> annotateInfixApp [RelNullary] 3 Nothing "¬_" args
-    Implies -> annotateInfixOp2 [] minPrecedence Nothing arrow args "→"
-    Add dom -> compileAdd dom args
-    Sub SubRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_-_" args
+    Implies -> annotateInfixApp [] minPrecedence Nothing "_→_" args
+    Add AddNat -> annotateInfixApp [DataNat] 6 (Just natQualifier) "_+_" args
     Mul MulNat -> annotateInfixApp [DataNat] 7 (Just natQualifier) "_*_" args
+    Add AddRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_+_" args
+    Sub SubRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_-_" args
     Mul MulRatTensor -> annotateInfixApp [DataRat] 7 (Just tensorQualifier) "_*_" args
     Div DivRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_÷_" args
     Neg NegRatTensor -> annotateInfixApp [DataTensor] 8 (Just tensorQualifier) "-_" args
     Min MinRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊓_" args
     Max MaxRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_⊔_" args
-    Compare dom ord -> compileComparison False ord dom args
+    Compare CompareIndex op -> annotateInfixApp [DataFin] 4 (Just finQualifier) (comparisonOperator False op) args
+    Compare CompareNat op -> annotateInfixApp [DataNat] 4 (Just natQualifier) (comparisonOperator False op) args
+    Compare CompareRatTensor op -> annotateInfixApp [DataTensor] 4 (Just tensorQualifier) (comparisonOperator False op) args
     FoldList -> annotateApp [DataList] (listQualifier <> ".foldr") args
     MapList -> annotateApp [DataList] (listQualifier <> ".map") args
     ReduceAndTensor -> annotateApp [DataTensor] "reduceAnd" args
@@ -477,7 +482,6 @@ compileBuiltin b args = case b of
     QuantifyRatTensor q -> case reverse args of
       (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
       _ -> unsupportedArgsError
-    -- Needs to be special cased as `At` in Agda is simply function application.
     At -> annotateInfixApp [FunctionBase] (-1) Nothing "_$_" args
     If -> annotateInfixApp [DataBool] 0 Nothing "if_then_else_" args
     Foreach -> unsupportedError
@@ -489,7 +493,9 @@ compileBuiltin b args = case b of
     DecAnd -> annotateInfixApp [DataBool] 6 Nothing "_∧_" args
     DecOr -> annotateInfixApp [DataBool] 5 Nothing "_∨_" args
     DecImplies -> annotateInfixApp [VehicleUtils] 4 Nothing "_⇒_" args
-    DecCompare dom ord -> compileComparison True ord dom args
+    DecCompare CompareIndex op -> annotateInfixApp [DataFin] 4 (Just finQualifier) (comparisonOperator True op) args
+    DecCompare CompareNat op -> annotateInfixApp [DataNat] 4 (Just natQualifier) (comparisonOperator True op) args
+    DecCompare CompareRatTensor op -> annotateInfixApp [DataTensor] 4 (Just tensorQualifier) (comparisonOperator True op) args
     DecReduceAndTensor -> _
     DecReduceOrTensor -> _
   DecidabilityBuiltinTypeClass {} -> monoError
@@ -550,7 +556,7 @@ compileIndexLiteral i = annotateInfixApp [DataFin] 10 Nothing "#_" [pretty i]
 compileNatLiteral :: Integer -> Code
 compileNatLiteral = pretty
 
-compileIntLiteral :: Integer -> Code
+compileIntLiteral :: Int -> Code
 compileIntLiteral i
   | i >= 0 = annotateInfixApp [DataInteger] 8 (Just intQualifier) "+_" [pretty i]
   | otherwise = annotateInfixApp [DataInteger] 6 (Just intQualifier) "-_" [compileIntLiteral (-i)]
@@ -579,22 +585,8 @@ compileDecBoolLiteral = \case
   True -> annotateConstant [DataBool] "true"
   False -> annotateConstant [DataBool] "false"
 
-compileAdd :: AddDomain -> [Arg DecidabilityBuiltin] -> Code
-compileAdd dom args = do
-  let (qualifier, dependency) = case dom of
-        AddNat -> (natQualifier, DataNat)
-        -- AddRat -> (ratQualifier, DataRat)
-        AddRatTensor -> (tensorQualifier, DataTensor)
-
-  annotateInfixApp [dependency] 6 (Just qualifier) "_+_" args
-
-compileComparison :: Bool -> ComparisonOp -> ComparisonDomain -> [Arg DecidabilityBuiltin] -> Code
-compileComparison decidable order dom args = do
-  (qualifier, elemDep) <- return $ case dom of
-    CompareIndex -> (finQualifier, DataFin)
-    CompareNat -> (natQualifier, DataNat)
-    CompareRatTensor -> (tensorQualifier, DataTensor)
-
+comparisonOperator :: Bool -> ComparisonOp -> Text
+comparisonOperator decidable order = do
   let orderDoc = case order of
         Le -> "≤"
         Lt -> "<"
@@ -602,9 +594,7 @@ compileComparison decidable order dom args = do
         Gt -> ">"
         Eq -> "≡"
         Ne -> "≢"
-  let opDoc = "_" <> orderDoc <> (if decidable then "ᵇ" else "") <> "_"
-
-  annotateInfixApp [elemDep] 4 (Just qualifier) opDoc args
+  "_" <> orderDoc <> (if decidable then "ᵇ" else "") <> "_"
 
 compileFunDef :: Code -> Code -> [Code] -> Code -> Code
 compileFunDef n t ns e =

@@ -2,12 +2,12 @@
 -- Type annotations
 --------------------------------------------------------------------------------
 
+id : A -> A
+id x = x
+
 -- Implementation of the `:` syntax
 typeAnn : forallT (t : Type) . t -> t
 typeAnn t a = a
-
-id : A -> A
-id x = x
 
 --------------------------------------------------------------------------------
 -- List
