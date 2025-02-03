@@ -84,20 +84,17 @@ analyseDependenciesAndPrune ::
   Prog expr ->
   DeclarationNames ->
   m (Prog expr)
-analyseDependenciesAndPrune prog@(Main ds) declarationsToCompile = do
-  let finalDeclarationNames =
-        if null declarationsToCompile
-          then fmap nameOf (filter isPropertyDecl ds)
-          else declarationsToCompile
+analyseDependenciesAndPrune prog declarationsToCompile
+  | null declarationsToCompile = return prog
+  | otherwise = do
+      dependencyGraph <- constructGraph prog
+      startingVertices <- forM declarationsToCompile $ \name ->
+        case vertexFromIdent dependencyGraph (Identifier (ModulePath [User]) name) of
+          Just vertex -> return vertex
+          Nothing -> throwError $ MissingPrunedName name
 
-  dependencyGraph <- constructGraph prog
-  startingVertices <- forM finalDeclarationNames $ \name ->
-    case vertexFromIdent dependencyGraph (Identifier (ModulePath [User]) name) of
-      Just vertex -> return vertex
-      Nothing -> throwError $ MissingPrunedName name
-
-  let declsToKeep = reachableFrom dependencyGraph startingVertices
-  return $ pruneProg prog declsToKeep
+      let declsToKeep = reachableFrom dependencyGraph startingVertices
+      return $ pruneProg prog declsToKeep
 
 pruneProg :: GenericProg expr -> Set Identifier -> GenericProg expr
 pruneProg (Main ds) declsToKeep = Main $ filter keepDecl ds

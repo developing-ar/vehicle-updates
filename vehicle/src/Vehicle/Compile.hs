@@ -8,6 +8,7 @@ import Control.Monad.Except (MonadError (..))
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy.Char8 (unpack)
+import Data.Maybe (mapMaybe)
 import Vehicle.Backend.Agda
 import Vehicle.Backend.LossFunction (convertToLossTensors)
 import Vehicle.Backend.LossFunction.JSON
@@ -63,8 +64,8 @@ compile loggingSettings options@CompileOptions {..} = runCompileMonad loggingSet
       compileToQueryFormat prunedProg resources queryFormatID output
     LossFunction differentiableLogic ->
       compileToLossFunction differentiableLogic prunedProg output outputAsJSON
-    ITP Agda ->
-      compileToAgda options prunedProg
+    ITP itp ->
+      compileToITP itp options prunedProg
 
 --------------------------------------------------------------------------------
 -- Backend-specific compilation functions
@@ -80,16 +81,26 @@ compileToQueryFormat typedProg resources queryFormatID output = do
   let verifier = queryFormats queryFormatID
   compileToQueries verifier typedProg resources output
 
-compileToAgda ::
+compileToITP ::
   (MonadCompile m, MonadStdIO m) =>
+  ITP ->
   CompileOptions ->
   Prog Builtin ->
   m ()
-compileToAgda CompileOptions {..} typedProg = do
-  errorOrDecProg <- decidabilityTypeCheck typedProg
-  case errorOrDecProg of
+compileToITP itp CompileOptions {..} typedProg@(Main ds) = do
+  -- Prune all standard-library declarations that aren't used.
+  let declsToCompile = mapMaybe (\d -> if isUserIdent (identifierOf d) then Just (nameOf d) else Nothing) ds
+  prunedProg <- analyseDependenciesAndPrune typedProg declsToCompile
+
+  -- Analyse the program to find out which `Bool`s are decidable and which aren't.
+  errorOrDecProg <- decidabilityTypeCheck prunedProg
+  decProg <- case errorOrDecProg of
     Left err -> throwError err
-    Right decProg -> do
+    Right decProg -> return decProg
+
+  -- Compile depending on the ITP
+  case itp of
+    Agda -> do
       let agdaOptions = AgdaOptions verificationCache output moduleName
       agdaCode <- compileProgToAgda decProg agdaOptions
       writeAgdaFile output agdaCode
