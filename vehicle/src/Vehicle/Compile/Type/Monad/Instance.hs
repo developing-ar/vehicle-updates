@@ -23,8 +23,8 @@ import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad.Class
-import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin)
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Interface.Type
 
 --------------------------------------------------------------------------------

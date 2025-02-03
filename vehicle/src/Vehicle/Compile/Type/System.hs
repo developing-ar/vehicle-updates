@@ -3,10 +3,11 @@ module Vehicle.Compile.Type.System where
 import Data.Hashable (Hashable)
 import Vehicle.Compile.Context.Free (MonadFreeContext)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrintableBuiltin, prettyVerbose)
+import Vehicle.Compile.Print (prettyVerbose)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad.Class (MonadTypeChecker)
 import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin)
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Interface.Type (TypableBuiltin)
 import Vehicle.Data.Builtin.Standard (Builtin (..))
 
@@ -39,10 +40,6 @@ class (Eq builtin, Hashable builtin, NormalisableBuiltin builtin, TypableBuiltin
 
   isAuxiliaryConstraint ::
     Expr builtin -> Bool
-
-  -- | Is the constraint a casting operation (e.g. of literals, tensors etc.)
-  isCastConstraint ::
-    builtin -> Bool
 
   -- | Solves an auxiliary instance constraint (i.e. a constraint that is
   -- not solvable by the default instance mechanism)

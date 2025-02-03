@@ -29,8 +29,10 @@ import Prelude hiding (iterate, pi)
 instance TypableBuiltin Builtin where
   typeBuiltin = typeStandardBuiltin
   useDependentMetas _ = True
-  couldBeEqual b1 b2 =
-    not (isStandardConstructor b1 && isStandardConstructor b2)
+  isConstructor = isStandardConstructor
+  isCastConstraint e = case e of
+    TypeClass c -> c `elem` ([IsTensorType, HasNatLits, HasRatLits, HasVecLits] :: [TypeClass])
+    _ -> False
 
 -- | Return the type of the provided builtin.
 isStandardConstructor :: Builtin -> Bool
@@ -155,9 +157,6 @@ instance HasTypeSystem Builtin where
   restrictDeclType = restrictStandardDeclType
   isAuxiliaryConstraint e = case e of
     App (Builtin _ NatInDomainConstraint) _ -> True
-    _ -> False
-  isCastConstraint e = case e of
-    TypeClass c -> c `elem` ([IsTensorType, HasNatLits, HasRatLits, HasVecLits] :: [TypeClass])
     _ -> False
 
   solveAuxiliaryInstanceConstraint = solveIndexConstraint

@@ -657,8 +657,7 @@ type HasTensorExpr expr builtin =
   ( HasBuiltinConstructor expr,
     BuiltinHasTensors builtin,
     BuiltinHasListLiterals builtin,
-    BuiltinHasNatLiterals builtin,
-    PrintableBuiltin builtin
+    BuiltinHasNatLiterals builtin
   )
 
 accessStackTensor :: (HasTensorExpr expr builtin) => Accessor (expr builtin) (StackTensorArgs (expr builtin))

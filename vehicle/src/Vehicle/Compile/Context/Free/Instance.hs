@@ -11,7 +11,7 @@ import Vehicle.Compile.Context.Free.Class
 import Vehicle.Compile.Context.Free.Core
 import Vehicle.Compile.Error (MonadCompile)
 import Vehicle.Compile.Prelude
-import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Prelude.IO qualified as VIO
 
 --------------------------------------------------------------------------------

@@ -52,8 +52,8 @@ existsInTensor f xs = reduceOr (map f xs)
 foreachIndex : forallT n . (Index n -> A) -> Vector A n
 foreachIndex n f = map f (indices n)
 -}
-existsIndex : forallT n . (Index n -> Bool) -> Bool
-existsIndex n f = reduceOr False (foreach i . f i)
+existsIndex : forallT {n} . (Index n -> Bool) -> Bool
+existsIndex f = reduceOr False (foreach i . f i)
 
-forallIndex : forallT n . (Index n -> Bool) -> Bool
-forallIndex n f = reduceAnd True (foreach i . f i)
+forallIndex : forallT {n} . (Index n -> Bool) -> Bool
+forallIndex f = reduceAnd True (foreach i . f i)

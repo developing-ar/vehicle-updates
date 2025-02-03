@@ -9,7 +9,8 @@ import Control.Monad.Identity
 import Data.List.NonEmpty qualified as NonEmpty (toList)
 import Vehicle.Compile.Error (MonadCompile)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal)
+import Vehicle.Compile.Print (prettyExternal)
+import Vehicle.Data.Builtin.Interface.Print
 
 -- | Removes all irrelevant code from the program/expression.
 removeIrrelevantCodeFromProg ::

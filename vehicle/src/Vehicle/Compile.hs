@@ -4,6 +4,7 @@ module Vehicle.Compile
   )
 where
 
+import Control.Monad.Except (MonadError (..))
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy.Char8 (unpack)
@@ -20,6 +21,9 @@ import Vehicle.Compile.FunctionaliseResources (functionaliseResources)
 import Vehicle.Compile.Monomorphisation (hoistInferableParameters)
 import Vehicle.Compile.Prelude as CompilePrelude
 import Vehicle.Compile.Print (prettyFriendly)
+import Vehicle.Compile.Type.Subsystem (typeCheckWithSubsystem)
+import Vehicle.Data.Builtin.Decidability.Instances (decidabilityBuiltinInstances)
+import Vehicle.Data.Builtin.Decidability.Type ()
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Prelude.Logging
 import Vehicle.TypeCheck (TypeCheckOptions (..), runCompileMonad, typeCheckUserProg)
@@ -48,7 +52,7 @@ compile loggingSettings options@CompileOptions {..} = runCompileMonad loggingSet
     typeCheckUserProg $
       TypeCheckOptions
         { specification = specification,
-          typingSystem = Standard
+          typingSystem = StandardTypes
         }
 
   prunedProg <- analyseDependenciesAndPrune prog declarationsToCompile
@@ -83,9 +87,11 @@ compileToAgda ::
   CompileOptions ->
   (Imports, Prog Builtin) ->
   m ()
-compileToAgda CompileOptions {..} (_, typedProg) = do
+compileToAgda CompileOptions {..} (imports, typedProg) = do
   let agdaOptions = AgdaOptions verificationCache output moduleName
-  agdaCode <- compileProgToAgda typedProg agdaOptions
+  let mergedProg = mergeImports imports typedProg
+  decProg <- typeCheckWithSubsystem DecidabilityTypes decidabilityBuiltinInstances throwError mergedProg
+  agdaCode <- compileProgToAgda decProg agdaOptions
   writeAgdaFile output agdaCode
 
 compileToLossFunction ::

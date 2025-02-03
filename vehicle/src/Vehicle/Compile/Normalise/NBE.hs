@@ -29,6 +29,7 @@ import Vehicle.Data.Builtin.Interface.Normalise
   ( NormalisableBuiltin (..),
     evaluateBuiltin,
   )
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Code.Value
 
 -- NOTE: there is no evaluatation to NF in this file. To do it

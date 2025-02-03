@@ -16,7 +16,8 @@ import Data.Set (Set)
 import Data.Set qualified as Set (fromList, member, singleton)
 import Vehicle.Compile.Error (MonadCompile)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrintableBuiltin, prettyFriendly)
+import Vehicle.Compile.Print (prettyFriendly)
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.DeBruijn (dbLevelToIndex)
 
 --------------------------------------------------------------------------------

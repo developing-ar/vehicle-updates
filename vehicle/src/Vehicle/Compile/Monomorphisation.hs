@@ -32,7 +32,8 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (PrintableBuiltin, prettyExternal, prettyFriendly, prettyFriendlyEmptyCtx, prettyVerbose)
+import Vehicle.Compile.Print (prettyExternal, prettyFriendly, prettyFriendlyEmptyCtx, prettyVerbose)
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Hashing ()
 
 --------------------------------------------------------------------------------
@@ -43,9 +44,6 @@ import Vehicle.Data.Hashing ()
 -- Not very sophisticated at the moment, if this needs to be improved perhaps
 -- http://mrg.doc.ic.ac.uk/publications/featherweight-go/main.pdf
 -- by Wen et al is a good starting point.
---
--- It also gets rid of automatically inserted coercions of literals
--- (e.g. naturals, rationals and tensors)
 monomorphise ::
   forall m builtin.
   (MonadCompile m, Hashable builtin, PrintableBuiltin builtin) =>
@@ -245,84 +243,7 @@ getTypeJoiner :: Text -> Text
 getTypeJoiner nameJoiner = nameJoiner <> nameJoiner
 
 --------------------------------------------------------------------------------
--- Step 4. Coercions
-{-
-removeLiteralCoercions ::
-  forall m.
-  (MonadCompile m) =>
-  Text ->
-  Prog Builtin ->
-  m (Prog Builtin)
-removeLiteralCoercions nameJoiner (Main ds) =
-  Main . catMaybes <$> traverse goDecl ds
-  where
-    goDecl :: Decl Builtin -> m (Maybe (Decl Builtin))
-    goDecl decl = case getVectorCoercion (identifierOf decl) of
-      Just StdVectorToVector -> return Nothing
-      Just StdVectorToList -> return Nothing
-      _ ->
-        Just
-          <$> traverse
-            ( \e -> do
-                e' <- traverseBuiltinsM (updateBuiltin decl) e
-                traverseFreeVarsM (const id) (updateFreeVar decl) e'
-            )
-            decl
-
-    getVectorCoercion :: Identifier -> Maybe StdLibFunction
-    getVectorCoercion ident = do
-      let typeJoiner = getTypeJoiner nameJoiner
-      let shortIdent = changeName ident $ fst $ Text.breakOn typeJoiner (nameOf ident)
-      findStdLibFunction shortIdent
-
-    updateBuiltin :: Decl Builtin -> BuiltinUpdate m Builtin Builtin
-    updateBuiltin decl p2 b args = case b of
-      -- (getBuiltinFunction -> Just (FromNat dom)) -> case (dom, filter isExplicit args) of
-      --   (FromNatToIndex, [RelevantExplicitArg _ (INatLiteral p n)]) -> return $ IIndexLiteral p n
-      --   (FromNatToNat, [e]) -> return $ argExpr e
-      --   (FromNatToRat, [RelevantExplicitArg _ (INatLiteral p n)]) -> return $ Builtin p (BuiltinConstructor $ RatTensorLiteral $ ZeroDimTensor $ fromIntegral n)
-      --   _ -> do
-      --     partialApplication decl (pretty (FromNat dom)) args
-      (getBuiltinFunction -> Just (FromRat FromRatToRat)) -> case args of
-        [e] -> return $ argExpr e
-        _ -> partialApplication decl (pretty FromRatToRat) args
-      _ -> return $ normAppList (Builtin p2 b) args
-
-    updateFreeVar :: Decl Builtin -> FreeVarUpdate m Builtin
-    updateFreeVar decl recGo p ident args = do
-      let vectorCoercion = getVectorCoercion ident
-      args' <- traverse (traverse recGo) args
-      case vectorCoercion of
-        Just StdVectorToVector -> case reverse args' of
-          vec : _ -> return $ argExpr vec
-          _ -> partialApplication decl (pretty ident) args'
-        -- Just StdVectorToList -> case reverse args' of
-        --   RelevantExplicitArg _ (IVecLiteral l xs) : _ -> return $ mkListExpr (argExpr l) (fmap argExpr xs)
-        --   _ -> partialApplication decl (pretty ident) args'
-        _ -> return $ normAppList (FreeVar p ident) args'
-
-    partialApplication :: Decl Builtin -> Doc () -> [Arg Builtin] -> m b
-    partialApplication decl v args =
-      compilerDeveloperError $
-        "Found partially applied"
-          <+> squotes v
-          <+> "@"
-          <+> prettyVerbose args
-          <+> "in"
-          <> line
-          <> indent
-            2
-            ( prettyFriendly decl
-                <> line
-                <> line
-                <> prettyVerbose decl
-                <> line
-                <> line
-                <> pretty (show $ bodyOf decl)
-            )
--}
---------------------------------------------------------------------------------
--- Step 5. Hoisting. Massive hack. Should be done with erasure.
+-- Step 5. Hoisting.
 
 hoistInferableParameters :: (MonadCompile m) => Prog builtin -> m (Prog builtin)
 hoistInferableParameters (Main ds) = do

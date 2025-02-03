@@ -18,10 +18,8 @@ import Vehicle.Data.Builtin.Polarity
 import Vehicle.Data.Builtin.Polarity.Solver (solvePolarityConstraint)
 import Vehicle.Data.Builtin.Standard (Builtin (..))
 import Vehicle.Data.Code.DSL (iterate)
-import Vehicle.Data.Code.Expr
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
-import Vehicle.Prelude
 import Prelude hiding (iterate, pi)
 
 --------------------------------------------------------------------------------
@@ -31,8 +29,8 @@ import Prelude hiding (iterate, pi)
 instance TypableBuiltin PolarityBuiltin where
   typeBuiltin = typePolarityBuiltin
   useDependentMetas _ = False
-  couldBeEqual b1 b2 =
-    not (isPolarityBuiltinConstructor b1 && isPolarityBuiltinConstructor b2)
+  isConstructor = isPolarityBuiltinConstructor
+  isCastConstraint _ = False
 
 isPolarityBuiltinConstructor :: PolarityBuiltin -> Bool
 isPolarityBuiltinConstructor = \case
@@ -190,7 +188,6 @@ instance HasTypeSystem PolarityBuiltin where
   convertFromStandardBuiltins = convertToPolarityTypes
   restrictDeclType = restrictDeclPolarityType
   isAuxiliaryConstraint _ = True
-  isCastConstraint _ = False
   solveAuxiliaryInstanceConstraint = solvePolarityConstraint
   addAuxiliaryInputOutputConstraints = addFunctionAuxiliaryInputOutputConstraints (PolarityRelation . FunctionPolarity)
   generateDefaultAuxiliaryConstraint _ = return False

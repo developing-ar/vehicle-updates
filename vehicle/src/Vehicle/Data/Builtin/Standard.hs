@@ -12,10 +12,12 @@ where
 import Vehicle.Data.Builtin.Core as Syntax
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Code.Expr
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.DSL
 import Vehicle.Prelude (GenericArg (..))
+import Vehicle.Syntax.Sugar (BinderType (..))
 
 -----------------------------------------------------------------------------
 -- Classes
@@ -207,6 +209,12 @@ instance BuiltinHasStandardData Builtin where
 instance BuiltinHasIterate Builtin where
   accessIterateBuiltin = functionAccessor Iterate
 
+instance BuiltinHasBinders Builtin where
+  getBuiltinBinder = \case
+    BuiltinFunction Foreach -> Just ForeachBinder
+    BuiltinFunction (QuantifyRatTensor q) -> Just $ QuantifierBinder q
+    _ -> Nothing
+
 ---------------------------------------------------------------------------------
 -- Printing
 
@@ -319,24 +327,33 @@ instance NormalisableBuiltin Builtin where
     TypeClassOp {} -> True
     _ -> False
 
-evalFromNatToNat :: (MonadNormBuiltin m) => EvalSimple FromNatToSimpleArgs Builtin m
+  isCast = \case
+    BuiltinCast b -> Just $ case b of
+      FromNat FromNatToNat -> forceEvalSimpleBuiltin evalFromNatToNat
+      FromNat FromNatToIndex -> forceEvalSimpleBuiltin evalFromNatToIndex
+      FromNat FromNatToRat -> forceEvalSimpleBuiltin evalFromNatToRat
+      FromRat FromRatToRat -> forceEvalSimpleBuiltin evalFromRatToRat
+      FromVectorToList -> forceEvalSimpleBuiltin evalVectorToList
+    _ -> Nothing
+
+evalFromNatToNat :: (MonadNormBuiltin m) => EvalSimple FromNatToSimpleArgs expr Builtin m
 evalFromNatToNat (FromNatToSimpleArgs v _) = return v
 
-evalFromNatToIndex :: (MonadNormBuiltin m) => EvalSimple FromNatToIndexArgs Builtin m
-evalFromNatToIndex = \case
-  FromNatToIndexArgs _ (INatLiteral v) _ -> return $ IIndexLiteral v
-  args -> return $ mkExpr accessFromNatToIndex args
+evalFromNatToIndex :: (MonadNormBuiltin m, HasBuiltinConstructor expr) => EvalSimple FromNatToIndexArgs expr Builtin m
+evalFromNatToIndex args = return $ case args of
+  FromNatToIndexArgs _ (INatLiteral v) _ -> IIndexLiteral v
+  _ -> mkExpr accessFromNatToIndex args
 
-evalFromNatToRat :: (MonadNormBuiltin m) => EvalSimple FromNatToSimpleArgs Builtin m
-evalFromNatToRat = \case
-  FromNatToSimpleArgs (INatLiteral n) _ -> return $ IRatLiteral $ fromIntegral n
-  args -> return $ mkExpr accessFromNatToRat args
+evalFromNatToRat :: (MonadNormBuiltin m, HasBuiltinConstructor expr) => EvalSimple FromNatToSimpleArgs expr Builtin m
+evalFromNatToRat args = return $ case args of
+  FromNatToSimpleArgs (INatLiteral n) _ -> IRatLiteral $ fromIntegral n
+  _ -> mkExpr accessFromNatToRat args
 
-evalFromRatToRat :: (MonadNormBuiltin m) => EvalSimple Op1Args Builtin m
+evalFromRatToRat :: (MonadNormBuiltin m) => EvalSimple Op1Args expr Builtin m
 evalFromRatToRat (Op1Args x) = return x
 
-evalVectorToList :: (MonadNormBuiltin m) => EvalSimple VectorToListArgs Builtin m
+evalVectorToList :: (MonadNormBuiltin m, HasBuiltinConstructor expr) => EvalSimple VectorToListArgs expr Builtin m
 evalVectorToList args@(VectorToListArgs t d xs) =
-  case argExpr d of
-    INatLiteral n | n == length xs -> return $ mkListExpr (argExpr t) xs
-    _ -> return $ mkExpr accessFromVectorToList args
+  return $ case argExpr d of
+    INatLiteral n | n == length xs -> mkListExpr (argExpr t) xs
+    _ -> mkExpr accessFromVectorToList args

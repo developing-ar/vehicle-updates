@@ -2,6 +2,7 @@ module Vehicle.Data.Builtin.Interface.Type where
 
 import Data.Proxy (Proxy)
 import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.DSL
 import Vehicle.Data.DSL
@@ -16,9 +17,11 @@ class (PrintableBuiltin builtin) => TypableBuiltin builtin where
   -- Efficiency hack for polarity/linearity subsystems.
   useDependentMetas :: Proxy builtin -> Bool
 
-  -- | Could the constructors end up the same if applied to some
-  -- suitable set of arguments.
-  couldBeEqual :: builtin -> builtin -> Bool
+  -- | Is the builtin a constructor?
+  isConstructor :: builtin -> Bool
+
+  -- | Is the builtin a constraint for a casting operation (e.g. of literals, tensors etc.)
+  isCastConstraint :: builtin -> Bool
 
 typeOfBuiltinType :: (HasStandardBuiltins builtin) => BuiltinType -> DSLExpr builtin
 typeOfBuiltinType = \case

@@ -47,6 +47,7 @@ import Vehicle.Compile (CompileOptions (..))
 import Vehicle.Export (ExportOptions (..))
 import Vehicle.Prelude
   ( Doc,
+    Pretty (..),
     enumerate,
     indent,
     layoutAsString,
@@ -54,6 +55,7 @@ import Vehicle.Prelude
     specificationFileExtension,
     supportedOptions,
     vsep,
+    (<+>),
   )
 import Vehicle.Prelude.Logging
 import Vehicle.TypeCheck (TypeCheckOptions (..))
@@ -299,10 +301,12 @@ allTargets :: [String]
 allTargets = allLossFunctionDLs <> allVerifiersFormats <> allITPs
 
 allTypeSystems :: [Doc a]
-allTypeSystems = flip map (enumerate @TypingSystem) $ \case
-  Standard -> "i) Standard - check whether the types written in the specification are consistent."
-  Polarity -> "ii) Polarity - check whether alternating quantifiers are used in the specification."
-  Linearity -> "iii) Linearity - check whether quantified variables are used linearly in the specification."
+allTypeSystems = flip map (enumerate @TypingSystem) $ \t ->
+  "-" <+> pretty t <+> "-" <+> case t of
+    StandardTypes -> "check whether the types written in the specification are consistent."
+    PolarityTypes -> "check whether alternating quantifiers are used in the specification."
+    LinearityTypes -> "check whether quantified variables are used linearly in the specification."
+    DecidabilityTypes -> "check which booleans are decidable and which are undecidable in the context of Vehicle"
 
 resourceOption :: Mod OptionFields (Text, String) -> Parser (Map Text String)
 resourceOption desc = Map.fromList <$> many (option (maybeReader readNL) desc)
@@ -374,7 +378,7 @@ typeSystemParser =
                     )
               )
         )
-      <> value Standard
+      <> value StandardTypes
 
 specificationParser :: Parser FilePath
 specificationParser =

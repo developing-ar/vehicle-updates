@@ -18,10 +18,8 @@ import Vehicle.Data.Builtin.Linearity
 import Vehicle.Data.Builtin.Linearity.Solver
 import Vehicle.Data.Builtin.Standard (Builtin (..))
 import Vehicle.Data.Code.DSL (iterate)
-import Vehicle.Data.Code.Expr
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
-import Vehicle.Prelude
 import Prelude hiding (iterate)
 
 --------------------------------------------------------------------------------
@@ -31,8 +29,8 @@ import Prelude hiding (iterate)
 instance TypableBuiltin LinearityBuiltin where
   typeBuiltin = typeLinearityBuiltin
   useDependentMetas _ = False
-  couldBeEqual b1 b2 =
-    not (isLinearityBuiltinConstructor b1 && isLinearityBuiltinConstructor b2)
+  isConstructor = isLinearityBuiltinConstructor
+  isCastConstraint _ = False
 
 isLinearityBuiltinConstructor :: LinearityBuiltin -> Bool
 isLinearityBuiltinConstructor = \case
@@ -177,7 +175,6 @@ instance HasTypeSystem LinearityBuiltin where
   convertFromStandardBuiltins = convertToLinearityTypes
   restrictDeclType = restrictLinearityDeclType
   isAuxiliaryConstraint _ = True
-  isCastConstraint _ = False
   solveAuxiliaryInstanceConstraint = solveLinearityConstraint
   addAuxiliaryInputOutputConstraints = addFunctionAuxiliaryInputOutputConstraints (LinearityRelation . FunctionLinearity)
   generateDefaultAuxiliaryConstraint _ = return False

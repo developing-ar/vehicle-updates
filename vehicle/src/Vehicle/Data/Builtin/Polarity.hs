@@ -10,6 +10,7 @@ import GHC.Generics (Generic)
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.DSL
 import Vehicle.Prelude
 
@@ -197,6 +198,7 @@ instance NormalisableBuiltin PolarityBuiltin where
     _ -> noBlockingArgs
 
   isTypeClassOp _ = False
+  isCast _ = Nothing
 
 -----------------------------------------------------------------------------
 -- DSL

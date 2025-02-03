@@ -4,7 +4,6 @@ module Vehicle.Backend.Agda.Compile
   )
 where
 
-import Control.Monad.Reader (runReaderT)
 import Data.Foldable (fold)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -28,6 +27,7 @@ import Vehicle.Compile.Print
 import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Builtin.Standard (BuiltinType (..))
 import Vehicle.Data.Builtin.Standard hiding (TensorType)
+import Vehicle.Data.Code.Expr ()
 import Vehicle.Data.Universe (UniverseLevel (..))
 import Vehicle.Libraries.StandardLibrary.Definitions
 import Vehicle.Syntax.Sugar
@@ -43,8 +43,8 @@ data AgdaOptions = AgdaOptions
   }
 
 compileProgToAgda :: (MonadCompile m) => Prog DecidabilityBuiltin -> AgdaOptions -> m (Doc a)
-compileProgToAgda prog options = logCompilerPass MinDetail currentPhase $
-  flip runReaderT (options, BoolLevel) $ do
+compileProgToAgda prog options =
+  logCompilerPass MinDetail currentPhase $ do
     monoProg <- monomorphise isPropertyDecl "-" prog
     prog2 <- capitaliseTypeNames monoProg
     programDoc <- runFreshNameContextT $ compileProg options prog2
@@ -216,10 +216,6 @@ scopeCode keyword code = keyword <> line <> indentCode code
 --------------------------------------------------------------------------------
 -- Intermediate results of compilation
 
--- | Marks if the current boolean expression is compiled to `Set` or `Bool`
-data BoolLevel = TypeLevel | BoolLevel
-  deriving (Eq)
-
 type Precedence = Int
 
 type Code = Doc (Set Dependency, Precedence)
@@ -236,13 +232,19 @@ getPrecedence e = maybe maxPrecedence snd (docAnn e)
 annotateConstant :: [Dependency] -> Code -> Code
 annotateConstant dependencies = annotate (Set.fromList dependencies, maxPrecedence)
 
-annotateApp :: (MonadAgdaCompile m) => [Dependency] -> Code -> [Arg DecidabilityBuiltin] -> m Code
-annotateApp dependencies fun = \case
-  [] -> return $ annotate (Set.fromList dependencies, getPrecedence fun) fun
-  args -> do
-    let precedence = 20
-    bracketedArgs <- compileArgs precedence args
-    return $ annotate (Set.fromList dependencies, precedence) (hsep (fun : bracketedArgs))
+annotateApp :: (MonadAgdaCompile m) => [Dependency] -> Maybe Code -> Code -> [Arg DecidabilityBuiltin] -> m Code
+annotateApp dependencies qualifier fun args = do
+  let funDoc = maybe "" (<> ".") qualifier <> fun
+
+  (precedence, annDoc) <-
+    if null args
+      then return (getPrecedence fun, funDoc)
+      else do
+        let precedence = 20
+        bracketedArgs <- compileArgs precedence args
+        return (20, hsep (funDoc : bracketedArgs))
+
+  return $ annotate (Set.fromList dependencies, precedence) annDoc
 
 annotateInfixApp ::
   (MonadAgdaCompile m) =>
@@ -253,26 +255,33 @@ annotateInfixApp ::
   [Arg DecidabilityBuiltin] ->
   m Code
 annotateInfixApp dependencies precedence qualifier op args
-  | not (all isExplicit args) =
-      annotateApp dependencies _ args
+  | not (all isExplicit args) = annotateApp dependencies qualifier (pretty op) args
   | otherwise = do
       bracketedArgs <- compileArgs precedence args
-      let doc = insertInfixArgs True (Text.split "_" op) bracketedArgs
+      let doc = insertInfixArgs qualifier op bracketedArgs
       return $ annotate (Set.fromList dependencies, precedence) doc
 
-insertInfixArgs :: Bool -> [Text] -> [Code] -> Code
-insertInfixArgs first fragments args = case (fragments, args) of
-  ([], _ : _) -> invalidError
-  a : as -> do
-    let qualifierDoc = maybe "" (<> ".") qualifier
-    _
+-- | Inserts infix args into the correct positions
+--
+-- e.g. insertInfixArgs (Just "B") "if_then_else_" [a, b] = B.if a then b else_
+insertInfixArgs :: Maybe Code -> Text -> [Code] -> Code
+insertInfixArgs qual rawOp = go qual rawOp
   where
-    invalidError =
-      developerError $
-        "was expecting no more than 1 argument for"
-          <+> op
-          <+> "but found the following arguments:"
-          <+> list args
+    go qualifier opText = \case
+      [] -> pretty opText
+      arg : args -> do
+        let (prefix, maybeSuffix) = Text.break (== '_') opText
+        case Text.uncons maybeSuffix of
+          Just (_underscore, suffix) -> do
+            let qualifierDoc = maybe "" (<> ".") qualifier
+            let remainder = insertInfixArgs Nothing suffix args
+            qualifierDoc <> pretty prefix <+> arg <+> remainder
+          Nothing ->
+            developerError $
+              "too many arguments"
+                <+> pretty rawOp
+                <+> "but found the following arguments:"
+                <+> list args
 
 argBrackets :: Precedence -> Visibility -> Code -> Code
 argBrackets parentPrecedence v e = case v of
@@ -406,28 +415,20 @@ compileApp fun args = do
       compileStdLibFunction stdlibFn userArgs
     _ -> do
       cFun <- compileExpr fun
-      annotateApp [] cFun userArgs
+      annotateApp [] Nothing cFun userArgs
 
 compileStdLibFunction :: (MonadAgdaCompile m) => StdLibFunction -> [Arg DecidabilityBuiltin] -> m Code
 compileStdLibFunction fn args = case fn of
-  StdId -> annotateApp [FunctionBase] "id" args
-  StdBigAnd -> _
-  StdBigOr -> _
-  StdExistsIndex -> _
-  StdForallIndex -> _
-  StdEqualsBool -> _
-  StdNotEqualsBool -> _
+  StdId -> annotateApp [FunctionBase] Nothing "id" args
+  StdExistsIndex -> annotateApp [VehicleUtils] Nothing "existsIndex" args
+  StdForallIndex -> annotateApp [VehicleUtils] Nothing "forallIndex" args
+  StdVectorType -> unsupported
   StdAppendList -> annotateInfixApp [DataList] 5 Nothing "_++_" args
-  StdVectorType -> _
-  StdForallIn -> case args of
-    [_, RelevantImplicitArg _ tCont, _, _, RelevantExplicitArg _ lam, RelevantExplicitArg _ cont] ->
-      compileQuantIn Forall tCont lam cont
-    _ -> developerError ""
-  StdExistsIn -> case args of
-    [RelevantImplicitArg _ tCont, _, _, RelevantExplicitArg _ lam, RelevantExplicitArg _ cont] ->
-      Just <$> compileQuantIn Exists tCont lam cont
-    _ -> return Nothing
+  StdForallInList -> unsupported
+  StdExistsInList -> unsupported
   StdTypeAnn -> annotateInfixApp [FunctionBase] 0 Nothing "_∋_" args
+  where
+    unsupported = developerError $ "Compilation of stdlib function" <+> quotePretty fn <+> "not implemented"
 
 compileBuiltin :: (MonadAgdaCompile m) => DecidabilityBuiltin -> [Arg DecidabilityBuiltin] -> m Code
 compileBuiltin b args = case b of
@@ -436,18 +437,18 @@ compileBuiltin b args = case b of
     RatType -> return $ annotateConstant [DataRat] ratQualifier
     UnitType -> return $ annotateConstant [DataUnit] "⊤"
     NatType -> return $ annotateConstant [DataNat] natQualifier
-    ListType -> annotateApp [DataList] "List" args
-    TensorType -> annotateApp [DataTensor] "Tensor" args
-    IndexType -> annotateApp [DataFin] "Fin" args
+    ListType -> annotateApp [DataList] Nothing "List" args
+    TensorType -> annotateApp [DataTensor] Nothing "Tensor" args
+    IndexType -> annotateApp [DataFin] Nothing "Fin" args
   DecidabilityBuiltinType t -> case t of
     DecBoolType -> return $ annotateConstant [DataBool] "Bool"
   StandardBuiltinConstructor c -> case c of
     Nil -> return $ annotateConstant [DataList] "[]"
     Cons -> annotateInfixApp [DataList] 5 Nothing "_∷_" args
     UnitLiteral -> return $ annotateConstant [DataUnit] "tt"
-    IndexLiteral n -> return $ compileIndexLiteral (toInteger n)
-    NatLiteral n -> return $ compileNatLiteral (toInteger n)
-    NatTensorLiteral t -> return $ compileTensorLiteral compileIntLiteral t
+    IndexLiteral n -> return $ compileIndexLiteral n
+    NatLiteral n -> return $ compileNatLiteral n
+    NatTensorLiteral t -> return $ compileTensorLiteral compileNatLiteral t
     BoolTensorLiteral t -> return $ compileTensorLiteral compileBoolLiteral t
     RatTensorLiteral t -> return $ compileTensorLiteral compileRatLiteral t
     IndexTensorLiteral t -> return $ compileTensorLiteral compileIndexLiteral t
@@ -470,15 +471,15 @@ compileBuiltin b args = case b of
     Compare CompareIndex op -> annotateInfixApp [DataFin] 4 (Just finQualifier) (comparisonOperator False op) args
     Compare CompareNat op -> annotateInfixApp [DataNat] 4 (Just natQualifier) (comparisonOperator False op) args
     Compare CompareRatTensor op -> annotateInfixApp [DataTensor] 4 (Just tensorQualifier) (comparisonOperator False op) args
-    FoldList -> annotateApp [DataList] (listQualifier <> ".foldr") args
-    MapList -> annotateApp [DataList] (listQualifier <> ".map") args
-    ReduceAndTensor -> annotateApp [DataTensor] "reduceAnd" args
-    ReduceOrTensor -> annotateApp [DataTensor] "reduceOr" args
-    ReduceAddRatTensor -> annotateApp [DataTensor] "reduceAdd" args
-    ReduceMinRatTensor -> annotateApp [DataTensor] "reduceMin" args
-    ReduceMaxRatTensor -> annotateApp [DataTensor] "reduceMax" args
-    ReduceMulRatTensor -> annotateApp [DataTensor] "reduceMul" args
-    ConstTensor -> annotateApp [DataTensor] "constTensor" args
+    FoldList -> annotateApp [DataList] (Just listQualifier) "foldr" args
+    MapList -> annotateApp [DataList] (Just listQualifier) "map" args
+    ReduceAndTensor -> annotateApp [DataTensor] Nothing "reduceAnd" args
+    ReduceOrTensor -> annotateApp [DataTensor] Nothing "reduceOr" args
+    ReduceAddRatTensor -> annotateApp [DataTensor] Nothing "reduceAdd" args
+    ReduceMinRatTensor -> annotateApp [DataTensor] Nothing "reduceMin" args
+    ReduceMaxRatTensor -> annotateApp [DataTensor] Nothing "reduceMax" args
+    ReduceMulRatTensor -> annotateApp [DataTensor] Nothing "reduceMul" args
+    ConstTensor -> annotateApp [DataTensor] Nothing "constTensor" args
     QuantifyRatTensor q -> case reverse args of
       (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
       _ -> unsupportedArgsError
@@ -489,15 +490,15 @@ compileBuiltin b args = case b of
     StackTensor {} -> unsupportedError
     PowRat -> unsupportedError
   DecidabilityBuiltinFunction f -> case f of
-    DecNot -> annotateApp [DataBool] "not" args
+    DecNot -> annotateApp [DataBool] Nothing "not" args
     DecAnd -> annotateInfixApp [DataBool] 6 Nothing "_∧_" args
     DecOr -> annotateInfixApp [DataBool] 5 Nothing "_∨_" args
     DecImplies -> annotateInfixApp [VehicleUtils] 4 Nothing "_⇒_" args
     DecCompare CompareIndex op -> annotateInfixApp [DataFin] 4 (Just finQualifier) (comparisonOperator True op) args
     DecCompare CompareNat op -> annotateInfixApp [DataNat] 4 (Just natQualifier) (comparisonOperator True op) args
     DecCompare CompareRatTensor op -> annotateInfixApp [DataTensor] 4 (Just tensorQualifier) (comparisonOperator True op) args
-    DecReduceAndTensor -> _
-    DecReduceOrTensor -> _
+    DecReduceAndTensor -> unsupportedError
+    DecReduceOrTensor -> unsupportedError
   DecidabilityBuiltinTypeClass {} -> monoError
   DecidabilityBuiltinTypeClassOp {} -> monoError
   where
@@ -534,46 +535,46 @@ compileTypeLevelQuantifier q binders body = do
     Exists -> return $ annotateConstant [DataProduct] "∃ λ"
   return $ quant <+> hsep cBinders <+> "→" <+> cBody
 
-compileQuantIn :: Bool -> Quantifier -> Expr DecidabilityBuiltin -> Expr DecidabilityBuiltin -> Expr DecidabilityBuiltin -> Code
-compileQuantIn bool q tCont fn cont = do
-  (quant, qualifier, dep) <- case tCont of
-    (Builtin _ (BuiltinType ListType)) -> case (boolLevel, q) of
-      (TypeLevel, Forall) -> return ("All", listQualifier, DataListAll)
-      (TypeLevel, Exists) -> return ("Any", listQualifier, DataListAny)
-      (BoolLevel, Forall) -> return ("all", listQualifier, DataList)
-      (BoolLevel, Exists) -> return ("any", listQualifier, DataList)
-    _ -> case (boolLevel, q) of
-      (TypeLevel, Forall) -> return ("All", tensorQualifier, DataTensorAll)
-      (TypeLevel, Exists) -> return ("Any", tensorQualifier, DataTensorAny)
-      (BoolLevel, Forall) -> return ("all", tensorQualifier, DataTensor)
-      (BoolLevel, Exists) -> return ("any", tensorQualifier, DataTensor)
+{-
+(quant, qualifier, dep) <- case tCont of
+  (Builtin _ (BuiltinType ListType)) -> case (boolLevel, q) of
+    (TypeLevel, Forall) -> return ("All", listQualifier, DataListAll)
+    (TypeLevel, Exists) -> return ("Any", listQualifier, DataListAny)
+    (BoolLevel, Forall) -> return ("all", listQualifier, DataList)
+    (BoolLevel, Exists) -> return ("any", listQualifier, DataList)
+  _ -> case (boolLevel, q) of
+    (TypeLevel, Forall) -> return ("All", tensorQualifier, DataTensorAll)
+    (TypeLevel, Exists) -> return ("Any", tensorQualifier, DataTensorAny)
+    (BoolLevel, Forall) -> return ("all", tensorQualifier, DataTensor)
+    (BoolLevel, Exists) -> return ("any", tensorQualifier, DataTensor)
 
-  annotateApp [dep] (qualifier <> "." <> quant) <$> traverse compileExpr [fn, cont]
+annotateApp [dep] (qualifier <> "." <> quant) <$> traverse compileExpr [fn, cont]
+-}
 
-compileIndexLiteral :: Integer -> Code
-compileIndexLiteral i = annotateInfixApp [DataFin] 10 Nothing "#_" [pretty i]
+compileIndexLiteral :: Int -> Code
+compileIndexLiteral i = annotate ([DataFin], 10) ("#" <+> pretty i)
 
-compileNatLiteral :: Integer -> Code
+compileNatLiteral :: Int -> Code
 compileNatLiteral = pretty
 
 compileIntLiteral :: Int -> Code
 compileIntLiteral i
-  | i >= 0 = annotateInfixApp [DataInteger] 8 (Just intQualifier) "+_" [pretty i]
-  | otherwise = annotateInfixApp [DataInteger] 6 (Just intQualifier) "-_" [compileIntLiteral (-i)]
+  | i >= 0 = annotate ([DataInteger], 8) (intQualifier <> ".+" <+> pretty i)
+  | otherwise = annotate ([DataInteger], 6) (intQualifier <> ".-" <+> compileIntLiteral (-i))
 
 compileRatLiteral :: Rational -> Code
-compileRatLiteral r = annotateInfixApp [DataRat] 7 (Just ratQualifier) "_/_" [num, denom]
+compileRatLiteral r = annotate ([DataRat], 7) (num <+> "/" <+> denom)
   where
-    num = compileIntLiteral (numerator r)
-    denom = compileNatLiteral (denominator r)
+    num = compileIntLiteral (fromInteger $ numerator r)
+    denom = compileNatLiteral (fromInteger $ denominator r)
 
+-- | Compiling tensor literals. No literals in Agda so have to go via cons.
 compileTensorLiteral :: (a -> Code) -> Tensor a -> Code
 compileTensorLiteral compileElement =
   foldMapTensor compileElement compileTensorLayer
   where
-    -- \| Compiling vector literals. No literals in Agda so have to go via cons.
     compileTensorLayer :: TensorShape -> [Code] -> Code
-    compileTensorLayer _shape = _ -- foldr (\x xs -> annotateInfixApp [] 5 Nothing "_∷ᵥ_" [x, xs]) "[]ᵥ"
+    compileTensorLayer _shape = foldr (\x xs -> annotate ([], 5) (x <> "∷ᵥ" <> xs)) "[]ᵥ"
 
 compileBoolLiteral :: Bool -> Code
 compileBoolLiteral = \case

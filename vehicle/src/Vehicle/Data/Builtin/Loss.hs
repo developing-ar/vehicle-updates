@@ -7,6 +7,7 @@ where
 import GHC.Generics (Generic)
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Standard (Builtin)
 import Vehicle.Data.Builtin.Standard qualified as S
 import Vehicle.Data.Code.Interface
@@ -284,6 +285,8 @@ instance NormalisableBuiltin LossBuiltin where
   blockingArgs = developerError "Blocking arguments not yet implemented for LossBuiltin"
 
   isTypeClassOp _ = False
+
+  isCast _ = Nothing
 
 --------------------------------------------------------------------------------
 -- Printing

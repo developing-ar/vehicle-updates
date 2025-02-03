@@ -8,12 +8,15 @@ import Data.Hashable (Hashable)
 import GHC.Generics (Generic)
 import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Interface
-import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin (..))
-import Vehicle.Data.Builtin.Standard (Builtin, BuiltinConstructor, BuiltinFunction (..), BuiltinType)
+import Vehicle.Data.Builtin.Interface.Normalise (BlockingArgs (..), EvalScheme (..), MonadNormBuiltin, NormalisableBuiltin (..), evalIterate, forceEvalSimpleBuiltin)
+import Vehicle.Data.Builtin.Interface.Print
+import Vehicle.Data.Builtin.Standard (Builtin, BuiltinConstructor (..), BuiltinFunction (..), BuiltinType)
+import Vehicle.Data.Code.Interface
 import Vehicle.Data.DSL (DSLExpr, builtin)
 import Vehicle.Data.Tensor (BoolTensor)
-import Vehicle.Prelude (Pretty (..), (<+>))
+import Vehicle.Prelude (Pretty (..), developerError, (<+>))
 import Vehicle.Syntax.Builtin.BasicOperations
+import Vehicle.Syntax.Sugar (BinderType (..))
 
 --------------------------------------------------------------------------------
 -- Data
@@ -26,6 +29,7 @@ instance Hashable DecidabilityBuiltinType
 
 data DecidabilityBuiltinTypeClass
   = IsBool
+  | HasBoolTensorLiterals
   | HasNot
   | HasAnd
   | HasOr
@@ -38,7 +42,8 @@ data DecidabilityBuiltinTypeClass
 instance Hashable DecidabilityBuiltinTypeClass
 
 data DecidabilityBuiltinTypeClassOp
-  = BoolTC
+  = BoolTypeTC
+  | FromBoolTensorLitTC
   | NotTC
   | AndTC
   | OrTC
@@ -60,6 +65,7 @@ data DecidabilityBuiltinFunction
   | DecCompare ComparisonDomain ComparisonOp
   | DecReduceAndTensor
   | DecReduceOrTensor
+  | BoolTensorToDecBoolTensor
   deriving (Eq, Ord, Show, Generic)
 
 instance Hashable DecidabilityBuiltinFunction
@@ -88,6 +94,15 @@ instance Hashable DecidabilityBuiltin
 --------------------------------------------------------------------------------
 -- Accessors
 
+functionAccessor :: BuiltinFunction -> Accessor DecidabilityBuiltin ()
+functionAccessor b =
+  Access
+    { getExpr = \case
+        StandardBuiltinFunction b1 | b == b1 -> Just ()
+        _ -> Nothing,
+      mkExpr = \() -> StandardBuiltinFunction b
+    }
+
 instance BuiltinHasStandardTypes DecidabilityBuiltin where
   accessBuiltinType =
     Access
@@ -114,18 +129,37 @@ instance BuiltinHasStandardData DecidabilityBuiltin where
           _ -> Nothing
       }
 
+instance BuiltinHasNatLiterals DecidabilityBuiltin where
+  accessNatLitBuiltin =
+    Access
+      { getExpr = \case
+          StandardBuiltinConstructor (NatLiteral n) -> Just n
+          _ -> Nothing,
+        mkExpr = StandardBuiltinConstructor . NatLiteral
+      }
+
+  accessNatTensorLitBuiltin =
+    Access
+      { getExpr = \case
+          StandardBuiltinConstructor (NatTensorLiteral b) -> Just b
+          _ -> Nothing,
+        mkExpr = StandardBuiltinConstructor . NatTensorLiteral
+      }
+
+  accessAddNatBuiltin = functionAccessor (Add AddNat)
+  accessMulNatBuiltin = functionAccessor (Mul MulNat)
+
+instance BuiltinHasBinders DecidabilityBuiltin where
+  getBuiltinBinder = \case
+    StandardBuiltinFunction Foreach -> Just ForeachBinder
+    StandardBuiltinFunction (QuantifyRatTensor q) -> Just $ QuantifierBinder q
+    _ -> Nothing
+
+instance BuiltinHasIterate DecidabilityBuiltin where
+  accessIterateBuiltin = functionAccessor Iterate
+
 --------------------------------------------------------------------------------
 -- Pretty printing
-
-nonDecidableEquivalent :: DecidabilityBuiltinFunction -> BuiltinFunction
-nonDecidableEquivalent = \case
-  DecNot -> Not
-  DecAnd -> And
-  DecOr -> Or
-  DecImplies -> Implies
-  DecCompare dom op -> Compare dom op
-  DecReduceAndTensor -> ReduceAndTensor
-  DecReduceOrTensor -> ReduceOrTensor
 
 instance Pretty DecidabilityBuiltinType where
   pretty t = case t of
@@ -134,6 +168,7 @@ instance Pretty DecidabilityBuiltinType where
 instance Pretty DecidabilityBuiltinTypeClass where
   pretty t = case t of
     HasCompare dom op -> "Has" <+> pretty dom <+> pretty op
+    HasBoolTensorLiterals -> pretty $ show t
     IsBool -> pretty $ show t
     HasNot -> pretty $ show t
     HasAnd -> pretty $ show t
@@ -143,7 +178,15 @@ instance Pretty DecidabilityBuiltinTypeClass where
     HasReduceOrTensor -> pretty $ show t
 
 instance Pretty DecidabilityBuiltinFunction where
-  pretty f = pretty (nonDecidableEquivalent f) <> "?"
+  pretty = \case
+    DecNot -> pretty Not <> "?"
+    DecAnd -> pretty And <> "?"
+    DecOr -> pretty Or <> "?"
+    DecImplies -> pretty Implies <> "?"
+    DecCompare dom op -> pretty (Compare dom op) <> "?"
+    DecReduceAndTensor -> pretty ReduceAndTensor <> "?"
+    DecReduceOrTensor -> pretty ReduceOrTensor <> "?"
+    BoolTensorToDecBoolTensor -> "boolTensorToDecBoolTensor"
 
 instance Pretty DecidabilityBuiltinConstructor where
   pretty = \case
@@ -151,7 +194,8 @@ instance Pretty DecidabilityBuiltinConstructor where
 
 instance Pretty DecidabilityBuiltinTypeClassOp where
   pretty t = case t of
-    BoolTC -> pretty $ show t
+    BoolTypeTC -> pretty $ show t
+    FromBoolTensorLitTC -> pretty $ show t
     NotTC -> pretty $ show t
     AndTC -> pretty $ show t
     OrTC -> pretty $ show t
@@ -189,13 +233,29 @@ instance PrintableBuiltin DecidabilityBuiltin where
 -- Normalisation
 
 instance NormalisableBuiltin DecidabilityBuiltin where
-  evalScheme = _
+  evalScheme = \case
+    StandardBuiltinFunction Iterate -> NonSimple evalIterate
+    _ -> None
 
-  blockingArgs = _
+  blockingArgs = \case
+    StandardBuiltinFunction Iterate -> Known [2]
+    _ -> Known []
 
   isTypeClassOp = \case
     DecidabilityBuiltinTypeClassOp {} -> True
     _ -> False
+
+  isCast e = case e of
+    DecidabilityBuiltinFunction BoolTensorToDecBoolTensor -> Just $ forceEvalSimpleBuiltin evalBoolTensorToDecBoolTensor
+    _ -> Nothing
+
+evalBoolTensorToDecBoolTensor ::
+  (MonadNormBuiltin m, HasBuiltinConstructor expr) =>
+  Op1Args (expr DecidabilityBuiltin) ->
+  m (expr DecidabilityBuiltin)
+evalBoolTensorToDecBoolTensor args = return $ case args of
+  Op1Args (getExpr accessBuiltinC -> Just (StandardBuiltinConstructor (BoolTensorLiteral t), [])) -> mkExpr accessBuiltinC (DecidabilityBuiltinConstructor (DecBoolTensor t), [])
+  _ -> developerError $ "Should not be possible to have non-literal" <+> pretty BoolTensorToDecBoolTensor <+> "args"
 
 --------------------------------------------------------------------------------
 -- DSL

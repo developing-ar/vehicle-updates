@@ -24,6 +24,9 @@ import Vehicle.Compile.Scope (scopeCheck, scopeCheckClosedExpr)
 import Vehicle.Compile.Type (typeCheckProg, typeCheckSolitaryExpr)
 import Vehicle.Compile.Type.Core (emptyInstanceDatabase)
 import Vehicle.Compile.Type.Subsystem
+import Vehicle.Data.Builtin.Decidability (DecidabilityBuiltin)
+import Vehicle.Data.Builtin.Decidability.Type ()
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Linearity (LinearityBuiltin)
 import Vehicle.Data.Builtin.Linearity.Type ()
 import Vehicle.Data.Builtin.Polarity (PolarityBuiltin)
@@ -49,9 +52,10 @@ typeCheck loggingSettings options@TypeCheckOptions {..} = runCompileMonad loggin
   (imports, typedProg) <- typeCheckUserProg options
   let mergedProg = mergeImports imports typedProg
   case typingSystem of
-    Standard -> return ()
-    Linearity -> printPropertyTypes =<< typeCheckWithSubsystem @LinearityBuiltin emptyInstanceDatabase throwError mergedProg
-    Polarity -> printPropertyTypes =<< typeCheckWithSubsystem @PolarityBuiltin emptyInstanceDatabase throwError mergedProg
+    StandardTypes -> return ()
+    LinearityTypes -> printPropertyTypes =<< typeCheckWithSubsystem @LinearityBuiltin typingSystem emptyInstanceDatabase throwError mergedProg
+    PolarityTypes -> printPropertyTypes =<< typeCheckWithSubsystem @PolarityBuiltin typingSystem emptyInstanceDatabase throwError mergedProg
+    DecidabilityTypes -> printPropertyTypes =<< typeCheckWithSubsystem @DecidabilityBuiltin typingSystem emptyInstanceDatabase throwError mergedProg
 
 --------------------------------------------------------------------------------
 -- Useful functions that apply to multiple compiler passes

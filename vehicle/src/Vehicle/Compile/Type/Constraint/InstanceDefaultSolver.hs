@@ -9,12 +9,13 @@ import Data.Hashable (Hashable)
 import Data.Maybe (mapMaybe)
 import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (In, NoCtx, PrettyVerbose, PrintableBuiltin, prettyVerbose)
+import Vehicle.Compile.Print (In, NoCtx, PrettyVerbose, prettyVerbose)
 import Vehicle.Compile.Type.Constraint.InstanceSolver (acceptCandidate)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
 import Vehicle.Compile.Type.Meta.Variable
 import Vehicle.Compile.Type.Monad.Class
+import Vehicle.Data.Builtin.Interface.Print
 
 type MonadInstanceDefault builtin m =
   ( MonadTypeChecker builtin m,

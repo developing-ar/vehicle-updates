@@ -11,8 +11,8 @@ import Vehicle.Compile.Context.Free (MonadFreeContext, addDeclToContext, runFres
 import Vehicle.Compile.Error (MonadCompile)
 import Vehicle.Compile.Normalise.NBE (normaliseClosure, normaliseInEmptyEnv)
 import Vehicle.Compile.Prelude
-import Vehicle.Data.Builtin.Decidability (DecidabilityBuiltin (..))
-import Vehicle.Data.Code.TypedView
+import Vehicle.Data.Builtin.Decidability (DecidabilityBuiltin (..), DecidabilityBuiltinType (..))
+import Vehicle.Data.Builtin.Standard (BuiltinType (..))
 import Vehicle.Data.Code.Value (Value (..))
 
 --------------------------------------------------------------------------------
@@ -97,7 +97,7 @@ isTypeDef t = case t of
   _ -> return False
   where
     go :: Lv -> Value DecidabilityBuiltin -> m Bool
-    go _ VBoolTensorType {} = return True
+    go _ (VBuiltin (StandardBuiltinType TensorType) [argExpr -> VBuiltin (DecidabilityBuiltinType DecBoolType) [], _ds]) = return True
     go lv (VPi binder closure) = do
       result <- normaliseClosure lv binder closure
       go (lv + 1) result

@@ -178,7 +178,7 @@ unblockNatValue expr = case toNatValue expr of
 unblockOp2 ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  EvalSimple Op2Args Builtin m ->
+  EvalSimple Op2Args Value Builtin m ->
   Op2Args (Value Builtin) ->
   m (Value Builtin)
 unblockOp2 unblock evalFn (Op2Args x y) = do
@@ -190,7 +190,7 @@ unblockOp2 unblock evalFn (Op2Args x y) = do
 
 unblockIndexOp2 ::
   (MonadUnblock m) =>
-  EvalSimple IndexComparisonArgs Builtin m ->
+  EvalSimple IndexComparisonArgs Value Builtin m ->
   IndexComparisonArgs (Value Builtin) ->
   m (Value Builtin)
 unblockIndexOp2 evalFn (IndexCompArgs n1 n2 x y) = do
@@ -203,7 +203,7 @@ unblockIndexOp2 evalFn (IndexCompArgs n1 n2 x y) = do
 unblockTensorOp1 ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  EvalSimple TensorOp1Args Builtin m ->
+  EvalSimple TensorOp1Args Value Builtin m ->
   TensorOp1Args (Value Builtin) ->
   m (Value Builtin)
 unblockTensorOp1 unblock evalFn (TensorOp1Args ds xs) = do
@@ -214,7 +214,7 @@ unblockTensorOp1 unblock evalFn (TensorOp1Args ds xs) = do
 unblockTensorOp2 ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  EvalSimple TensorOp2Args Builtin m ->
+  EvalSimple TensorOp2Args Value Builtin m ->
   TensorOp2Args (Value Builtin) ->
   m (Value Builtin)
 unblockTensorOp2 unblock evalFn (TensorOp2Args ds xs ys) = do
@@ -227,7 +227,7 @@ unblockTensorOp2 unblock evalFn (TensorOp2Args ds xs ys) = do
 unblockReduceTensor ::
   (MonadUnblock m) =>
   UnblockingFunction m ->
-  EvalSimple TensorReductionArgs Builtin m ->
+  EvalSimple TensorReductionArgs Value Builtin m ->
   TensorReductionArgs (Value Builtin) ->
   m (Value Builtin)
 unblockReduceTensor unblock evalFn (TensorOp2Args ds e xs) = do

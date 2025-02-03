@@ -328,8 +328,8 @@ allInstances =
     quantifierCandidates q indexOp =
       [ ( forAllNat $ \n ->
             hasQuantifier q (tIndex n),
-          lamDim $ \d ->
-            free indexOp @@ [d],
+          lamDim $ \n ->
+            free indexOp @@@ [n],
           False
         ),
         ( forAllDims $ \ds ->

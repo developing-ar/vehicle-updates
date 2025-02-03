@@ -5,11 +5,13 @@ module Vehicle.Backend.Queries.Error
 where
 
 import Control.Monad.Except (MonadError (..))
+import Vehicle.Backend.Prelude (TypingSystem (..))
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyVerbose)
 import Vehicle.Compile.Type.Core (emptyInstanceDatabase)
 import Vehicle.Compile.Type.Subsystem (typeCheckWithSubsystem)
+import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Linearity
 import Vehicle.Data.Builtin.Linearity.Type ()
 import Vehicle.Data.Builtin.Polarity
@@ -31,7 +33,7 @@ diagnoseNonLinearity queryFormat prog propertyProv@(propertyIdentifier, _) = do
       <+> quotePretty propertyIdentifier
       <> line
 
-  subTypedProg <- typeCheckWithSubsystem emptyInstanceDatabase handleUnexpectedError prog
+  subTypedProg <- typeCheckWithSubsystem LinearityTypes emptyInstanceDatabase handleUnexpectedError prog
 
   -- Extract and diagnose the type.
   propertyType <- findDeclType propertyIdentifier subTypedProg
@@ -58,7 +60,7 @@ diagnoseAlternatingQuantifiers queryFormat prog propertyProv@(propertyIdentifier
       <+> quotePretty propertyIdentifier
       <> line
 
-  subTypedProg <- typeCheckWithSubsystem emptyInstanceDatabase handleUnexpectedError prog
+  subTypedProg <- typeCheckWithSubsystem PolarityTypes emptyInstanceDatabase handleUnexpectedError prog
 
   -- Extract and diagnose the type.
   propertyType <- findDeclType propertyIdentifier subTypedProg
@@ -77,3 +79,41 @@ findDeclType ident (Main decls) = do
   case candidates of
     [property] -> return $ typeOf property
     _ -> compilerDeveloperError $ "Could not find property" <+> quotePretty ident <+> "in program after subtyping."
+
+removeImplicitAndInstanceArgs ::
+  forall m builtin.
+  (MonadCompile m, PrintableBuiltin builtin) =>
+  Prog builtin ->
+  m (Prog builtin)
+removeImplicitAndInstanceArgs prog =
+  logCompilerPass MaxDetail "removal of implicit arguments" $ do
+    result <- traverse go prog
+    logCompilerPassOutput $ prettyExternal result
+    return result
+  where
+    go :: Expr builtin -> m (Expr builtin)
+    go expr = case expr of
+      App fun args -> do
+        fun' <- go fun
+        let nonImplicitArgs = NonEmpty.filter isExplicit args
+        nonImplicitArgs' <- traverse (traverse go) nonImplicitArgs
+        return $ normAppList fun' nonImplicitArgs'
+      BoundVar {} -> return expr
+      FreeVar {} -> return expr
+      Universe {} -> return expr
+      Meta {} -> return expr
+      Hole {} -> return expr
+      Builtin {} -> return expr
+      Pi p binder res -> Pi p <$> traverse go binder <*> go res
+      Lam p binder body
+        | isExplicit binder || not (isTypeUniverse (typeOf binder)) ->
+            Lam p <$> traverse go binder <*> go body
+        | otherwise -> do
+            -- TODO This is a massive hack to get around the unused implicit
+            -- {l} argument in `mapVector` in the standard library that isn't
+            -- handled by monomorphisation.
+            -- STILL NEEDED?
+            body' <- go body
+            let removedBody = Hole p "_" `substDBInto` body'
+            return removedBody
+      Let p bound binder body -> Let p <$> go bound <*> traverse go binder <*> go body

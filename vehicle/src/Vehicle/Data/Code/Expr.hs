@@ -13,10 +13,11 @@ import Data.Serialize (Serialize)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import GHC.Generics (Generic)
+import Vehicle.Data.Builtin.Interface
+import Vehicle.Data.Code.Interface (HasBuiltinConstructor (..))
 import Vehicle.Data.DeBruijn (Ix (..), Lv, Substitutable (..), Substitution, shiftDBIndex, unLv)
 import Vehicle.Data.Universe (UniverseLevel (..))
 import Vehicle.Prelude
-import Vehicle.Syntax.Builtin (Builtin (..), BuiltinFunction (..))
 import Vehicle.Syntax.Sugar (BinderType (..), HasBinders (..))
 
 --------------------------------------------------------------------------------
@@ -163,10 +164,10 @@ pattern BuiltinExpr p b args <- App (Builtin p b) args
   where
     BuiltinExpr p b args = App (Builtin p b) args
 
-getBuiltinApp :: Expr builtin -> Maybe (Provenance, builtin, [Arg builtin])
+getBuiltinApp :: Expr builtin -> Maybe (builtin, [Arg builtin])
 getBuiltinApp = \case
-  Builtin p b -> Just (p, b, [])
-  App (Builtin p b) args -> Just (p, b, NonEmpty.toList args)
+  Builtin _ b -> Just (b, [])
+  App (Builtin _ b) args -> Just (b, NonEmpty.toList args)
   _ -> Nothing
 
 getFreeVarApp :: Expr builtin -> Maybe (Provenance, Identifier, [Arg builtin])
@@ -286,17 +287,23 @@ freeVarsIn =
 -----------------------------------------------------------------------------
 -- Instances
 
-instance HasBinders (Expr Builtin) where
+instance (BuiltinHasBinders builtin) => HasBinders (Expr builtin) where
   getBinder = \case
     Pi _ binder body -> Just (PiBinder, binder, body)
     Lam _ binder body -> Just (LamBinder, binder, body)
-    BuiltinExpr _ (BuiltinFunction (QuantifyRatTensor q)) (NonEmpty.reverse -> (argExpr -> Lam _ binder body) :| _) -> Just (QuantifierBinder q, binder, body)
-    BuiltinExpr _ (BuiltinFunction Foreach) (NonEmpty.reverse -> (argExpr -> Lam _ binder body) :| _) -> Just (ForeachBinder, binder, body)
+    BuiltinExpr _ (getBuiltinBinder -> Just b) (NonEmpty.last -> (argExpr -> Lam _ binder body)) -> Just (b, binder, body)
     _ -> Nothing
 
   getLetBinder = \case
     Let _ value binder body -> Just (value, binder, body)
     _ -> Nothing
+
+instance HasBuiltinConstructor Expr where
+  accessBuiltinC =
+    Access
+      { getExpr = getBuiltinApp,
+        mkExpr = \(b, args) -> normAppList (Builtin mempty b) args
+      }
 
 --------------------------------------------------------------------------------
 -- DeBruijin substitution

@@ -17,14 +17,10 @@ pattern TensorIdent <- Identifier (ModulePath [StdLib]) "Tensor"
 data StdLibFunction
   = StdTypeAnn
   | StdId
-  | StdBigAnd
-  | StdBigOr
   | StdExistsIndex
   | StdForallIndex
-  | StdExistsIn
-  | StdForallIn
-  | StdEqualsBool
-  | StdNotEqualsBool
+  | StdExistsInList
+  | StdForallInList
   | StdAppendList
   | StdVectorType
   deriving (Eq, Ord, Enum, Bounded, Generic)
@@ -33,14 +29,10 @@ instance Show StdLibFunction where
   show = \case
     StdTypeAnn -> "typeAnn"
     StdId -> "id"
-    StdBigAnd -> "bigAnd"
-    StdBigOr -> "bigOr"
     StdExistsIndex -> "existsIndex"
     StdForallIndex -> "forallIndex"
-    StdExistsIn -> "existsIn"
-    StdForallIn -> "forallIn"
-    StdEqualsBool -> "equalsBool"
-    StdNotEqualsBool -> "notEqualsBool"
+    StdExistsInList -> "existsInList"
+    StdForallInList -> "forallInList"
     StdAppendList -> "appendList"
     StdVectorType -> "Vector"
 

@@ -68,3 +68,9 @@ instance
 
   subVector : ∀ {a} {A : Set a} {{_ : HasSub A}} {n} → HasSub (Vector A n)
   subVector = hasSub (Vector.zipWith _⊖_)
+
+allIndex : (Fin n → Bool) → Bool
+allIndex = ?
+
+existsIndex : (Fin n → Bool) → Bool
+existsIndex = ?

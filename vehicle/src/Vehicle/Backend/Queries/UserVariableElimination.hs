@@ -287,7 +287,7 @@ eliminateNotEqualRatTensor args@(TensorOp2Args dims _ _) = do
 eliminateTensorAssertion ::
   forall m.
   (MonadQueryStructure m) =>
-  EvalSimple TensorOp2Args Builtin m ->
+  EvalSimple TensorOp2Args Value Builtin m ->
   TensorOp2Args (Value Builtin) ->
   m (Value Builtin)
 eliminateTensorAssertion evalFn (TensorOp2Args dims xs ys) =
