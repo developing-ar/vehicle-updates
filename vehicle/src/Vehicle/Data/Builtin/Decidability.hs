@@ -8,7 +8,7 @@ import Data.Hashable (Hashable)
 import GHC.Generics (Generic)
 import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Interface
-import Vehicle.Data.Builtin.Interface.Normalise (BlockingArgs (..), EvalScheme (..), MonadNormBuiltin, NormalisableBuiltin (..), evalIterate, forceEvalSimpleBuiltin)
+import Vehicle.Data.Builtin.Interface.Normalise (BlockingArgs (..), EvalScheme (..), MonadNormBuiltin, NormalisableBuiltin (..), evalFoldList, evalIterate, forceEvalSimpleBuiltin)
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Standard (Builtin, BuiltinConstructor (..), BuiltinFunction (..), BuiltinType)
 import Vehicle.Data.Code.Interface
@@ -149,6 +149,26 @@ instance BuiltinHasNatLiterals DecidabilityBuiltin where
   accessAddNatBuiltin = functionAccessor (Add AddNat)
   accessMulNatBuiltin = functionAccessor (Mul MulNat)
 
+instance BuiltinHasListLiterals DecidabilityBuiltin where
+  accessNilBuiltin =
+    Access
+      { getExpr = \case
+          StandardBuiltinConstructor Nil -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> StandardBuiltinConstructor Nil
+      }
+
+  accessConsBuiltin =
+    Access
+      { getExpr = \case
+          StandardBuiltinConstructor Cons -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> StandardBuiltinConstructor Cons
+      }
+
+  accessMapListBuiltin = functionAccessor MapList
+  accessFoldListBuiltin = functionAccessor FoldList
+
 instance BuiltinHasBinders DecidabilityBuiltin where
   getBuiltinBinder = \case
     StandardBuiltinFunction Foreach -> Just ForeachBinder
@@ -235,6 +255,7 @@ instance PrintableBuiltin DecidabilityBuiltin where
 instance NormalisableBuiltin DecidabilityBuiltin where
   evalScheme = \case
     StandardBuiltinFunction Iterate -> NonSimple evalIterate
+    StandardBuiltinFunction FoldList -> NonSimple evalFoldList
     _ -> None
 
   blockingArgs = \case

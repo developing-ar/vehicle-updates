@@ -55,47 +55,52 @@
                     "tag": "ReconstructTensor",
                     "contents": [
                       "OtherVariable",
-                      [
-                        2
-                      ],
                       3,
-                      [
-                        4,
-                        5
-                      ]
+                      {
+                        "tensorValue": {
+                          "tag": "Values",
+                          "contents": [
+                            4,
+                            5
+                          ]
+                        },
+                        "tensorShape": [
+                          2
+                        ]
+                      }
                     ]
                   },
                   {
                     "tag": "ReconstructTensor",
                     "contents": [
                       "OtherVariable",
-                      [
-                        1
-                      ],
                       6,
-                      [
-                        7
-                      ]
+                      {
+                        "tensorValue": {
+                          "tag": "Constant",
+                          "contents": 7
+                        },
+                        "tensorShape": [
+                          1
+                        ]
+                      }
                     ]
                   },
                   {
-                    "tag": "SolveTensorEquality",
+                    "tag": "SolveEquality",
                     "contents": [
+                      true,
                       0,
                       {
                         "constantValue": {
-                          "value": [
-                            {
-                              "numerator": 0,
-                              "denominator": 1
-                            },
-                            {
+                          "tensorValue": {
+                            "tag": "Constant",
+                            "contents": {
                               "numerator": 0,
                               "denominator": 1
                             }
-                          ],
-                          "tag": "Tensor",
-                          "shape": [
+                          },
+                          "tensorShape": [
                             2
                           ]
                         },

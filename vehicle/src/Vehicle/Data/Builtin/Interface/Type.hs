@@ -40,7 +40,7 @@ typeOfBuiltinFunction = \case
   And -> typeOfTensorOp2 tBool
   Or -> typeOfTensorOp2 tBool
   Implies -> typeOfTensorOp2 tBool
-  QuantifyRatTensor _ -> forAllExpl "A" type0 $ \a -> typeOfQuantifier a
+  QuantifyRatTensor _ -> forAllDims $ \ds -> typeOfQuantifier (tRatTensor ds)
   If -> typeOfIf
   ReduceAndTensor -> typeOfTensorBoolReduceOp
   ReduceOrTensor -> typeOfTensorBoolReduceOp
