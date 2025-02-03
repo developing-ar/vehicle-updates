@@ -49,7 +49,7 @@ typeDecidabilityBuiltin = \case
   StandardBuiltinConstructor c -> typeOfBuiltinConstructor c
   StandardBuiltinFunction f -> case f of
     -- We change `If` to require decidable booleans
-    If -> forAllTypes $ \t -> tDecBool ~> t ~> t ~> t
+    If -> forAllTypes $ \t -> tTensor tDecBool dimNil ~> t ~> t ~> t
     _ -> typeOfBuiltinFunction f
   DecidabilityBuiltinType t -> typeDecidableType t
   DecidabilityBuiltinTypeClass t -> typeDecidableTypeClass t
