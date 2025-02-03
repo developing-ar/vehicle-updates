@@ -45,42 +45,49 @@
                     "tag": "ReconstructTensor",
                     "contents": [
                       "OtherVariable",
-                      [
-                        1
-                      ],
                       2,
-                      [
-                        3
-                      ]
+                      {
+                        "tensorValue": {
+                          "tag": "Constant",
+                          "contents": 3
+                        },
+                        "tensorShape": [
+                          1
+                        ]
+                      }
                     ]
                   },
                   {
                     "tag": "ReconstructTensor",
                     "contents": [
                       "OtherVariable",
-                      [
-                        1
-                      ],
                       4,
-                      [
-                        5
-                      ]
+                      {
+                        "tensorValue": {
+                          "tag": "Constant",
+                          "contents": 5
+                        },
+                        "tensorShape": [
+                          1
+                        ]
+                      }
                     ]
                   },
                   {
-                    "tag": "SolveRationalEquality",
+                    "tag": "SolveEquality",
                     "contents": [
-                      1,
+                      true,
+                      0,
                       {
                         "constantValue": {
-                          "value": [
-                            {
+                          "tensorValue": {
+                            "tag": "Constant",
+                            "contents": {
                               "numerator": 0,
                               "denominator": 1
                             }
-                          ],
-                          "tag": "Tensor",
-                          "shape": []
+                          },
+                          "tensorShape": []
                         },
                         "coefficients": {
                           "3": {
@@ -89,17 +96,6 @@
                           }
                         }
                       }
-                    ]
-                  },
-                  {
-                    "tag": "ReconstructTensor",
-                    "contents": [
-                      "UserVariable",
-                      [],
-                      0,
-                      [
-                        1
-                      ]
                     ]
                   }
                 ]

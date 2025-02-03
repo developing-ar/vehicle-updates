@@ -40,27 +40,35 @@
                     "tag": "ReconstructTensor",
                     "contents": [
                       "OtherVariable",
-                      [
-                        2
-                      ],
                       0,
-                      [
-                        1,
-                        2
-                      ]
+                      {
+                        "tensorValue": {
+                          "tag": "Values",
+                          "contents": [
+                            1,
+                            2
+                          ]
+                        },
+                        "tensorShape": [
+                          2
+                        ]
+                      }
                     ]
                   },
                   {
                     "tag": "ReconstructTensor",
                     "contents": [
                       "OtherVariable",
-                      [
-                        1
-                      ],
                       3,
-                      [
-                        4
-                      ]
+                      {
+                        "tensorValue": {
+                          "tag": "Constant",
+                          "contents": 4
+                        },
+                        "tensorShape": [
+                          1
+                        ]
+                      }
                     ]
                   }
                 ]
