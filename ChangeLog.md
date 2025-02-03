@@ -4,6 +4,8 @@
 
 * BREAKING: `forall _ in _` no longer works for `Tensor`/`Vector` types.
 
+* Pointwise `min` and `max` now work over `Tensor`s.
+
 * Better error messages for typing errors
 
 * Fixed bug where `type` declarations with parameters were handled incorrectly.

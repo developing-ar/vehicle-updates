@@ -187,6 +187,8 @@ delabBuiltinFunction fun args = case fun of
   V.Neg _dom -> delabTypeClassOp V.NegTC args
   V.Sub _dom -> delabTypeClassOp V.SubTC args
   V.Div _dom -> delabTypeClassOp V.DivTC args
+  V.Min _dom -> delabApp (B.Min tokMin) args
+  V.Max _dom -> delabApp (B.Max tokMax) args
   V.QuantifyRatTensor q -> delabTypeClassOp (V.QuantifierTC q) args
   V.Compare _ op -> delabTypeClassOp (V.CompareTC op) args
   V.FoldList -> delabTypeClassOp V.FoldTC args
@@ -197,8 +199,6 @@ delabBuiltinFunction fun args = case fun of
   V.ReduceOrTensor -> delabApp (B.ReduceOr tokReduceOr) args
   -- Builtins not in the surface syntax.
   V.PowRat -> rawDelab
-  V.Min _dom -> rawDelab
-  V.Max _dom -> rawDelab
   V.ReduceAddRatTensor -> rawDelab
   V.ReduceMulRatTensor -> rawDelab
   V.ReduceMaxRatTensor -> rawDelab

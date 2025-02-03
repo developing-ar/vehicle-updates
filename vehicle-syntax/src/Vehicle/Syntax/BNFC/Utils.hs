@@ -109,6 +109,10 @@ tokMul = mkToken B.TokMul "*"
 
 tokDiv = mkToken B.TokDiv "/"
 
+tokMin = mkToken B.TokMin "min"
+
+tokMax = mkToken B.TokMax "max"
+
 tokSeqOpen = mkToken B.TokSeqOpen "["
 
 tokSeqClose = mkToken B.TokSeqClose "]"
