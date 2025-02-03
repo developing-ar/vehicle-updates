@@ -499,6 +499,7 @@ compileBuiltin b args = case b of
     DecCompare CompareRatTensor op -> annotateInfixApp [DataTensor] 4 (Just tensorQualifier) (comparisonOperator True op) args
     DecReduceAndTensor -> unsupportedError
     DecReduceOrTensor -> unsupportedError
+    BoolTensorToDecBoolTensor -> unsupportedError
   DecidabilityBuiltinTypeClass {} -> monoError
   DecidabilityBuiltinTypeClassOp {} -> monoError
   where

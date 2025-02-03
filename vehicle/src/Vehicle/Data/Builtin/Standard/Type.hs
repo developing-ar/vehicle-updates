@@ -1,9 +1,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Vehicle.Data.Builtin.Standard.Type
-  ( isStandardConstructor,
-  )
-where
+module Vehicle.Data.Builtin.Standard.Type () where
 
 import Vehicle.Compile.Context.Free (getFreeEnv)
 import Vehicle.Compile.Prelude
@@ -14,8 +11,9 @@ import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.System
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Type
-import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.Builtin.Standard.IndexSolver
+import Vehicle.Data.Builtin.Standard.Normalise ()
 import Vehicle.Data.Code.DSL
 import Vehicle.Data.DSL
 import Prelude hiding (iterate, pi)

@@ -16,7 +16,7 @@ import Vehicle.Compile.Print.TypingError
 import Vehicle.Data.Assertion (prettyUnderConstrainedVariable)
 import Vehicle.Data.Builtin.Linearity
 import Vehicle.Data.Builtin.Polarity
-import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.Code.Interface (getDimsExprs)
 import Vehicle.Data.Code.TypedView
 import Vehicle.Data.Code.Value

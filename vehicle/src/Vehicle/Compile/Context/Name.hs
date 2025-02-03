@@ -48,7 +48,7 @@ ixToProperName :: (MonadNameContext m, HasCallStack) => Provenance -> Ix -> m Na
 ixToProperName p ix = do
   ctx <- getNameContext
   case lookupIx ctx ix of
-    Nothing -> varOutOfBounds "DeBruijn index" p ix (length ctx)
+    Nothing -> varOutOfBounds "DeBruijn index" p ix ctx
     Just Nothing -> return "_"
     Just (Just name) -> return name
 
@@ -56,17 +56,19 @@ lvToProperName :: (MonadNameContext m, HasCallStack) => Provenance -> Lv -> m Na
 lvToProperName p lv = do
   ctx <- getNameContext
   case lookupLv ctx lv of
-    Nothing -> varOutOfBounds "DeBruijn level" p lv (length ctx)
+    Nothing -> varOutOfBounds "DeBruijn level" p lv ctx
     Just Nothing -> return "_"
     Just (Just name) -> return name
 
 -- | Throw an |IndexOutOfBounds| error using an arbitrary var.
-varOutOfBounds :: (MonadNameContext m, Pretty var, HasCallStack) => Doc a -> Provenance -> var -> Int -> m a
-varOutOfBounds varType p var ctxSize =
+varOutOfBounds :: (MonadNameContext m, Pretty var, HasCallStack) => Doc a -> Provenance -> var -> NamedBoundCtx -> m a
+varOutOfBounds varType p var ctx =
   developerError $
     "During descoping found"
       <+> varType
       <+> pretty var
-      <+> "greater than current context size"
-      <+> pretty ctxSize
+      <+> "greater than the size"
+      <+> quotePretty (length ctx)
+      <+> "of the current context"
+      <+> pretty ctx
       <+> parens (pretty p)

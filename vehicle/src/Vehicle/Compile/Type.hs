@@ -78,6 +78,8 @@ typeCheckDecls = \case
 typeCheckDecl :: forall builtin m. (TCM builtin m) => Decl Builtin -> m (Decl builtin)
 typeCheckDecl uncheckedDecl =
   logCompilerPass MidDetail ("typing" <+> quotePretty (identifierOf uncheckedDecl)) $ do
+    logDebug MidDetail $ prettyExternal uncheckedDecl <> line
+
     convertedDecl <- traverse convertExprFromStandardTypes uncheckedDecl
 
     decl <- case convertedDecl of

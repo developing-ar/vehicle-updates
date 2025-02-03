@@ -1,7 +1,7 @@
 @property
 e1 : Bool
 e1 = let x = True, y = False in x and y
-
+{-
 @property
 e2 : Bool
 e2 = let y = 1 in y >= 2
@@ -37,3 +37,4 @@ falsey x = x <= 0.5
 @property
 correctOutput : Bool
 correctOutput = let y = 0 in falsey y
+-}

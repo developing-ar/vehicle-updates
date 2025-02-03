@@ -2,9 +2,15 @@
 
 ## Version 0.17.0
 
-* Fixed bug where `type` declarations with parameters were handled incorrectly.
+* BREAKING: `forall _ in _` no longer works for `Tensor`/`Vector` types.
 
 * Better error messages for typing errors
+
+* Fixed bug where `type` declarations with parameters were handled incorrectly.
+
+* Fixed rare bug where `let .. in ..` statements weren't typed checked correctly.
+
+* Fixed bug in Agda compilation where decidable `Bool`s were incorrectly translated to types.
 
 ## Version 0.16.1
 

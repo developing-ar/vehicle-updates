@@ -7,6 +7,7 @@ import Control.Applicative ((<|>))
 import Control.Monad (foldM, zipWithM)
 import Data.Maybe (fromMaybe, isJust)
 import Vehicle.Compile.Prelude
+import Vehicle.Compile.Print (prettyVerbose)
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Print (PrintableBuiltin)
@@ -51,7 +52,7 @@ class (PrintableBuiltin builtin) => NormalisableBuiltin builtin where
   evalScheme :: (MonadLogger m) => builtin -> EvalScheme builtin m
   blockingArgs :: builtin -> BlockingArgs
   isTypeClassOp :: builtin -> Bool
-  isCast :: (MonadLogger m, HasBuiltinConstructor expr) => builtin -> Maybe ([GenericArg (expr builtin)] -> m (expr builtin))
+  isCast :: (MonadLogger m) => builtin -> Maybe ([GenericArg (Expr builtin)] -> m (Expr builtin))
 
 evaluateBuiltin ::
   (MonadLogger m, NormalisableBuiltin builtin) =>
@@ -65,16 +66,17 @@ evaluateBuiltin evalApp b spine = case evalScheme b of
   None -> return $ VBuiltin b spine
 
 forceEvalSimpleBuiltin ::
-  (IsArgs args, MonadLogger m) =>
-  EvalSimple args expr builtin m ->
-  [GenericArg (expr builtin)] ->
-  m (expr builtin)
-forceEvalSimpleBuiltin eval spine =
+  (IsArgs args, MonadLogger m, Pretty builtin, PrintableBuiltin builtin) =>
+  builtin ->
+  EvalSimple args Expr builtin m ->
+  [GenericArg (Expr builtin)] ->
+  m (Expr builtin)
+forceEvalSimpleBuiltin b eval spine =
   case getExpr accessSpine spine of
     Just args -> eval args
-    Nothing -> developerError "Should not be evaluating args"
-
--- maybe _ _ (getExpr accessSpine spine)
+    Nothing ->
+      developerError $
+        "Should not be evaluating" <+> quotePretty b <+> "with incomplete args of" <+> prettyVerbose spine
 
 --------------------------------------------------------------------------------
 -- Evaluation

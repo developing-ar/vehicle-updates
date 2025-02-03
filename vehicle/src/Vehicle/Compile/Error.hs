@@ -17,7 +17,7 @@ import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Linearity
 import Vehicle.Data.Builtin.Polarity
-import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.Code.Value
 import Vehicle.Data.Tensor (TensorShape)
 import Vehicle.Syntax.Parse (ParseError, ParseLocation)

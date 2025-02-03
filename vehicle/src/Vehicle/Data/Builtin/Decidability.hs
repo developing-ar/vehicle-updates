@@ -246,7 +246,7 @@ instance NormalisableBuiltin DecidabilityBuiltin where
     _ -> False
 
   isCast e = case e of
-    DecidabilityBuiltinFunction BoolTensorToDecBoolTensor -> Just $ forceEvalSimpleBuiltin evalBoolTensorToDecBoolTensor
+    DecidabilityBuiltinFunction BoolTensorToDecBoolTensor -> Just $ forceEvalSimpleBuiltin e evalBoolTensorToDecBoolTensor
     _ -> Nothing
 
 evalBoolTensorToDecBoolTensor ::

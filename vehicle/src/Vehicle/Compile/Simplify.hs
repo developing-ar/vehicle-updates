@@ -7,7 +7,6 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NonEmpty (filter, reverse, toList)
 import Data.Text qualified as Text
 import Vehicle.Data.Builtin.Core
-import Vehicle.Data.Builtin.Standard ()
 import Vehicle.Syntax.AST.Arg
 import Vehicle.Syntax.AST.Expr
 import Vehicle.Syntax.AST.Relevance (Relevance (..))

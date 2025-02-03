@@ -22,14 +22,10 @@ import Vehicle.Compile.Print
 import Vehicle.Compile.Print.Error
 import Vehicle.Compile.Scope (scopeCheck, scopeCheckClosedExpr)
 import Vehicle.Compile.Type (typeCheckProg, typeCheckSolitaryExpr)
-import Vehicle.Compile.Type.Core (emptyInstanceDatabase)
 import Vehicle.Compile.Type.Subsystem
-import Vehicle.Data.Builtin.Decidability (DecidabilityBuiltin)
 import Vehicle.Data.Builtin.Decidability.Type ()
 import Vehicle.Data.Builtin.Interface.Print
-import Vehicle.Data.Builtin.Linearity (LinearityBuiltin)
 import Vehicle.Data.Builtin.Linearity.Type ()
-import Vehicle.Data.Builtin.Polarity (PolarityBuiltin)
 import Vehicle.Data.Builtin.Polarity.Type ()
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Builtin.Standard.Instances
@@ -43,7 +39,7 @@ import Vehicle.Verify.Specification.IO
 
 data TypeCheckOptions = TypeCheckOptions
   { specification :: FilePath,
-    typingSystem :: TypingSystem
+    secondaryTypeSystem :: Maybe SecondaryTypeSystem
   }
   deriving (Eq, Show)
 
@@ -51,11 +47,11 @@ typeCheck :: (MonadStdIO IO) => LoggingSettings -> TypeCheckOptions -> IO ()
 typeCheck loggingSettings options@TypeCheckOptions {..} = runCompileMonad loggingSettings $ do
   (imports, typedProg) <- typeCheckUserProg options
   let mergedProg = mergeImports imports typedProg
-  case typingSystem of
-    StandardTypes -> return ()
-    LinearityTypes -> printPropertyTypes =<< typeCheckWithSubsystem @LinearityBuiltin typingSystem emptyInstanceDatabase throwError mergedProg
-    PolarityTypes -> printPropertyTypes =<< typeCheckWithSubsystem @PolarityBuiltin typingSystem emptyInstanceDatabase throwError mergedProg
-    DecidabilityTypes -> printPropertyTypes =<< typeCheckWithSubsystem @DecidabilityBuiltin typingSystem emptyInstanceDatabase throwError mergedProg
+  case secondaryTypeSystem of
+    Nothing -> return ()
+    Just LinearityTypes -> printPropertyTypes =<< linearityTypeCheck mergedProg
+    Just PolarityTypes -> printPropertyTypes =<< polarityTypeCheck mergedProg
+    Just DecidabilityTypes -> printPropertyTypes =<< decidabilityTypeCheck mergedProg
 
 --------------------------------------------------------------------------------
 -- Useful functions that apply to multiple compiler passes
@@ -133,18 +129,20 @@ loadLibrary library = do
     libraryFile <- findLibraryContentFile library
     typeCheckOrLoadProg StdLib mempty libraryFile
 
-printPropertyTypes :: (MonadIO m, MonadCompile m, PrintableBuiltin builtin) => Prog builtin -> m ()
-printPropertyTypes (Main decls) = do
-  let properties = filter isPropertyDecl decls
-  let propertyDocs = fmap propertySummary properties
-  let outputDoc = concatWith (\a b -> a <> line <> b) propertyDocs
-  programOutput outputDoc
-  where
-    propertySummary :: (PrintableBuiltin builtin) => Decl builtin -> Doc a
-    propertySummary decl = do
-      let propertyName = pretty $ identifierName $ identifierOf decl
-      let propertyType = prettyFriendlyEmptyCtx (typeOf decl)
-      propertyName <+> ":" <+> propertyType
+printPropertyTypes :: (MonadIO m, MonadCompile m, PrintableBuiltin builtin) => Either CompileError (Prog builtin) -> m ()
+printPropertyTypes = \case
+  Left err -> throwError err
+  Right (Main decls) -> do
+    let properties = filter isPropertyDecl decls
+    let propertyDocs = fmap propertySummary properties
+    let outputDoc = concatWith (\a b -> a <> line <> b) propertyDocs
+    programOutput outputDoc
+    where
+      propertySummary :: (PrintableBuiltin builtin) => Decl builtin -> Doc a
+      propertySummary decl = do
+        let propertyName = pretty $ identifierName $ identifierOf decl
+        let propertyType = prettyFriendlyEmptyCtx (typeOf decl)
+        propertyName <+> ":" <+> propertyType
 
 runCompileMonad ::
   forall m a.

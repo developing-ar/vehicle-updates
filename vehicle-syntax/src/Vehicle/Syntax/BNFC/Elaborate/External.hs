@@ -615,8 +615,8 @@ elabQuantifierIn ::
 elabQuantifierIn tk q binder container body = do
   p <- mkProvenance tk
   let quantBuiltin = V.Var p $ case q of
-        V.Forall -> "forallIn"
-        V.Exists -> "existsIn"
+        V.Forall -> "forallInList"
+        V.Exists -> "existsInList"
 
   binder' <- elabNameBinder False binder
   container' <- elabExpr container

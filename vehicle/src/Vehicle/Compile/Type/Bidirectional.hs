@@ -215,7 +215,10 @@ inferExpr e = do
       -- Check the type of the body, with the bound variable added to the context.
       (checkedBody, typeOfBody) <- addBinderToContext checkedBinder $ inferExpr body
 
-      return (Let p checkedBoundExpr checkedBinder checkedBody, typeOfBody)
+      -- Substitute through the type of the bound expression to preserve well-typedness
+      let finalType = typeOfBoundExpr `substDBInto` typeOfBody
+
+      return (Let p checkedBoundExpr checkedBinder checkedBody, finalType)
     Lam p binder body -> do
       -- Infer the type of the bound variable from the binder
       (typeOfBinder, typeOfBinderType) <- inferExpr (typeOf binder)
@@ -225,9 +228,7 @@ inferExpr e = do
 
       -- Update the context with the bound variable
       (checkedBody, typeOfBody) <- addBinderToContext checkedBinder $ inferExpr body
-
-      let t' = Pi p checkedBinder typeOfBody
-      return (Lam p checkedBinder checkedBody, t')
+      return (Lam p checkedBinder checkedBody, Pi p checkedBinder typeOfBody)
     Builtin p op -> do
       return (Builtin p op, fromDSL p $ typeBuiltin op)
 
@@ -459,4 +460,5 @@ showInferExit :: forall builtin m. (MonadBidirectional builtin m) => (Expr built
 showInferExit (e, t) = do
   decrCallDepth
   ctx <- getNamedBoundCtx (Proxy @(Type builtin))
+  -- logDebug MaxDetail $ "infer-exit " <+> prettyVerbose e <+> ":" <+> prettyVerbose t <+> pretty (length ctx)
   logDebug MaxDetail $ "infer-exit " <+> prettyExternal (WithContext e ctx) <+> ":" <+> prettyExternal (WithContext t ctx)

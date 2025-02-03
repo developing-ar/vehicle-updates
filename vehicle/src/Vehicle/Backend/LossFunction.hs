@@ -16,6 +16,7 @@ import Vehicle.Compile.Normalise.Quote (unnormalise)
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Loss (LossBuiltin)
+import Vehicle.Data.Builtin.Standard.Normalise ()
 
 convertToLossTensors ::
   (MonadCompile m) =>

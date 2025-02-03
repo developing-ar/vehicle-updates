@@ -3,7 +3,7 @@ module Vehicle.Data.Builtin.Interface.Type where
 import Data.Proxy (Proxy)
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Print
-import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.Code.DSL
 import Vehicle.Data.DSL
 import Vehicle.Prelude (Relevance (..))

@@ -34,7 +34,7 @@ import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta.Map (MetaMap (..))
 import Vehicle.Data.Assertion (Bounds (..), Inequality, NormalisedRelation (..))
 import Vehicle.Data.Builtin.Interface.Print
-import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.LinearExpr (Constant (..), LinearExpr, prettyLinearExpr)
 import Vehicle.Data.Code.Value

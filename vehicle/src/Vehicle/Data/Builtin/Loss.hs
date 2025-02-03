@@ -8,8 +8,8 @@ import GHC.Generics (Generic)
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise
 import Vehicle.Data.Builtin.Interface.Print
-import Vehicle.Data.Builtin.Standard (Builtin)
-import Vehicle.Data.Builtin.Standard qualified as S
+import Vehicle.Data.Builtin.Standard.Core (Builtin)
+import Vehicle.Data.Builtin.Standard.Core qualified as S
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.Tensor (Tensor)
 import Vehicle.Prelude (Pretty (..), developerError)

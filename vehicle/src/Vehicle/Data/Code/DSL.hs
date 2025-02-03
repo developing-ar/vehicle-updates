@@ -2,7 +2,7 @@ module Vehicle.Data.Code.DSL where
 
 import Data.List.NonEmpty (NonEmpty (..))
 import Vehicle.Data.Builtin.Interface
-import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.DSL
 import Vehicle.Data.Tensor (Tensor (..), pattern ZeroDimTensor)
 import Vehicle.Prelude

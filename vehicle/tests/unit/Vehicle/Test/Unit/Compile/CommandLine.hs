@@ -7,7 +7,7 @@ import Data.Map qualified as Map (fromList)
 import Options.Applicative (ParserResult (..), defaultPrefs, execParserPure)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertEqual, assertFailure, testCase)
-import Vehicle.Backend.Prelude (TypingSystem (..))
+import Vehicle.Backend.Prelude (SecondaryTypeSystem (..))
 import Vehicle.CommandLine
   ( GlobalOptions (..),
     ModeOptions (..),

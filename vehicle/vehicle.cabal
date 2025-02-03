@@ -247,8 +247,10 @@ library
     Vehicle.Data.Builtin.Polarity
     Vehicle.Data.Builtin.Polarity.Solver
     Vehicle.Data.Builtin.Polarity.Type
+    Vehicle.Data.Builtin.Standard.Core
     Vehicle.Data.Builtin.Standard.IndexSolver
     Vehicle.Data.Builtin.Standard.Instances
+    Vehicle.Data.Builtin.Standard.Normalise
     Vehicle.Data.Builtin.Standard.Type
     Vehicle.Data.Code.TypedView
     Vehicle.Data.QuantifiedVariable

@@ -133,10 +133,12 @@ compilePropertyDecl prog propertyData@(_, _, declProv@(ident, _), _, _) expr = d
     return (nameOf (fst declProv), multiProperty)
 
 handlePropertyCompileError :: (MonadCompile m) => Prog Builtin -> MultiPropertyMetaData -> CompileError -> m a
-handlePropertyCompileError prog (queryFormat, _, declProv, _, _) e = case e of
-  UnsupportedNonLinearConstraint {} -> throwError =<< diagnoseNonLinearity (queryFormatID queryFormat) prog declProv
-  UnsupportedAlternatingQuantifiers {} -> throwError =<< diagnoseAlternatingQuantifiers (queryFormatID queryFormat) prog declProv
-  _ -> throwError e
+handlePropertyCompileError prog (queryFormat, _, declProv, _, _) e = do
+  let formatID = queryFormatID queryFormat
+  case e of
+    UnsupportedNonLinearConstraint {} -> throwError =<< diagnoseNonLinearity formatID prog declProv
+    UnsupportedAlternatingQuantifiers {} -> throwError =<< diagnoseAlternatingQuantifiers formatID prog declProv
+    _ -> throwError e
 
 -- | Compiles a property of type `Tensor Bool dims` for some variable `dims`,
 -- by recursing through the levels of vectors until it reaches something of

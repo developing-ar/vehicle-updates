@@ -9,7 +9,7 @@ import Vehicle.Compile.Type.Monad.Class (MonadTypeChecker)
 import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Interface.Type (TypableBuiltin)
-import Vehicle.Data.Builtin.Standard (Builtin (..))
+import Vehicle.Data.Builtin.Standard.Core (Builtin (..))
 
 -- | The type-checking monad.
 type TCM builtin m =

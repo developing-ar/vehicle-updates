@@ -42,7 +42,7 @@ import Options.Applicative
     switch,
     value,
   )
-import Vehicle.Backend.Prelude (DifferentiableLogicID, ITP, Target (..), TypingSystem (..), findTarget)
+import Vehicle.Backend.Prelude (DifferentiableLogicID, ITP, SecondaryTypeSystem (..), Target (..), findTarget)
 import Vehicle.Compile (CompileOptions (..))
 import Vehicle.Export (ExportOptions (..))
 import Vehicle.Prelude
@@ -301,9 +301,8 @@ allTargets :: [String]
 allTargets = allLossFunctionDLs <> allVerifiersFormats <> allITPs
 
 allTypeSystems :: [Doc a]
-allTypeSystems = flip map (enumerate @TypingSystem) $ \t ->
+allTypeSystems = flip map (enumerate @SecondaryTypeSystem) $ \t ->
   "-" <+> pretty t <+> "-" <+> case t of
-    StandardTypes -> "check whether the types written in the specification are consistent."
     PolarityTypes -> "check whether alternating quantifiers are used in the specification."
     LinearityTypes -> "check whether quantified variables are used linearly in the specification."
     DecidabilityTypes -> "check which booleans are decidable and which are undecidable in the context of Vehicle"
@@ -362,7 +361,7 @@ verifySpecificationParser =
             <> "a previous call to `vehicle compile`."
         )
 
-typeSystemParser :: Parser TypingSystem
+typeSystemParser :: Parser (Maybe SecondaryTypeSystem)
 typeSystemParser =
   option auto $
     long "typeSystem"
@@ -378,7 +377,7 @@ typeSystemParser =
                     )
               )
         )
-      <> value StandardTypes
+      <> value Nothing
 
 specificationParser :: Parser FilePath
 specificationParser =
