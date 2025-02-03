@@ -21,9 +21,9 @@ import Vehicle.Backend.Agda.CapitaliseTypeNames (capitaliseTypeNames)
 import Vehicle.Compile.Context.Bound (getNamedBoundCtx)
 import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, ixToProperName, runFreshNameContextT)
 import Vehicle.Compile.Error
-import Vehicle.Compile.Monomorphisation
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
+import Vehicle.Compile.Type.Subsystem (resolveInstanceArgumentsAndCasts)
 import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Builtin.Standard (BuiltinType (..))
 import Vehicle.Data.Builtin.Standard hiding (TensorType)
@@ -45,7 +45,7 @@ data AgdaOptions = AgdaOptions
 compileProgToAgda :: (MonadCompile m) => Prog DecidabilityBuiltin -> AgdaOptions -> m (Doc a)
 compileProgToAgda prog options =
   logCompilerPass MinDetail currentPhase $ do
-    monoProg <- monomorphise isPropertyDecl "-" prog
+    monoProg <- resolveInstanceArgumentsAndCasts prog
     prog2 <- capitaliseTypeNames monoProg
     programDoc <- runFreshNameContextT $ compileProg options prog2
     let programStream = layoutPretty defaultLayoutOptions programDoc
@@ -535,22 +535,6 @@ compileTypeLevelQuantifier q binders body = do
     Forall -> return "∀"
     Exists -> return $ annotateConstant [DataProduct] "∃ λ"
   return $ quant <+> hsep cBinders <+> "→" <+> cBody
-
-{-
-(quant, qualifier, dep) <- case tCont of
-  (Builtin _ (BuiltinType ListType)) -> case (boolLevel, q) of
-    (TypeLevel, Forall) -> return ("All", listQualifier, DataListAll)
-    (TypeLevel, Exists) -> return ("Any", listQualifier, DataListAny)
-    (BoolLevel, Forall) -> return ("all", listQualifier, DataList)
-    (BoolLevel, Exists) -> return ("any", listQualifier, DataList)
-  _ -> case (boolLevel, q) of
-    (TypeLevel, Forall) -> return ("All", tensorQualifier, DataTensorAll)
-    (TypeLevel, Exists) -> return ("Any", tensorQualifier, DataTensorAny)
-    (BoolLevel, Forall) -> return ("all", tensorQualifier, DataTensor)
-    (BoolLevel, Exists) -> return ("any", tensorQualifier, DataTensor)
-
-annotateApp [dep] (qualifier <> "." <> quant) <$> traverse compileExpr [fn, cont]
--}
 
 compileIndexLiteral :: Int -> Code
 compileIndexLiteral i = annotate ([DataFin], 10) ("#" <+> pretty i)

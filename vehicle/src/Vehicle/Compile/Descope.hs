@@ -10,7 +10,6 @@ module Vehicle.Compile.Descope
   )
 where
 
-import Debug.Trace
 import Vehicle.Compile.Context.Name
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Interface.Print
@@ -78,9 +77,7 @@ genericDescopeExpr f e = showDescopeExit $ case showDescopeEntry e of
   Let p bound binder body -> do
     bound' <- genericDescopeExpr f bound
     binder' <- traverse (genericDescopeExpr f) binder
-    body' <- addNameToContext binder $ do
-      ctx <- getNameContext
-      traceShow (length ctx) $ genericDescopeExpr f body
+    body' <- addNameToContext binder $ genericDescopeExpr f body
     return $ S.Let p bound' binder' body'
   Lam p binder body -> do
     binder' <- traverse (genericDescopeExpr f) binder

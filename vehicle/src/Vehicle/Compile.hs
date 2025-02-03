@@ -54,41 +54,39 @@ compile loggingSettings options@CompileOptions {..} = runCompileMonad loggingSet
           secondaryTypeSystem = Nothing
         }
 
-  prunedProg <- analyseDependenciesAndPrune prog declarationsToCompile
-  let result = (imports, prunedProg)
+  let mergedProg = mergeImports imports prog
+  prunedProg <- analyseDependenciesAndPrune mergedProg declarationsToCompile
 
   let resources = Resources specification networkLocations datasetLocations parameterValues
   case target of
     VerifierQueries queryFormatID ->
-      compileToQueryFormat result resources queryFormatID output
+      compileToQueryFormat prunedProg resources queryFormatID output
     LossFunction differentiableLogic ->
-      compileToLossFunction differentiableLogic result output outputAsJSON
+      compileToLossFunction differentiableLogic prunedProg output outputAsJSON
     ITP Agda ->
-      compileToAgda options result
+      compileToAgda options prunedProg
 
 --------------------------------------------------------------------------------
 -- Backend-specific compilation functions
 
 compileToQueryFormat ::
   (MonadCompile m, MonadStdIO m) =>
-  (Imports, Prog Builtin) ->
+  Prog Builtin ->
   Resources ->
   QueryFormatID ->
   Maybe FilePath ->
   m ()
-compileToQueryFormat (imports, typedProg) resources queryFormatID output = do
-  let mergedProg = mergeImports imports typedProg
+compileToQueryFormat typedProg resources queryFormatID output = do
   let verifier = queryFormats queryFormatID
-  compileToQueries verifier mergedProg resources output
+  compileToQueries verifier typedProg resources output
 
 compileToAgda ::
   (MonadCompile m, MonadStdIO m) =>
   CompileOptions ->
-  (Imports, Prog Builtin) ->
+  Prog Builtin ->
   m ()
-compileToAgda CompileOptions {..} (imports, typedProg) = do
-  let mergedProg = mergeImports imports typedProg
-  errorOrDecProg <- decidabilityTypeCheck mergedProg
+compileToAgda CompileOptions {..} typedProg = do
+  errorOrDecProg <- decidabilityTypeCheck typedProg
   case errorOrDecProg of
     Left err -> throwError err
     Right decProg -> do
@@ -100,13 +98,12 @@ compileToLossFunction ::
   forall m.
   (MonadCompile m, MonadStdIO m) =>
   DifferentiableLogicID ->
-  (Imports, Prog Builtin) ->
+  Prog Builtin ->
   Maybe FilePath ->
   Bool ->
   m ()
-compileToLossFunction logicID (imports, typedProg) outputFile outputAsJSON = do
-  let mergedProg = mergeImports imports typedProg
-  hoistedProg <- hoistInferableParameters mergedProg
+compileToLossFunction logicID typedProg outputFile outputAsJSON = do
+  hoistedProg <- hoistInferableParameters typedProg
   functionalisedProg <- functionaliseResources hoistedProg
   let logic = dslFor logicID
   compiledLogic <- compileLogic logicID logic

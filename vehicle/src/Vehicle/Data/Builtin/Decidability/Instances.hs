@@ -36,6 +36,17 @@ allInstances =
             False
           )
         ]
+      <> [ ( decTypeClass HasBoolTensorLiterals tBool,
+             lamDims $ \ds ->
+               explLam "bs" (tBoolTensor ds) $ \bs ->
+                 bs,
+             False
+           ),
+           ( decTypeClass HasBoolTensorLiterals tDecBool,
+             decFunction BoolTensorToDecBoolTensor,
+             False
+           )
+         ]
       <> decCandidate HasNot Not DecNot
       <> decCandidate HasAnd And DecAnd
       <> decCandidate HasOr Or DecOr

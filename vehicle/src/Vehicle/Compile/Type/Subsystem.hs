@@ -2,6 +2,7 @@ module Vehicle.Compile.Type.Subsystem
   ( polarityTypeCheck,
     linearityTypeCheck,
     decidabilityTypeCheck,
+    resolveInstanceArgumentsAndCasts,
   )
 where
 
@@ -36,7 +37,7 @@ linearityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Either CompileError
 linearityTypeCheck = typeCheckWithSubsystem LinearityTypes emptyInstanceDatabase simplifyTypes
 
 decidabilityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Either CompileError (Prog DecidabilityBuiltin))
-decidabilityTypeCheck = typeCheckWithSubsystem LinearityTypes decidabilityBuiltinInstances simplifyTypes
+decidabilityTypeCheck = typeCheckWithSubsystem DecidabilityTypes decidabilityBuiltinInstances return
 
 typeCheckWithSubsystem ::
   forall builtin m.
@@ -68,7 +69,7 @@ resolveInstanceArgumentsAndCasts ::
   Prog builtin ->
   m (Prog builtin)
 resolveInstanceArgumentsAndCasts prog =
-  logCompilerPass MaxDetail "resolution of instance arguments" $ do
+  logCompilerPass MaxDetail "resolution of instance arguments and casts" $ do
     flip traverseDecls prog $ \decl -> do
       decl1 <- traverse (traverseBuiltinsM removeBuiltinInstances) decl
       decl2 <- traverse (traverseFreeVarsM (const id) removeFreeInstances) decl1

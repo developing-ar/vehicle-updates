@@ -6,6 +6,8 @@ import Control.Monad.State (StateT (..))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Writer (WriterT (..))
 import Data.Hashable (Hashable)
+import Data.IntSet (IntSet)
+import Data.IntSet qualified as IntSet
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (..))
 import Prettyprinter (fill)
@@ -437,6 +439,11 @@ getActiveConstraints = do
   ts <- fmap (mapObject InstanceConstraint) <$> getActiveInstanceConstraints
   xs <- fmap (mapObject InstanceConstraint) <$> getActiveAuxiliaryInstanceConstraints
   return $ us <> ts <> as <> xs
+
+getActiveConstraintIDs :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m IntSet
+getActiveConstraintIDs _ = do
+  activeConstraints <- getActiveConstraints @builtin
+  return $ IntSet.fromList $ fmap (constraintID . contextOf) activeConstraints
 
 getActiveUnificationConstraints :: (MonadTypeChecker builtin m) => m [WithContext (UnificationConstraint builtin)]
 getActiveUnificationConstraints = getsMetaCtx unificationConstraints

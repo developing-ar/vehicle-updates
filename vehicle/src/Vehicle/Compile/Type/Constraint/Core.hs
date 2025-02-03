@@ -1,6 +1,5 @@
 module Vehicle.Compile.Type.Constraint.Core
   ( runConstraintSolver,
-    trackIfConstraintProgressMade,
     blockOn,
     malformedConstraintError,
     extractHeadFromInstanceCandidate,
@@ -17,7 +16,6 @@ import Data.Bifunctor (Bifunctor (..))
 import Data.Data (Proxy (..))
 import Data.HashMap.Strict (HashMap, fromListWith, mapMaybeWithKey)
 import Data.Hashable (Hashable)
-import Data.IntSet qualified as IntSet
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
@@ -60,19 +58,6 @@ runConstraintSolver _ getConstraints setConstraints attemptToSolveConstraint = l
                 attemptToSolveConstraint unblockedConstraint
 
               loop (loopNumber + 1)
-
-trackIfConstraintProgressMade ::
-  forall builtin m constraint.
-  (MonadTypeChecker builtin m, PrettyExternal (Contextualised constraint (ConstraintContext builtin))) =>
-  m [Contextualised constraint (ConstraintContext builtin)] ->
-  m () ->
-  m Bool
-trackIfConstraintProgressMade getConstraints action = do
-  let getConstraintIDs = (\x -> IntSet.fromList $ fmap (constraintID . contextOf) x) <$> getConstraints
-  oldConstraintIDS <- getConstraintIDs
-  action
-  newConstraintIDS <- getConstraintIDs
-  return $ newConstraintIDS /= oldConstraintIDS
 
 -- | Find the first constraint satisfying `p` appending all the constraints that don't satisfy it to
 -- the end of the list, so we don't search through them again immediately next time.

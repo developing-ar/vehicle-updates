@@ -6,6 +6,7 @@ where
 
 import Control.Monad (forM, when)
 import Control.Monad.Except (MonadError (..))
+import Data.IntSet qualified as IntSet
 import Data.List (partition, sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Proxy (Proxy (..))
@@ -15,7 +16,7 @@ import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
 import Vehicle.Compile.Type.Bidirectional
 import Vehicle.Compile.Type.Constraint.ApplicationSolver (runApplicationSolver)
-import Vehicle.Compile.Type.Constraint.Core (runConstraintSolver, trackIfConstraintProgressMade)
+import Vehicle.Compile.Type.Constraint.Core (runConstraintSolver)
 import Vehicle.Compile.Type.Constraint.InstanceDefaultSolver (addNewInstanceConstraintUsingDefaults)
 import Vehicle.Compile.Type.Constraint.InstanceSolver (runInstanceSolver)
 import Vehicle.Compile.Type.Constraint.UnificationSolver
@@ -210,21 +211,23 @@ solveConstraints d = logCompilerPass MidDetail "constraint solving" $ do
       logUnsolvedUnknowns updatedDecl
 
       -- Try to solve the constraints pass
-      let passDoc = "constraint solving pass" <+> pretty loopNumber
-      progress <-
-        logCompilerPass MaxDetail passDoc $
-          trackIfConstraintProgressMade @builtin getActiveConstraints $
-            runSolvers updatedDecl
+      oldConstraintIDS <- getActiveConstraintIDs (Proxy @builtin)
+      logCompilerPass MaxDetail ("constraint solving pass" <+> pretty loopNumber) $
+        runSolvers updatedDecl
+      newConstraintIDS <- getActiveConstraintIDs (Proxy @builtin)
 
-      if progress
-        then loopOverConstraints (loopNumber + 1) updatedDecl
-        else do
-          -- If no constraints are unblocked then try generating new constraints using defaults.
-          logDebug MaxDetail $ "Temporarily stuck" <> line
-          success <- tryToUnstick updatedDecl
-          when success $
-            -- If new constraints generated then continue solving.
-            loopOverConstraints (loopNumber + 1) decl
+      if IntSet.null newConstraintIDS
+        then return ()
+        else
+          if newConstraintIDS /= oldConstraintIDS
+            then loopOverConstraints (loopNumber + 1) updatedDecl
+            else do
+              -- If no constraints are unblocked then try generating new constraints using defaults.
+              logDebug MaxDetail $ "Temporarily stuck" <> line
+              success <- tryToUnstick updatedDecl
+              when success $
+                -- If new constraints generated then continue solving.
+                loopOverConstraints (loopNumber + 1) decl
 
     runSolvers :: (TCM builtin m) => Maybe (Decl builtin) -> m ()
     runSolvers maybeDecl = do

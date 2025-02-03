@@ -5,13 +5,16 @@ module Vehicle.Data.Builtin.Decidability.Type
   )
 where
 
+import Vehicle.Compile.Context.Free (getFreeEnv)
 import Vehicle.Compile.Prelude
+import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.System
 import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Builtin.Interface.Type
 import Vehicle.Data.Builtin.Standard (BuiltinConstructor (..), BuiltinFunction (..), BuiltinType (..))
 import Vehicle.Data.Code.DSL
+import Vehicle.Data.Code.Value (GluedExpr (..))
 import Vehicle.Data.DSL
 import Vehicle.Syntax.Builtin (Builtin (..))
 import Prelude hiding (iterate, pi)
@@ -72,7 +75,7 @@ typeDecidableTypeClass = \case
 
 typeDecidableTypeClassOp :: DecidabilityBuiltinTypeClassOp -> DSLExpr DecidabilityBuiltin
 typeDecidableTypeClassOp = \case
-  BoolTypeTC -> constraint IsBool id
+  BoolTypeTC -> constraint IsBool (const type0)
   FromBoolTensorLitTC -> constraint HasBoolTensorLiterals typeOfCast
   NotTC -> constraint HasNot typeOfTensorOp1
   AndTC -> constraint HasAnd typeOfTensorOp2
@@ -111,63 +114,87 @@ typeOfCast t = forAllDims $ \dims -> tBoolTensor dims ~> tTensor t dims
 
 instance HasTypeSystem DecidabilityBuiltin where
   convertFromStandardBuiltins = convertToDecidabilityBuiltins
-  restrictDeclType _ _ = return
+  restrictDeclType = restrictDecidabilityDeclType
   isAuxiliaryConstraint _ = False
 
-  solveAuxiliaryInstanceConstraint = decidableAuxError
-  addAuxiliaryInputOutputConstraints = decidableAuxError
-  generateDefaultAuxiliaryConstraint = decidableAuxError
+  solveAuxiliaryInstanceConstraint _ = return ()
+  addAuxiliaryInputOutputConstraints = return
+  generateDefaultAuxiliaryConstraint _ = return False
 
 convertToDecidabilityBuiltins ::
   forall m.
   (MonadTypeChecker DecidabilityBuiltin m) =>
   BuiltinUpdate m Builtin DecidabilityBuiltin
-convertToDecidabilityBuiltins p b args = return $
+convertToDecidabilityBuiltins p b args =
   case b of
     BuiltinFunction f -> do
-      let b' = case f of
-            -- Convert to type-classes for resolution
-            Not -> DecidabilityBuiltinTypeClassOp NotTC
-            And -> DecidabilityBuiltinTypeClassOp AndTC
-            Or -> DecidabilityBuiltinTypeClassOp OrTC
-            Implies -> DecidabilityBuiltinTypeClassOp ImpliesTC
-            Compare dom op -> DecidabilityBuiltinTypeClassOp $ CompareTC dom op
-            -- Standard conversion
-            QuantifyRatTensor q -> StandardBuiltinFunction $ QuantifyRatTensor q
-            If -> StandardBuiltinFunction If
-            ReduceAndTensor -> StandardBuiltinFunction ReduceAndTensor
-            ReduceOrTensor -> StandardBuiltinFunction ReduceOrTensor
-            Neg dom -> StandardBuiltinFunction $ Neg dom
-            Add dom -> StandardBuiltinFunction $ Add dom
-            Sub dom -> StandardBuiltinFunction $ Sub dom
-            Mul dom -> StandardBuiltinFunction $ Mul dom
-            Div dom -> StandardBuiltinFunction $ Div dom
-            Min dom -> StandardBuiltinFunction $ Min dom
-            Max dom -> StandardBuiltinFunction $ Max dom
-            PowRat -> StandardBuiltinFunction PowRat
-            ReduceAddRatTensor -> StandardBuiltinFunction ReduceAddRatTensor
-            ReduceMulRatTensor -> StandardBuiltinFunction ReduceMulRatTensor
-            ReduceMinRatTensor -> StandardBuiltinFunction ReduceMinRatTensor
-            ReduceMaxRatTensor -> StandardBuiltinFunction ReduceMaxRatTensor
-            FoldList -> StandardBuiltinFunction FoldList
-            MapList -> StandardBuiltinFunction MapList
-            Foreach -> StandardBuiltinFunction Foreach
-            Iterate -> StandardBuiltinFunction Iterate
-            At -> StandardBuiltinFunction At
-            StackTensor -> StandardBuiltinFunction StackTensor
-            ConstTensor -> StandardBuiltinFunction ConstTensor
-      normAppList (Builtin p b') args
+      case f of
+        -- Convert to type-classes for resolution
+        Not -> convertTo NotTC
+        And -> convertTo AndTC
+        Or -> convertTo OrTC
+        Implies -> convertTo ImpliesTC
+        Compare dom op -> convertTo $ CompareTC dom op
+        ReduceAndTensor -> convertTo ReduceAndTensorTC
+        ReduceOrTensor -> convertTo ReduceOrTensorTC
+        -- Standard conversion
+        QuantifyRatTensor q -> sameFunction $ QuantifyRatTensor q
+        If -> sameFunction If
+        Neg dom -> sameFunction $ Neg dom
+        Add dom -> sameFunction $ Add dom
+        Sub dom -> sameFunction $ Sub dom
+        Mul dom -> sameFunction $ Mul dom
+        Div dom -> sameFunction $ Div dom
+        Min dom -> sameFunction $ Min dom
+        Max dom -> sameFunction $ Max dom
+        PowRat -> sameFunction PowRat
+        ReduceAddRatTensor -> sameFunction ReduceAddRatTensor
+        ReduceMulRatTensor -> sameFunction ReduceMulRatTensor
+        ReduceMinRatTensor -> sameFunction ReduceMinRatTensor
+        ReduceMaxRatTensor -> sameFunction ReduceMaxRatTensor
+        FoldList -> sameFunction FoldList
+        MapList -> sameFunction MapList
+        Foreach -> sameFunction Foreach
+        Iterate -> sameFunction Iterate
+        At -> sameFunction At
+        StackTensor -> sameFunction StackTensor
+        ConstTensor -> sameFunction ConstTensor
     BuiltinConstructor c -> case c of
       BoolTensorLiteral {} -> do
         let original = Builtin p (StandardBuiltinConstructor c)
-        normAppList (Builtin p $ DecidabilityBuiltinTypeClassOp FromBoolTensorLitTC) [explicit original]
-      _ -> normAppList (Builtin p (StandardBuiltinConstructor c)) args
+        return $ normAppList (Builtin p $ DecidabilityBuiltinTypeClassOp FromBoolTensorLitTC) [explicit original]
+      _ -> sameConstructor c
     BuiltinType s -> do
       let b' = case s of
             BoolType {} -> DecidabilityBuiltinTypeClassOp BoolTypeTC
             _ -> StandardBuiltinType s
-      normAppList (Builtin p b') args
+      return $ normAppList (Builtin p b') args
     _ -> monomorphisationError b args
+  where
+    sameFunction f = return $ normAppList (Builtin p (StandardBuiltinFunction f)) args
+    sameConstructor c = return $ normAppList (Builtin p (StandardBuiltinConstructor c)) args
+    -- When converting to a TypeClassOp we need to insert an extra implicit for the type ensure
+    -- the implicit/instance resolution fires correctly in bidirectional typing.
+    convertTo t = return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) (implicit (Hole p "_t") : args)
 
-decidableAuxError :: b
-decidableAuxError = developerError "Auxiliary constraints for DecidabilityBuiltin should not exist"
+freshDecidabilityMeta :: (MonadTypeChecker DecidabilityBuiltin m) => Provenance -> m (Expr DecidabilityBuiltin)
+freshDecidabilityMeta p = unnormalised <$> freshMetaExpr p (TypeUniverse p 0) mempty
+
+restrictDecidabilityDeclType ::
+  forall m.
+  (MonadTypeChecker DecidabilityBuiltin m) =>
+  RestrictedDecl ->
+  DeclProvenance ->
+  Type DecidabilityBuiltin ->
+  m (Type DecidabilityBuiltin)
+restrictDecidabilityDeclType rDecl declProv@(_, p) declType = do
+  freeEnv <- getFreeEnv
+  let origin = InstanceTypeRestrictionOrigin $ TypeRestrictionOrigin freeEnv declProv rDecl declType
+  case rDecl of
+    RestrictedProperty -> do
+      let elemType = Builtin p (StandardBuiltinType BoolType)
+      dims <- freshDecidabilityMeta p
+      let boolType = normAppList (Builtin p (StandardBuiltinType TensorType)) [explicit elemType, explicitIrrelevant dims]
+      createFreshUnificationConstraint p mempty (CheckingInstanceType origin) boolType declType
+      return declType
+    _ -> return declType
