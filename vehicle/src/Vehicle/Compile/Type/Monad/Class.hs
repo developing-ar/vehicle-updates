@@ -378,10 +378,9 @@ solveMeta m solution solutionCtx = do
           <> line
           <> "but is being re-solved as"
             <+> line
-          <> indent 2 (squotes (prettyVerbose solution))
+          <> indent 2 (squotes (prettyVerbose abstractedSolution))
           <> line
-    -- Could use `insertWith` instead of `insert` here for one lookup instead of
-    -- two, but not possible to throw a monadic error unfortunately.
+          <> "in context" <+> pretty (toNamedBoundCtx solutionCtx)
     Nothing -> do
       modifyMetaCtx $ \TypeCheckerState {..} ->
         TypeCheckerState

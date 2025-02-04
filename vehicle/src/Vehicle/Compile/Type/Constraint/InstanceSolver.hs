@@ -292,8 +292,6 @@ replaceProvenance p = go
       Builtin _ b -> Builtin p b
       FreeVar _ v -> FreeVar p v
       BoundVar _ v -> BoundVar p v
-      -- NOTE: no need to lift the substitutions here as we're passing under the binders
-      -- because by construction every meta-variable solution is a closed term.
       Pi _ binder res -> Pi p (fmap go binder) (go res)
       Let _ e1 binder e2 -> Let p (go e1) (fmap go binder) (go e2)
       Lam _ binder e -> Lam p (fmap go binder) (go e)
