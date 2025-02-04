@@ -84,7 +84,12 @@ resolveInstanceArgumentsAndCasts prog =
     removeBuiltinInstances p b args
       | isTypeClassOp b = do
           (inst, remainingArgs) <- findInstanceArg b args
-          return $ substArgs inst remainingArgs
+          -- Replace the provenance of the final solution with the provenance of where the
+          -- constraint was generated. This is needed to get the information to propagate
+          -- properly for the polarity and linearity types, otherwise the provenance ends
+          -- up empty as the candidates are constructed independently.
+          let newInst = replaceProvenance p inst
+          return $ substArgs newInst remainingArgs
       | otherwise = return $ normAppList (Builtin p b) args
 
     removeFreeInstances :: FreeVarUpdate m builtin
@@ -100,6 +105,22 @@ resolveInstanceArgumentsAndCasts prog =
     removeCasts p b args = case isCast b of
       Just f -> f args
       Nothing -> return $ normAppList (Builtin p b) args
+
+    replaceProvenance :: Provenance -> Expr builtin -> Expr builtin
+    replaceProvenance p = go
+      where
+        go :: Expr builtin -> Expr builtin
+        go = \case
+          Meta _p m -> Meta p m
+          App fun args -> App (go fun) (fmap (fmap go) args)
+          Universe _ u -> Universe p u
+          Hole _ h -> Hole p h
+          Builtin _ b -> Builtin p b
+          FreeVar _ v -> FreeVar p v
+          BoundVar _ v -> BoundVar p v
+          Pi _ binder res -> Pi p (fmap go binder) (go res)
+          Let _ e1 binder e2 -> Let p (go e1) (fmap go binder) (go e2)
+          Lam _ binder e -> Lam p (fmap go binder) (go e)
 
 removeImplicitArgs ::
   forall m builtin.

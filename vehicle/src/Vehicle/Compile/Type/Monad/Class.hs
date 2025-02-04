@@ -339,17 +339,6 @@ abstractOverCtx ctx body = do
   let lam binder = Lam p (Binder p (lamBinderForm (nameOf binder)) Explicit (relevanceOf binder) (TypeUniverse p 0))
   foldr lam body (reverse ctx)
 
-abstractMetaSolution ::
-  (MonadTypeChecker builtin m) =>
-  MetaID ->
-  Expr builtin ->
-  m (GluedExpr builtin)
-abstractMetaSolution m solution = do
-  MetaInfo _ _ metaCtx <- getMetaInfo m
-  let env = boundContextToEnv metaCtx
-  let abstractedSolution = abstractOverCtx metaCtx solution
-  glueNBE env abstractedSolution
-
 solveMeta ::
   forall builtin m.
   (MonadTypeChecker builtin m) =>
@@ -358,7 +347,8 @@ solveMeta ::
   BoundCtx (Type builtin) ->
   m ()
 solveMeta m solution solutionCtx = do
-  abstractedSolution <- abstractMetaSolution m solution
+  MetaInfo _ _ metaCtx <- getMetaInfo m
+  let abstractedSolution = abstractOverCtx metaCtx solution
 
   logDebug MaxDetail $
     "solved"
@@ -382,9 +372,11 @@ solveMeta m solution solutionCtx = do
           <> line
           <> "in context" <+> pretty (toNamedBoundCtx solutionCtx)
     Nothing -> do
+      let env = boundContextToEnv metaCtx
+      gluedSolution <- glueNBE env abstractedSolution
       modifyMetaCtx $ \TypeCheckerState {..} ->
         TypeCheckerState
-          { currentSubstitution = MetaMap.insert m abstractedSolution currentSubstitution,
+          { currentSubstitution = MetaMap.insert m gluedSolution currentSubstitution,
             solvedMetaState = registerSolvedMeta m solvedMetaState,
             ..
           }
@@ -509,10 +501,16 @@ removeInstanceConstraint constraint = modifyMetaCtx @builtin $ \TypeCheckerState
   TypeCheckerState {instanceConstraints = newConstraints, ..}
 
 -- | Create a new fresh copy of the context for a new constraint
-copyContext :: forall builtin m. (MonadTypeChecker builtin m) => ConstraintContext builtin -> m (ConstraintContext builtin)
-copyContext (ConstraintContext _cid originProv creationProv _blockingStatus ctx) = do
-  freshID <- generateFreshConstraintID (Proxy @builtin)
-  return $ ConstraintContext freshID originProv creationProv unknownBlockingStatus ctx
+copyContext ::
+  forall builtin m.
+  (MonadTypeChecker builtin m) =>
+  ConstraintContext builtin ->
+  Maybe (BoundCtx (Type builtin)) ->
+  m (ConstraintContext builtin)
+copyContext (ConstraintContext _ originProv creationProv _ ctx) maybeNewCtx = do
+  newID <- generateFreshConstraintID (Proxy @builtin)
+  let newCtx = fromMaybe ctx maybeNewCtx
+  return $ ConstraintContext newID originProv creationProv unknownBlockingStatus newCtx
 
 --------------------------------------------------------------------------------
 -- Constraints

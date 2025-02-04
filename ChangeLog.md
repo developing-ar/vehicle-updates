@@ -4,6 +4,8 @@
 
 * BREAKING: `forall _ in _` no longer works for `Tensor`/`Vector` types.
 
+* BREAKING: Upgraded dependency on Agda standard library from v2.0 to v2.2
+
 * Pointwise `min` and `max` now work over `Tensor`s.
 
 * Better error messages for typing errors

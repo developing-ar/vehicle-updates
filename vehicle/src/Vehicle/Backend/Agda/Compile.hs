@@ -122,8 +122,6 @@ data Dependency
   | DataListAny
   | DataVector
   | DataVectorInstances
-  | DataVectorAll
-  | DataVectorAny
   | FunctionBase
   | PropEquality
   | RelNullary
@@ -159,8 +157,6 @@ instance Pretty Dependency where
     DataListAny -> "Data.List.Relation.Unary.Any as" <+> listQualifier
     DataVector -> "Data.Vec.Functional" <+> "renaming" <+> parens "[] to []ᵥ; _∷_ to _∷ᵥ_"
     DataVectorInstances -> "Data.Vec.Functional.Instances"
-    DataVectorAll -> "Data.Vec.Functional.Relation.Unary.All as" <+> vectorQualifier
-    DataVectorAny -> "Data.Vec.Functional.Relation.Unary.Any as" <+> vectorQualifier
     FunctionBase -> "Function.Base"
     PropEquality -> "Relation.Binary.PropositionalEquality"
     RelNullary -> "Relation.Nullary"
@@ -201,11 +197,8 @@ ratQualifier = "ℚ"
 listQualifier :: Doc a
 listQualifier = "List"
 
-vectorQualifier :: Doc a
-vectorQualifier = "Vector"
-
 tensorQualifier :: Doc a
-tensorQualifier = "Tensor"
+tensorQualifier = "𝕋"
 
 indentCode :: Code -> Code
 indentCode = indent 2
@@ -265,23 +258,32 @@ annotateInfixApp dependencies precedence qualifier op args
 --
 -- e.g. insertInfixArgs (Just "B") "if_then_else_" [a, b] = B.if a then b else_
 insertInfixArgs :: Maybe Code -> Text -> [Code] -> Code
-insertInfixArgs qual rawOp = go qual rawOp
+insertInfixArgs qual rawOp as = hsep (go qual rawOp as)
   where
+    go :: Maybe Code -> Text -> [Code] -> [Code]
     go qualifier opText = \case
-      [] -> pretty opText
+      []
+        | Text.null opText -> []
+        | otherwise -> [pretty opText]
       arg : args -> do
         let (prefix, maybeSuffix) = Text.break (== '_') opText
-        case Text.uncons maybeSuffix of
-          Just (_underscore, suffix) -> do
-            let qualifierDoc = maybe "" (<> ".") qualifier
-            let remainder = insertInfixArgs Nothing suffix args
-            qualifierDoc <> pretty prefix <+> arg <+> remainder
-          Nothing ->
-            developerError $
-              "too many arguments"
-                <+> pretty rawOp
-                <+> "but found the following arguments:"
-                <+> list args
+        let front = pretty prefix
+        let back = case Text.uncons maybeSuffix of
+              Just (_underscore, suffix) -> insertInfixArgs Nothing suffix args
+              Nothing ->
+                developerError $
+                  "too many arguments"
+                    <+> pretty rawOp
+                    <+> "but found the following arguments:"
+                    <+> list args
+
+        case qualifier of
+          Nothing
+            | Text.null prefix -> [arg, back]
+            | otherwise -> [front, arg, back]
+          Just q
+            | Text.null prefix -> [arg, q <> "." <> back]
+            | otherwise -> [q <> "." <> front, arg, back]
 
 argBrackets :: Precedence -> Visibility -> Code -> Code
 argBrackets parentPrecedence v e = case v of
@@ -463,7 +465,7 @@ compileBuiltin b args = case b of
     Mul MulNat -> annotateInfixApp [DataNat] 7 (Just natQualifier) "_*_" args
     Add AddRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_+_" args
     Sub SubRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_-_" args
-    Mul MulRatTensor -> annotateInfixApp [DataRat] 7 (Just tensorQualifier) "_*_" args
+    Mul MulRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_*_" args
     Div DivRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_÷_" args
     Neg NegRatTensor -> annotateInfixApp [DataTensor] 8 (Just tensorQualifier) "-_" args
     Min MinRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊓_" args
@@ -485,9 +487,9 @@ compileBuiltin b args = case b of
       _ -> unsupportedArgsError
     At -> annotateInfixApp [FunctionBase] (-1) Nothing "_$_" args
     If -> annotateInfixApp [DataBool] 0 Nothing "if_then_else_" args
-    Foreach -> unsupportedError
-    Iterate -> unsupportedError
+    Foreach -> annotateApp [DataTensor] Nothing "foreach" args
     StackTensor {} -> unsupportedError
+    Iterate -> unsupportedError
     PowRat -> unsupportedError
   DecidabilityBuiltinFunction f -> case f of
     DecNot -> annotateApp [DataBool] Nothing "not" args

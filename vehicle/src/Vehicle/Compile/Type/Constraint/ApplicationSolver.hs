@@ -32,7 +32,7 @@ solveApplicationConstraint (WithContext InferArgs {..} ctx) = do
   case result of
     Right (finalExpr, finalType) -> do
       let p = provenanceOf ctx
-      let origin = _
+      let origin = developerError "Origin not implemented!"
       createFreshUnificationConstraint p boundCtx origin typeSolution finalType
       createFreshUnificationConstraint p boundCtx origin exprSolution finalExpr
     Left (blockedProblem, blockingMetas) -> do

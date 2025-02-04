@@ -17,12 +17,9 @@ import Vehicle.Compile.Print.Error (MeaningfulError (..))
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Constraint.UnificationSolver (runUnificationSolver)
 import Vehicle.Compile.Type.Core
-import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class
-  ( abstractMetaSolution,
-    addInstanceConstraints,
-    getMetaSubstitution,
+  ( addInstanceConstraints,
   )
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Code.Value
@@ -202,35 +199,11 @@ acceptCandidate (WithContext Resolve {..} constraintCtx) goal candidate = do
   -- Unify the goal and candidate bodies
   goalConstraint <- createInstanceUnification extendedGoalInfo (goalExpr goal) substCandidateExpr
 
-  -- Replace the provenance of the final solution with the provenance of where the
-  -- constraint was generated. This is needed to get the information to propagate
-  -- properly for the polarity and linearity types, otherwise the provenance ends
-  -- up empty as the candidates are constructed independently.
-  let finalCandidateSolution = replaceProvenance (provenanceOf constraintCtx) substCandidateSolution
-  solutionConstraint <- createInstanceUnification extendedGoalInfo finalCandidateSolution instanceSolution
+  normCandidateSolution <- normaliseInEnv (boundContextToEnv extendedGoalCtx) substCandidateSolution
+  solutionConstraint <- createInstanceUnification extendedGoalInfo normCandidateSolution instanceSolution
 
   -- Add the constriants
   addUnificationConstraints [goalConstraint, solutionConstraint]
-
-instantiateTypeClassSolution ::
-  forall builtin m.
-  (MonadInstance builtin m) =>
-  (ConstraintContext builtin, InstanceConstraintOrigin builtin) ->
-  MetaID ->
-  Expr builtin ->
-  [Binder builtin] ->
-  m ()
-instantiateTypeClassSolution goalInfo meta solution goalCtx = do
-  metaSubst <- getMetaSubstitution (Proxy @builtin)
-  case MetaMap.lookup meta metaSubst of
-    Nothing -> solveMeta meta solution goalCtx
-    Just existingSolution -> do
-      -- The meta may have already been solved here because we support non-unique instance solutions for overloading
-      -- the tensor element types (e.g. `Bool` -> both `BoolElement` and `Tensor BoolElement []`).
-      -- If we've already solved the meta, then just unify the solutions.
-      abstractedSolution <- abstractMetaSolution meta solution
-      unificationConstraint <- createInstanceUnification goalInfo (normalised abstractedSolution) (normalised existingSolution)
-      addUnificationConstraints [unificationConstraint]
 
 -- | Generate meta variables for each binder in the telescope of the candidate
 -- and then substitute them into the candidate expression.
@@ -279,22 +252,6 @@ instantiateCandidateTelescope goalCtxExtension (constraintCtx, constraintOrigin)
 prettyCandidate :: (PrintableBuiltin builtin) => WithContext (InstanceCandidate builtin) -> Doc a
 prettyCandidate (WithContext candidate ctx) =
   prettyExternal (WithContext (candidateExpr candidate) (toNamedBoundCtx ctx))
-
-replaceProvenance :: Provenance -> Expr builtin -> Expr builtin
-replaceProvenance p = go
-  where
-    go :: Expr builtin -> Expr builtin
-    go = \case
-      Meta _p m -> Meta p m
-      App fun args -> App (go fun) (fmap (fmap go) args)
-      Universe _ u -> Universe p u
-      Hole _ h -> Hole p h
-      Builtin _ b -> Builtin p b
-      FreeVar _ v -> FreeVar p v
-      BoundVar _ v -> BoundVar p v
-      Pi _ binder res -> Pi p (fmap go binder) (go res)
-      Let _ e1 binder e2 -> Let p (go e1) (fmap go binder) (go e2)
-      Lam _ binder e -> Lam p (fmap go binder) (go e)
 
 extractCandidateError :: CompileError -> UnAnnDoc
 extractCandidateError err = case details err of

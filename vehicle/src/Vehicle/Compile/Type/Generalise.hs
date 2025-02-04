@@ -4,22 +4,26 @@ module Vehicle.Compile.Type.Generalise
   )
 where
 
-import Control.Monad (foldM, forM)
+import Control.Monad (foldM, forM, forM_)
 import Control.Monad.Except (MonadError (..))
 import Data.Data (Proxy (..))
-import Data.List.NonEmpty (NonEmpty (..), (<|))
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Maybe (fromMaybe)
 import Vehicle.Compile.Context.Bound
 import Vehicle.Compile.Error
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
+import Vehicle.Compile.Type.Constraint.UnificationSolver
+  ( UnificationResult (..),
+  )
+import Vehicle.Compile.Type.Constraint.UnificationSolver qualified as UnificationSolver
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class (getActiveAuxiliaryInstanceConstraints, setAuxiliaryInstanceConstraints)
-import Vehicle.Data.DeBruijn
+import Vehicle.Data.Code.Value (Value (..))
 
 --------------------------------------------------------------------------------
 -- Type-class generalisation
@@ -85,7 +89,7 @@ prependConstraint decl (WithContext (Resolve _origin meta relevance goal) ctx) =
   let typeClass = quote p (contextDBLevel ctx) $ goalExpr goal
   substTypeClass <- substMetas typeClass
   logCompilerPass MaxDetail ("generalisation over" <+> prettyVerbose substTypeClass) $
-    prependBinderAndSolveMeta meta (BinderDisplayForm OnlyType True) (Instance True) relevance substTypeClass decl
+    prependBinderAndSolveMeta (boundContextOf ctx) meta (BinderDisplayForm OnlyType True) (Instance True) relevance substTypeClass decl
 
 --------------------------------------------------------------------------------
 -- Unsolved meta generalisation
@@ -137,7 +141,8 @@ quantifyOverMeta decl meta = do
         -- Prepend the implicit binders for the new generalised variable.
         binderName <- runBoundContextT metaCtx $ getBinderNameOrFreshName Nothing metaType
         let binderDisplayForm = BinderDisplayForm (OnlyName binderName) True
-        prependBinderAndSolveMeta meta binderDisplayForm (Implicit True) Relevant metaType decl
+        let metaExpr = VMeta meta []
+        prependBinderAndSolveMeta metaCtx metaExpr binderDisplayForm (Implicit True) Relevant metaType decl
 
 isMeta :: Expr builtin -> Bool
 isMeta Meta {} = True
@@ -150,14 +155,15 @@ isMeta _ = False
 prependBinderAndSolveMeta ::
   forall builtin m.
   (MonadTypeChecker builtin m) =>
-  MetaID ->
+  BoundCtx (Type builtin) ->
+  Value builtin ->
   BinderDisplayForm ->
   Visibility ->
   Relevance ->
   Type builtin ->
   Decl builtin ->
   m (Decl builtin)
-prependBinderAndSolveMeta meta f v r binderType decl = do
+prependBinderAndSolveMeta ctx solutionExpr f v r binderType decl = do
   -- All the metas contained within the type of the binder about to be
   -- appended cannot have any dependencies on variables later on in the expression.
   -- So the replace them with meta-variables with empty contexts.
@@ -174,20 +180,29 @@ prependBinderAndSolveMeta meta f v r binderType decl = do
     DefFunction p ident anns t e ->
       return $ DefFunction p ident anns (Pi p typeBinder t) (Lam p bodyBinder e)
 
+  metas <- metasIn solutionExpr
+  forM_ (MetaSet.toList metas) $ \meta ->
+    extendBoundCtxOfMeta meta typeBinder
+
+  let solution = VBoundVar (Lv 0) []
+  solvingResult <- UnificationSolver.solve ctx solutionExpr solution
+  case solvingResult of
+    Success -> return ()
+    _ -> developerError "Unexpectedly unable to solve generalisation unification constraint"
+
+  {-
   -- Then we add i) the new binder to the context of the meta-variable being
   -- solved, and ii) a new argument to all uses of the meta-variable so
-  -- that meta-subsitution will work later.
-  extendBoundCtxOfMeta meta typeBinder
+  -- that meta-substitution will work later.
   let updatedDecl = addNewArgumentToMetaUses meta prependedDecl
 
   -- We now solve the meta as the newly bound variable
   metaCtx <- getMetaCtx (Proxy @builtin) meta
-  let p = provenanceOf prependedDecl
-  let solution = BoundVar p (Ix $ length metaCtx - 1)
   solveMeta meta solution metaCtx
+  -}
 
   -- Substitute the new meta solution through.
-  resultDecl <- substMetas updatedDecl
+  resultDecl <- substMetas prependedDecl
 
   logCompilerPassOutput $ prettyExternal resultDecl
   return resultDecl
@@ -210,27 +225,3 @@ removeContextsOfMetasIn binderType decl =
         substBinderType <- substMetas binderType
         logCompilerPassOutput (prettyExternal substDecl)
         return (substBinderType, substDecl)
-
-addNewArgumentToMetaUses :: MetaID -> Decl builtin -> Decl builtin
-addNewArgumentToMetaUses meta = fmap (go (-1))
-  where
-    go :: Lv -> Expr builtin -> Expr builtin
-    go d expr = case expr of
-      Meta p m
-        | m == meta -> App (Meta p m) [newVar p]
-      App (Meta p m) args
-        | m == meta -> App (Meta p m) (newVar p <| goArgs args)
-      Universe {} -> expr
-      Hole {} -> expr
-      Meta {} -> expr
-      Builtin {} -> expr
-      FreeVar {} -> expr
-      BoundVar {} -> expr
-      App fun args -> App (go d fun) (goArgs args)
-      Pi p binder result -> Pi p (goBinder binder) (go (d + 1) result)
-      Let p bound binder body -> Let p (go d bound) (goBinder binder) (go (d + 1) body)
-      Lam p binder body -> Lam p (goBinder binder) (go (d + 1) body)
-      where
-        newVar p = Arg p Explicit Relevant (BoundVar p $ shiftDBIndex 0 d)
-        goBinder = fmap (go d)
-        goArgs = fmap (fmap (go d))

@@ -2,10 +2,12 @@
 
 module Vehicle.Compile.Type.Constraint.UnificationSolver
   ( runUnificationSolver,
+    solve,
+    UnificationResult (..),
   )
 where
 
-import Control.Monad.Except (MonadError (..))
+import Control.Monad.Except (MonadError (..), forM)
 import Data.IntMap (IntMap)
 import Data.IntMap qualified as IntMap
 import Data.IntSet qualified as IntSet
@@ -53,49 +55,76 @@ runUnificationSolver proxy =
 
 type MonadUnify builtin m = MonadTypeChecker builtin m
 
+type UnificationProblem builtin =
+  ( BoundCtx (Type builtin),
+    Value builtin,
+    Value builtin
+  )
+
+type ConstraintInfo builtin =
+  ( UnificationProblem builtin,
+    MetaSet
+  )
+
+infoBoundCtx :: ConstraintInfo builtin -> BoundCtx (Type builtin)
+infoBoundCtx ((ctx, _, _), _) = ctx
+
+data UnificationResult builtin
+  = Success
+  | -- | Always an error
+    HardFailure (NonEmpty (UnificationProblem builtin))
+  | -- | Only an error when further reduction will never occur.
+    Blocked [ConstraintInfo builtin]
+
 solveUnificationConstraint ::
   forall builtin m.
   (MonadUnify builtin m) =>
   WithContext (UnificationConstraint builtin) ->
   m ()
-solveUnificationConstraint constraint = do
-  result <- solve constraint
+solveUnificationConstraint (WithContext (Unify origin e1 e2) ctx) = do
+  result <- solve (boundContextOf ctx) e1 e2
   case result of
     Success -> return ()
-    Blocked blockedConstraints ->
-      addUnificationConstraints blockedConstraints
-    HardFailure failedConstraints -> do
+    Blocked blockedProblems -> do
+      newConstraints <- forM blockedProblems $ createNewConstraint ctx origin
+      addUnificationConstraints newConstraints
+    HardFailure failedProblems -> do
+      finalFailedConstraints <- forM failedProblems $ \x ->
+        substMetas =<< createNewConstraint ctx origin (x, mempty)
       freeEnv <- getFreeEnv
-      finalFailedConstraints <- traverse substMetas failedConstraints
       throwError $ TypingError $ FailedUnificationConstraints $ FailedUnificationConstraintsError freeEnv finalFailedConstraints
+
+createNewConstraint ::
+  (MonadUnify builtin m) =>
+  ConstraintContext builtin ->
+  UnificationConstraintOrigin builtin ->
+  (UnificationProblem builtin, MetaSet) ->
+  m (WithContext (UnificationConstraint builtin))
+createNewConstraint constraintCtx origin ((boundCtx, e1, e2), blockingMetas) = do
+  newConstraint <- WithContext (Unify origin e1 e2) <$> copyContext constraintCtx (Just boundCtx)
+  return $ blockConstraintOn newConstraint blockingMetas
 
 solve ::
   forall builtin m.
   (MonadUnify builtin m) =>
-  WithContext (UnificationConstraint builtin) ->
+  BoundCtx (Type builtin) ->
+  Value builtin ->
+  Value builtin ->
   m (UnificationResult builtin)
-solve (WithContext (Unify origin e1 e2) ctx) = do
+solve ctx e1 e2 = do
   -- Force the heads of both expressions
-  let namedCtx = namedBoundCtxOf ctx
+  let namedCtx = toNamedBoundCtx ctx
   (ne1, e1BlockingMetas) <- forceHead namedCtx e1
   (ne2, e2BlockingMetas) <- forceHead namedCtx e2
 
   -- Construct the new constraint information
   let blockingMetas = e1BlockingMetas <> e2BlockingMetas
-  let updatedConstraint = WithContext (Unify origin ne1 ne2) ctx
-  let constraintInfo = (updatedConstraint, blockingMetas)
+  let constraintInfo = ((ctx, ne1, ne2), blockingMetas)
 
   -- Perform the unification
-  let prettyExpr e = prettyExternal (WithContext e (namedBoundCtxOf ctx))
+  let prettyExpr e = prettyExternal (WithContext e namedCtx)
   logIndent MaxDetail ("unifying" <+> prettyExpr ne1 <+> "~" <+> prettyExpr ne2) $ do
     unification constraintInfo (ne1, ne2)
-
-data UnificationResult builtin
-  = Success
-  | -- | Always an error
-    HardFailure (NonEmpty (WithContext (UnificationConstraint builtin)))
-  | -- | Only an error when further reduction will never occur.
-    Blocked [WithContext (UnificationConstraint builtin)]
 
 instance Semigroup (UnificationResult builtin) where
   HardFailure r1 <> HardFailure r2 = HardFailure (r1 <> r2)
@@ -109,33 +138,25 @@ instance Semigroup (UnificationResult builtin) where
 instance Monoid (UnificationResult builtin) where
   mempty = Success
 
-type ConstraintInfo builtin = (WithContext (UnificationConstraint builtin), MetaSet)
-
-ctxOf :: ConstraintInfo builtin -> ConstraintContext builtin
-ctxOf (WithContext _ ctx, _) = ctx
-
 -- | Create a new unification constraint, copying the context as appropriate.
 subUnify ::
   (MonadTypeChecker builtin m) =>
   ConstraintInfo builtin ->
-  (Value builtin, Value builtin) ->
+  Value builtin ->
+  Value builtin ->
   m (UnificationResult builtin)
-subUnify (WithContext (Unify origin _ _) ctx, _) (e1, e2) =
-  solve . WithContext (Unify origin e1 e2) =<< copyContext ctx
+subUnify info = solve (infoBoundCtx info)
 
 block ::
   (MonadUnify builtin m) =>
   ConstraintInfo builtin ->
   Maybe MetaSet ->
   m (UnificationResult builtin)
-block (WithContext constraint ctx, originalBlockingMetas) maybeRefinedBlockingMetas = do
+block (problem, originalBlockingMetas) maybeRefinedBlockingMetas = do
   let blockingMetas = fromMaybe originalBlockingMetas maybeRefinedBlockingMetas
   if MetaSet.null blockingMetas
-    then return $ HardFailure [WithContext constraint ctx]
-    else do
-      newConstraint <- WithContext constraint <$> copyContext ctx
-      let blockedConstraint = blockConstraintOn newConstraint blockingMetas
-      return $ Blocked [blockedConstraint]
+    then return $ HardFailure [problem]
+    else return $ Blocked [(problem, blockingMetas)]
 
 pattern (:~:) :: a -> b -> (a, b)
 pattern x :~: y = (x, y)
@@ -145,7 +166,7 @@ unification ::
   ConstraintInfo builtin ->
   (Value builtin, Value builtin) ->
   m (UnificationResult builtin)
-unification info@(constraint, _) = \case
+unification info = \case
   -----------------------
   -- Rigid-rigid cases --
   -----------------------
@@ -157,7 +178,7 @@ unification info@(constraint, _) = \case
     | v1 == v2 -> solveSpine info spine1 spine2
   VBuiltin b1 spine1 :~: VBuiltin b2 spine2
     | b1 == b2 -> solveSpine info spine1 spine2
-    | isConstructor b1 && isConstructor b2 -> hardFail constraint
+    | isConstructor b1 && isConstructor b2 -> hardFail info
   VPi binder1 closure1 :~: VPi binder2 closure2
     | visibilityMatches binder1 binder2 -> solveClosure info (binder1, closure1) (binder2, closure2)
   VLam binder1 closure1 :~: VLam binder2 closure2 ->
@@ -191,11 +212,11 @@ solveArg ::
   ConstraintInfo builtin ->
   (VArg builtin, VArg builtin) ->
   m (UnificationResult builtin)
-solveArg info@(constraint, _) (arg1, arg2)
-  | not (visibilityMatches arg1 arg2) = hardFail constraint
+solveArg info (arg1, arg2)
+  | not (visibilityMatches arg1 arg2) = hardFail info
   -- Don't unify instances, they should be uniquely determined by the type.
   | isInstance arg1 = return Success
-  | otherwise = subUnify info (argExpr arg1, argExpr arg2)
+  | otherwise = subUnify info (argExpr arg1) (argExpr arg2)
 
 solveSpine ::
   (MonadUnify builtin m) =>
@@ -203,8 +224,8 @@ solveSpine ::
   Spine builtin ->
   Spine builtin ->
   m (UnificationResult builtin)
-solveSpine info@(constraint, _) args1 args2
-  | length args1 /= length args2 = hardFail constraint
+solveSpine info args1 args2
+  | length args1 /= length args2 = hardFail info
   | otherwise = mconcat <$> traverse (solveArg info) (zip args1 args2)
 
 solveClosure ::
@@ -213,12 +234,12 @@ solveClosure ::
   (VBinder builtin, Closure builtin) ->
   (VBinder builtin, Closure builtin) ->
   m (UnificationResult builtin)
-solveClosure info@(constraint, _) (binder1, Closure env1 body1) (binder2, Closure env2 body2) = do
+solveClosure info (binder1, Closure env1 body1) (binder2, Closure env2 body2) = do
   -- Unify binder constraints
-  binderConstraint <- subUnify info (typeOf binder1, typeOf binder2)
+  binderConstraint <- subUnify info (typeOf binder1) (typeOf binder2)
 
   -- Evaluate the normalised bodies of the lambdas
-  let lv = contextDBLevel (contextOf constraint)
+  let lv = boundCtxLv $ infoBoundCtx info
   nbody1 <- normaliseInEnv (extendEnvWithBound lv binder1 env1) body1
   nbody2 <- normaliseInEnv (extendEnvWithBound lv binder2 env2) body2
 
@@ -226,7 +247,7 @@ solveClosure info@(constraint, _) (binder1, Closure env1 body1) (binder2, Closur
   let updatedInfo = updateInfoUnderBinder info (binder1, binder2)
 
   -- Unify the two bodies
-  bodyConstraint <- subUnify updatedInfo (nbody1, nbody2)
+  bodyConstraint <- subUnify updatedInfo nbody1 nbody2
 
   -- Return the result
   return $ binderConstraint <> bodyConstraint
@@ -239,10 +260,10 @@ solveFlexFlex ::
   m (UnificationResult builtin)
 solveFlexFlex info (meta1, spine1) (meta2, spine2) = do
   -- It may be that only one of the two spines is invertible
-  maybeRenaming <- invert (contextDBLevel (ctxOf info)) (meta1, spine1)
+  maybeRenaming <- invert (boundCtxLv (infoBoundCtx info)) (meta1, spine1)
   case maybeRenaming of
     Nothing -> solveFlexRigid info (meta2, spine2) (VMeta meta1 spine1)
-    Just renaming -> solveFlexRigidWithRenaming (ctxOf info) (meta1, spine1) renaming (VMeta meta2 spine2)
+    Just renaming -> solveFlexRigidWithRenaming (infoBoundCtx info) (meta1, spine1) renaming (VMeta meta2 spine2)
 
 solveFlexRigid ::
   (MonadUnify builtin m) =>
@@ -251,11 +272,12 @@ solveFlexRigid ::
   Value builtin ->
   m (UnificationResult builtin)
 solveFlexRigid info (metaID, spine) solution = do
+  let ctx = infoBoundCtx info
   -- Check that 'spine' is a pattern and try to calculate a substitution
   -- that renames the variables in `solution` to ones available to `meta`
-  maybeRenaming <- invert (contextDBLevel (ctxOf info)) (metaID, spine)
+  maybeRenaming <- invert (boundCtxLv ctx) (metaID, spine)
   case maybeRenaming of
-    Just renaming -> solveFlexRigidWithRenaming (ctxOf info) (metaID, spine) renaming solution
+    Just renaming -> solveFlexRigidWithRenaming ctx (metaID, spine) renaming solution
     -- This constraint is stuck because it is not pattern; shelve
     -- it for now and hope that another constraint allows us to
     -- progress.
@@ -264,7 +286,7 @@ solveFlexRigid info (metaID, spine) solution = do
 solveFlexRigidWithRenaming ::
   forall builtin m.
   (MonadUnify builtin m) =>
-  ConstraintContext builtin ->
+  BoundCtx (Type builtin) ->
   (MetaID, Spine builtin) ->
   Renaming ->
   Value builtin ->
@@ -275,15 +297,15 @@ solveFlexRigidWithRenaming ctx meta@(metaID, _) renaming solution = do
       then pruneMetaDependencies ctx meta solution
       else return solution
 
-  let unnormSolution = quote mempty (contextDBLevel ctx) prunedSolution
+  let unnormSolution = quote mempty (boundCtxLv ctx) prunedSolution
   let substSolution = substDBAll 0 (\v -> unIx v `IntMap.lookup` renaming) unnormSolution
-  solveMeta metaID substSolution (boundContext ctx)
+  solveMeta metaID substSolution ctx
   return Success
 
 pruneMetaDependencies ::
   forall builtin m.
   (MonadUnify builtin m) =>
-  ConstraintContext builtin ->
+  BoundCtx (Type builtin) ->
   (MetaID, Spine builtin) ->
   Value builtin ->
   m (Value builtin)
@@ -328,7 +350,7 @@ pruneMetaDependencies ctx (solvingMetaID, solvingMetaSpine) attemptedSolution = 
 createMetaWithRestrictedDependencies ::
   forall builtin m.
   (MonadUnify builtin m) =>
-  ConstraintContext builtin ->
+  BoundCtx (Type builtin) ->
   MetaID ->
   [Lv] ->
   m (Value builtin)
@@ -336,21 +358,20 @@ createMetaWithRestrictedDependencies ctx meta newDependencies = do
   p <- getMetaProvenance (Proxy @builtin) meta
   metaType <- getMetaType meta
 
-  let constraintLevel = contextDBLevel ctx
+  let constraintLevel = boundCtxLv ctx
   let dbIndices = fmap (dbLevelToIndex constraintLevel) newDependencies
-  let boundCtx = boundContextOf ctx
-  let newDeps = fmap (\v -> prettyFriendly (WithContext (BoundVar p v :: Expr builtin) (toNamedBoundCtx boundCtx))) dbIndices
+  let newDeps = fmap (\v -> prettyFriendly (WithContext (BoundVar p v :: Expr builtin) (toNamedBoundCtx ctx))) dbIndices
 
   logCompilerSection MaxDetail ("restricting dependencies of" <+> pretty meta <+> "to" <+> sep newDeps) $ do
     let levelSet = IntSet.fromList $ fmap unLv newDependencies
     let makeElem (i, v) = if i `IntSet.member` levelSet then Just v else Nothing
-    let ctxWithLevels = zip (reverse [0 .. length boundCtx - 1 :: Int]) boundCtx
+    let ctxWithLevels = zip (reverse [0 .. length ctx - 1 :: Int]) ctx
     let restrictedContext = mapMaybe makeElem ctxWithLevels
     newMetaExpr <- freshMetaExpr p metaType restrictedContext
 
     let substitution = IntMap.fromAscList (zip [0 ..] (reverse dbIndices))
     let substMetaExpr = substDBAll 0 (\v -> unIx v `IntMap.lookup` substitution) newMetaExpr
-    solveMeta meta substMetaExpr (boundContext ctx)
+    solveMeta meta substMetaExpr ctx
 
     normaliseInEnv (boundContextToEnv restrictedContext) newMetaExpr
 
@@ -358,20 +379,19 @@ updateInfoUnderBinder ::
   ConstraintInfo builtin ->
   (VBinder builtin, VBinder builtin) ->
   ConstraintInfo builtin
-updateInfoUnderBinder (WithContext constraint ctx, blockingMeta) (binder1, _binder2) = do
+updateInfoUnderBinder ((ctx, e1, e2), blockingMetas) (binder1, _binder2) = do
   -- Update the context.
   -- NOTE: that we have to unnormalise here indicates something is wrong.
-  let unnormBinder = fmap (unnormalise (contextDBLevel ctx)) binder1
-  let newCtx = updateConstraintBoundCtx ctx (unnormBinder :)
-  (WithContext constraint newCtx, blockingMeta)
+  let unnormBinder = fmap (unnormalise (boundCtxLv ctx)) binder1
+  ((unnormBinder : ctx, e1, e2), blockingMetas)
 
 hardFail ::
   (MonadUnify builtin m) =>
-  WithContext (UnificationConstraint builtin) ->
+  ConstraintInfo builtin ->
   m (UnificationResult builtin)
-hardFail constraint = do
+hardFail (problem, _) = do
   logDebug MaxDetail "failed"
-  return $ HardFailure [constraint]
+  return $ HardFailure [problem]
 
 --------------------------------------------------------------------------------
 -- Argument patterns

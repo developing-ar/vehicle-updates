@@ -12,7 +12,6 @@ import Vehicle.Compile.Print (prettyFriendly)
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad
-import Vehicle.Compile.Type.Monad.Class (addAuxiliaryInstanceConstraints)
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Polarity
 import Vehicle.Data.Code.Value
@@ -30,7 +29,9 @@ solvePolarityConstraint (WithContext constraint ctx) = do
   let nConstraint = WithContext normConstraint ctx
   case maybeProgress of
     Nothing -> malformedConstraintError nConstraint
-    Just progress -> handleConstraintProgress nConstraint =<< progress
+    Just progress -> do
+      let solution = VBuiltin (PolarityConstructor UnitLiteral) []
+      handleAuxiliaryConstraintProgress solution nConstraint =<< progress
 
 --------------------------------------------------------------------------------
 -- Constraint solving
@@ -206,19 +207,6 @@ implPolarityOp p pol1 pol2 =
 
 --------------------------------------------------------------------------------
 -- Other
-
-handleConstraintProgress ::
-  (MonadTypeChecker PolarityBuiltin m) =>
-  WithContext (InstanceConstraint PolarityBuiltin) ->
-  AuxiliaryConstraintProgress PolarityBuiltin ->
-  m ()
-handleConstraintProgress originalConstraint@(WithContext (Resolve _ m _ _) ctx) = \case
-  Stuck metas -> addAuxiliaryInstanceConstraints [blockConstraintOn originalConstraint metas]
-  Progress newUnificationConstraints newAuxiliaryConstraints -> do
-    let solution = Builtin mempty (PolarityConstructor UnitLiteral)
-    solveMeta m solution (boundContext ctx)
-    addUnificationConstraints newUnificationConstraints
-    addAuxiliaryInstanceConstraints newAuxiliaryConstraints
 
 getTypeClass :: (MonadCompile m) => InstanceGoal PolarityBuiltin -> m (PolarityRelation, Spine PolarityBuiltin)
 getTypeClass = \case

@@ -9,6 +9,7 @@ module Vehicle.Compile.Type.Constraint.Core
     mkCandidate,
     makeInstanceDatabase,
     AuxiliaryConstraintProgress (..),
+    handleAuxiliaryConstraintProgress,
   )
 where
 
@@ -22,7 +23,7 @@ import Vehicle.Compile.Print
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
-import Vehicle.Compile.Type.Monad.Class (MonadTypeChecker, copyContext, getIsUnblockedFn)
+import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
@@ -76,6 +77,19 @@ data AuxiliaryConstraintProgress builtin
   | Progress [WithContext (UnificationConstraint builtin)] [WithContext (InstanceConstraint builtin)]
   deriving (Show)
 
+handleAuxiliaryConstraintProgress ::
+  (MonadTypeChecker builtin m) =>
+  Value builtin ->
+  WithContext (InstanceConstraint builtin) ->
+  AuxiliaryConstraintProgress builtin ->
+  m ()
+handleAuxiliaryConstraintProgress solution originalConstraint@(WithContext constraint ctx) = \case
+  Stuck metas -> addAuxiliaryInstanceConstraints [blockConstraintOn originalConstraint metas]
+  Progress newUnificationConstraints newAuxiliaryConstraints -> do
+    solutionConstraint <- createInstanceUnification (ctx, instanceOrigin constraint) solution (instanceSolution constraint)
+    addUnificationConstraints (solutionConstraint : newUnificationConstraints)
+    addAuxiliaryInstanceConstraints newAuxiliaryConstraints
+
 instance Semigroup (AuxiliaryConstraintProgress builtin) where
   Stuck m1 <> Stuck m2 = Stuck (m1 <> m2)
   Stuck {} <> x@Progress {} = x
@@ -103,7 +117,7 @@ createInstanceUnification ::
   m (WithContext (UnificationConstraint builtin))
 createInstanceUnification (ctx, origin) e1 e2 = do
   let unifyOrigin = CheckingInstanceType origin
-  WithContext (Unify unifyOrigin e1 e2) <$> copyContext ctx
+  WithContext (Unify unifyOrigin e1 e2) <$> copyContext ctx Nothing
 
 extractHeadFromInstanceCandidate ::
   (PrintableBuiltin builtin) =>

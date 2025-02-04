@@ -159,12 +159,13 @@ createFreshInstanceConstraint ::
 createFreshInstanceConstraint auxiliaryConstraint boundCtx p origin relevance tcExpr = do
   let env = boundContextToEnv boundCtx
   metaExpr <- freshMetaExpr p tcExpr boundCtx
+  normMetaExpr <- normaliseInEnv env metaExpr
 
   let originProvenance = provenanceOf tcExpr
   context <- createFreshConstraintCtx originProvenance p boundCtx
   nTCExpr <- normaliseInEnv env tcExpr
   let goal = parseInstanceGoal nTCExpr
-  let constraint = WithContext (Resolve origin metaExpr relevance goal) context
+  let constraint = WithContext (Resolve origin normMetaExpr relevance goal) context
 
   if auxiliaryConstraint
     then addAuxiliaryInstanceConstraints [constraint]
@@ -181,9 +182,12 @@ createDerivedInstanceConstraint ::
   m (Expr builtin, WithContext (InstanceConstraint builtin))
 createDerivedInstanceConstraint (ctx, origin) r t = do
   let p = provenanceOf ctx
-  newCtx <- copyContext ctx
+  let boundCtx = boundContext ctx
   let dbLevel = contextDBLevel ctx
   let newTypeClassExpr = quote p dbLevel t
-  metaExpr <- freshMetaExpr p newTypeClassExpr (boundContext ctx)
-  let newConstraint = Resolve origin metaExpr r $ parseInstanceGoal t
+  metaExpr <- freshMetaExpr p newTypeClassExpr boundCtx
+  normMetaExpr <- normaliseInEnv (boundContextToEnv boundCtx) metaExpr
+  let newConstraint = Resolve origin normMetaExpr r $ parseInstanceGoal t
+
+  newCtx <- copyContext ctx Nothing
   return (metaExpr, WithContext newConstraint newCtx)

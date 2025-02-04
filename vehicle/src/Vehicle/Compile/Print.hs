@@ -512,17 +512,23 @@ instance
   PrettyUsing rest (InstanceConstraint builtin `In` ConstraintContext builtin)
   where
   prettyUsing (Resolve _ solution _ goal, ctx) = do
-    let solution' = prettyUsing @rest (solution, namedBoundCtxOf ctx)
-    let expr' = prettyUsing @rest (goalExpr goal, namedBoundCtxOf ctx)
+    let nameCtx = namedBoundCtxOf ctx
+    let solution' = prettyUsing @rest (solution, nameCtx)
+    let expr' = prettyUsing @rest (goalExpr goal, nameCtx)
     prettyConstraintContext ctx <+> solution' <+> "<=" <+> expr'
 
 instance
-  (PrettyUsing rest (ArgInsertionProblem builtin `In` NamedBoundCtx)) =>
+  ( PrettyUsing rest (Expr builtin `In` NamedBoundCtx),
+    PrettyUsing rest (ArgInsertionProblem builtin `In` NamedBoundCtx)
+  ) =>
   PrettyUsing rest (ApplicationConstraint builtin `In` ConstraintContext builtin)
   where
   prettyUsing (InferArgs {..}, ctx) = do
-    let problemDoc = prettyUsing @rest (argInsertionProblem, namedBoundCtxOf ctx)
-    prettyConstraintContext ctx <+> parens (pretty exprSolutionMeta <+> "=" <+> problemDoc) <+> ":" <+> pretty typeSolutionMeta
+    let nameCtx = namedBoundCtxOf ctx
+    let problemDoc = prettyUsing @rest (argInsertionProblem, nameCtx)
+    let exprDoc = prettyUsing @rest (exprSolution, nameCtx)
+    let typeDoc = prettyUsing @rest (typeSolution, nameCtx)
+    prettyConstraintContext ctx <+> parens (exprDoc <+> "=" <+> problemDoc) <+> ":" <+> typeDoc
 
 instance
   ( PrettyUsing rest (UnificationConstraint builtin `In` ctx),

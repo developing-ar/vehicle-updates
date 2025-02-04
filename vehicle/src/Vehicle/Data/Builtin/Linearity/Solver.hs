@@ -10,8 +10,8 @@ import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyFriendly)
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Core
-import Vehicle.Compile.Type.Monad (MonadTypeChecker, addUnificationConstraints)
-import Vehicle.Compile.Type.Monad.Class (addAuxiliaryInstanceConstraints, solveMeta, substMetas)
+import Vehicle.Compile.Type.Monad (MonadTypeChecker)
+import Vehicle.Compile.Type.Monad.Class (substMetas)
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Linearity
 import Vehicle.Data.Code.Value
@@ -29,7 +29,9 @@ solveLinearityConstraint (WithContext constraint ctx) = do
   let maybeProgress = solve tc (ctx, origin) (mapMaybe getExplicitArg spine)
   case maybeProgress of
     Nothing -> malformedConstraintError nConstraint
-    Just progress -> handleConstraintProgress nConstraint =<< progress
+    Just progress -> do
+      let solution = VBuiltin (LinearityConstructor UnitLiteral) []
+      handleAuxiliaryConstraintProgress solution nConstraint =<< progress
 
 --------------------------------------------------------------------------------
 -- Constraint solving
@@ -146,19 +148,6 @@ powLinearityOp p l1 l2 = case (l1, l2) of
 
 --------------------------------------------------------------------------------
 -- Other
-
-handleConstraintProgress ::
-  (MonadTypeChecker LinearityBuiltin m) =>
-  WithContext (InstanceConstraint LinearityBuiltin) ->
-  AuxiliaryConstraintProgress LinearityBuiltin ->
-  m ()
-handleConstraintProgress originalConstraint@(WithContext (Resolve _ m _ _) ctx) = \case
-  Stuck metas -> addAuxiliaryInstanceConstraints [blockConstraintOn originalConstraint metas]
-  Progress newUnificationConstraints newAuxiliaryConstraints -> do
-    let solution = Builtin mempty (LinearityConstructor UnitLiteral)
-    solveMeta m solution (boundContext ctx)
-    addUnificationConstraints newUnificationConstraints
-    addAuxiliaryInstanceConstraints newAuxiliaryConstraints
 
 getTypeClass :: (MonadCompile m) => InstanceGoal LinearityBuiltin -> m (LinearityRelation, Spine LinearityBuiltin)
 getTypeClass = \case

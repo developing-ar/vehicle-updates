@@ -92,7 +92,7 @@ setConstraintBoundCtx ::
 setConstraintBoundCtx ctx v = updateConstraintBoundCtx ctx (const v)
 
 contextDBLevel :: ConstraintContext builtin -> Lv
-contextDBLevel = Lv . length . boundContext
+contextDBLevel = boundCtxLv . boundContext
 
 --------------------------------------------------------------------------------
 -- Application constraints
@@ -161,7 +161,7 @@ goalExpr InstanceGoal {..} = VBuiltin goalHead goalSpine
 
 data InstanceConstraint builtin = Resolve
   { instanceOrigin :: InstanceConstraintOrigin builtin,
-    instanceSolution :: Expr builtin,
+    instanceSolution :: Value builtin,
     instanceRelevance :: Relevance,
     instanceGoal :: InstanceGoal builtin
   }

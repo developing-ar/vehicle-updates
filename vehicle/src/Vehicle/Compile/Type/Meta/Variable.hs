@@ -37,7 +37,7 @@ data MetaInfo builtin = MetaInfo
   { -- | Location in the source file the meta-variable was generated
     metaProvenance :: Provenance,
     -- | The type of the meta-variable
-    metaType :: Expr builtin,
+    metaType :: Type builtin,
     -- | The number of bound variables in scope when the meta-variable was created.
     metaCtx :: BoundCtx (Expr builtin)
   }
