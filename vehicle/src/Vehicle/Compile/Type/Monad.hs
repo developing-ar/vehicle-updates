@@ -7,7 +7,6 @@ module Vehicle.Compile.Type.Monad
     adoptHypotheticalState,
     -- Meta variables
     freshMetaExpr,
-    freshMetaIdAndExpr,
     getMetaType,
     getMetaCtx,
     getMetaProvenance,
@@ -89,25 +88,16 @@ runTypeCheckerTHypothetically e = do
 adoptHypotheticalState :: (MonadTypeChecker builtin m) => TypeCheckerState builtin -> m ()
 adoptHypotheticalState = modifyMetaCtx . const
 
-freshMetaIdAndExpr ::
-  forall builtin m.
-  (MonadTypeChecker builtin m) =>
-  Provenance ->
-  Type builtin ->
-  BoundCtx (Type builtin) ->
-  m (MetaID, GluedExpr builtin)
-freshMetaIdAndExpr p t boundCtx = do
-  let ctx = if useDependentMetas (Proxy @builtin) then boundCtx else mempty
-  freshMeta p t ctx
-
 freshMetaExpr ::
   forall builtin m.
   (MonadTypeChecker builtin m) =>
   Provenance ->
   Type builtin ->
   BoundCtx (Type builtin) ->
-  m (GluedExpr builtin)
-freshMetaExpr p t boundCtx = snd <$> freshMetaIdAndExpr p t boundCtx
+  m (Expr builtin)
+freshMetaExpr p t boundCtx = do
+  let ctx = if useDependentMetas (Proxy @builtin) then boundCtx else mempty
+  freshMeta p t ctx
 
 -- | Adds an entirely new unification constraint (as opposed to one
 -- derived from another constraint).
@@ -139,20 +129,20 @@ createFreshApplicationConstraint ::
   m (Expr builtin, Type builtin)
 createFreshApplicationConstraint ctx problem blockingMetas = do
   let p = provenanceOf $ originalFun problem
-  (typeMeta, finalType) <- freshMetaIdAndExpr p (TypeUniverse p 0) ctx
-  (exprMeta, finalExpr) <- freshMetaIdAndExpr p (unnormalised finalType) ctx
+  finalType <- freshMetaExpr p (TypeUniverse p 0) ctx
+  finalExpr <- freshMetaExpr p finalType ctx
 
   let constraint =
         InferArgs
-          { exprSolutionMeta = exprMeta,
-            typeSolutionMeta = typeMeta,
+          { exprSolution = finalExpr,
+            typeSolution = finalType,
             argInsertionProblem = problem
           }
 
   context <- createFreshConstraintCtx p p ctx
   let blockedConstraint = WithContext constraint (blockCtxOn blockingMetas context)
   addApplicationConstraint blockedConstraint
-  return (unnormalised finalExpr, unnormalised finalType)
+  return (finalExpr, finalType)
 
 -- | Adds an entirely new instance constraint (as opposed to one
 -- derived from another constraint).
@@ -165,16 +155,16 @@ createFreshInstanceConstraint ::
   InstanceConstraintOrigin builtin ->
   Relevance ->
   Type builtin ->
-  m (GluedExpr builtin)
+  m (Expr builtin)
 createFreshInstanceConstraint auxiliaryConstraint boundCtx p origin relevance tcExpr = do
   let env = boundContextToEnv boundCtx
-  (meta, metaExpr) <- freshMetaIdAndExpr p tcExpr boundCtx
+  metaExpr <- freshMetaExpr p tcExpr boundCtx
 
   let originProvenance = provenanceOf tcExpr
   context <- createFreshConstraintCtx originProvenance p boundCtx
   nTCExpr <- normaliseInEnv env tcExpr
   let goal = parseInstanceGoal nTCExpr
-  let constraint = WithContext (Resolve origin meta relevance goal) context
+  let constraint = WithContext (Resolve origin metaExpr relevance goal) context
 
   if auxiliaryConstraint
     then addAuxiliaryInstanceConstraints [constraint]
@@ -194,6 +184,6 @@ createDerivedInstanceConstraint (ctx, origin) r t = do
   newCtx <- copyContext ctx
   let dbLevel = contextDBLevel ctx
   let newTypeClassExpr = quote p dbLevel t
-  (meta, metaExpr) <- freshMetaIdAndExpr p newTypeClassExpr (boundContext ctx)
-  let newConstraint = Resolve origin meta r $ parseInstanceGoal t
-  return (unnormalised metaExpr, WithContext newConstraint newCtx)
+  metaExpr <- freshMetaExpr p newTypeClassExpr (boundContext ctx)
+  let newConstraint = Resolve origin metaExpr r $ parseInstanceGoal t
+  return (metaExpr, WithContext newConstraint newCtx)

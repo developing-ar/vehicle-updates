@@ -349,10 +349,10 @@ createMetaWithRestrictedDependencies ctx meta newDependencies = do
     newMetaExpr <- freshMetaExpr p metaType restrictedContext
 
     let substitution = IntMap.fromAscList (zip [0 ..] (reverse dbIndices))
-    let substMetaExpr = substDBAll 0 (\v -> unIx v `IntMap.lookup` substitution) (unnormalised newMetaExpr)
+    let substMetaExpr = substDBAll 0 (\v -> unIx v `IntMap.lookup` substitution) newMetaExpr
     solveMeta meta substMetaExpr (boundContext ctx)
 
-    return $ normalised newMetaExpr
+    normaliseInEnv (boundContextToEnv restrictedContext) newMetaExpr
 
 updateInfoUnderBinder ::
   ConstraintInfo builtin ->

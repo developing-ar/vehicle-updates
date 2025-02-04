@@ -18,7 +18,6 @@ import Vehicle.Data.Builtin.Polarity
 import Vehicle.Data.Builtin.Polarity.Solver (solvePolarityConstraint)
 import Vehicle.Data.Builtin.Standard (Builtin (..))
 import Vehicle.Data.Code.DSL (iterate)
-import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
 import Prelude hiding (iterate, pi)
 
@@ -196,7 +195,7 @@ pattern PolarityExpr :: Provenance -> Polarity -> Expr PolarityBuiltin
 pattern PolarityExpr p pol = Builtin p (Polarity pol)
 
 freshPolarityMeta :: (MonadTypeChecker PolarityBuiltin m) => Provenance -> m (Expr PolarityBuiltin)
-freshPolarityMeta p = unnormalised <$> freshMetaExpr p (TypeUniverse p 0) mempty
+freshPolarityMeta p = freshMetaExpr p (TypeUniverse p 0) mempty
 
 convertToPolarityTypes ::
   forall m.

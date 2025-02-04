@@ -8,6 +8,7 @@ import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Bidirectional (solveArgInsertionProblem)
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Core
+import Vehicle.Compile.Type.Monad (createFreshUnificationConstraint)
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.System
 
@@ -30,8 +31,10 @@ solveApplicationConstraint (WithContext InferArgs {..} ctx) = do
   result <- solveArgInsertionProblem boundCtx argInsertionProblem
   case result of
     Right (finalExpr, finalType) -> do
-      solveMeta typeSolutionMeta finalType boundCtx
-      solveMeta exprSolutionMeta finalExpr boundCtx
+      let p = provenanceOf ctx
+      let origin = _
+      createFreshUnificationConstraint p boundCtx origin typeSolution finalType
+      createFreshUnificationConstraint p boundCtx origin exprSolution finalExpr
     Left (blockedProblem, blockingMetas) -> do
       let newConstraint = InferArgs {argInsertionProblem = blockedProblem, ..}
       let finalConstraint = WithContext newConstraint (blockCtxOn blockingMetas ctx)

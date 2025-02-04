@@ -200,18 +200,17 @@ acceptCandidate (WithContext Resolve {..} constraintCtx) goal candidate = do
   addInstanceConstraints recInstanceConstraints
 
   -- Unify the goal and candidate bodies
-  unificationConstraint <- createInstanceUnification extendedGoalInfo (goalExpr goal) substCandidateExpr
-  addUnificationConstraints [unificationConstraint]
+  goalConstraint <- createInstanceUnification extendedGoalInfo (goalExpr goal) substCandidateExpr
 
   -- Replace the provenance of the final solution with the provenance of where the
   -- constraint was generated. This is needed to get the information to propagate
   -- properly for the polarity and linearity types, otherwise the provenance ends
   -- up empty as the candidates are constructed independently.
   let finalCandidateSolution = replaceProvenance (provenanceOf constraintCtx) substCandidateSolution
+  solutionConstraint <- createInstanceUnification extendedGoalInfo finalCandidateSolution instanceSolution
 
-  -- Add the solution of the type-class as well (if we had first class records
-  -- then we wouldn't need to do this manually).
-  instantiateTypeClassSolution extendedGoalInfo instanceSolutionMeta finalCandidateSolution extendedGoalCtx
+  -- Add the constriants
+  addUnificationConstraints [goalConstraint, solutionConstraint]
 
 instantiateTypeClassSolution ::
   forall builtin m.
@@ -264,7 +263,7 @@ instantiateCandidateTelescope goalCtxExtension (constraintCtx, constraintOrigin)
           Implicit {} -> do
             let p = provenanceOf constraintCtx
             expr <- freshMetaExpr p binderType boundCtx
-            return (unnormalised expr, [])
+            return (expr, [])
           Instance {} -> do
             let newInfo = (setConstraintBoundCtx constraintCtx boundCtx, constraintOrigin)
             -- WARNING massive hack should be traversing the normalised type here.

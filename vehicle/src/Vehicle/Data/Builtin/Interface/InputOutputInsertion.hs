@@ -12,7 +12,6 @@ import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
 import Vehicle.Compile.Type.Monad
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Interface (BuiltinHasStandardData)
-import Vehicle.Data.Code.Value
 
 -------------------------------------------------------------------------------
 -- Inserting polarity and linearity constraints to capture function application
@@ -71,11 +70,11 @@ addFunctionConstraint constraint declProv@(_, declP) position existingExpr = do
       existingSubsitutions <- get
       case MetaMap.lookup metaID existingSubsitutions of
         Nothing -> do
-          freshMeta <- unnormalised <$> freshMetaExpr p (TypeUniverse p 0) mempty
-          modify (MetaMap.insert metaID freshMeta)
-          return freshMeta
+          meta <- freshMetaExpr p (TypeUniverse p 0) mempty
+          modify (MetaMap.insert metaID meta)
+          return meta
         Just existingMeta -> return existingMeta
-    _ -> unnormalised <$> freshMetaExpr p (TypeUniverse p 0) mempty
+    _ -> freshMetaExpr p (TypeUniverse p 0) mempty
 
   let constraintArgs = case position of
         FunctionInput {} -> [newExpr, existingExpr]

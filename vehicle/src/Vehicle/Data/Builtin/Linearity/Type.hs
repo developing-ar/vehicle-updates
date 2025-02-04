@@ -18,7 +18,6 @@ import Vehicle.Data.Builtin.Linearity
 import Vehicle.Data.Builtin.Linearity.Solver
 import Vehicle.Data.Builtin.Standard (Builtin (..))
 import Vehicle.Data.Code.DSL (iterate)
-import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
 import Prelude hiding (iterate)
 
@@ -183,7 +182,7 @@ pattern LinearityExpr :: Provenance -> Linearity -> Expr LinearityBuiltin
 pattern LinearityExpr p lin = Builtin p (Linearity lin)
 
 freshLinearityMeta :: (MonadTypeChecker LinearityBuiltin m) => Provenance -> m (Expr LinearityBuiltin)
-freshLinearityMeta p = unnormalised <$> freshMetaExpr p (TypeUniverse p 0) mempty
+freshLinearityMeta p = freshMetaExpr p (TypeUniverse p 0) mempty
 
 convertToLinearityTypes ::
   forall m.

@@ -506,12 +506,15 @@ instance
     prettyConstraintContext ctx <+> e1' <+> "~" <+> e2'
 
 instance
-  (PrettyUsing rest (Value builtin `In` NamedBoundCtx)) =>
+  ( PrettyUsing rest (Value builtin `In` NamedBoundCtx),
+    PrettyUsing rest (Expr builtin `In` NamedBoundCtx)
+  ) =>
   PrettyUsing rest (InstanceConstraint builtin `In` ConstraintContext builtin)
   where
-  prettyUsing (Resolve _ m _ goal, ctx) = do
+  prettyUsing (Resolve _ solution _ goal, ctx) = do
+    let solution' = prettyUsing @rest (solution, namedBoundCtxOf ctx)
     let expr' = prettyUsing @rest (goalExpr goal, namedBoundCtxOf ctx)
-    prettyConstraintContext ctx <+> pretty m <+> "<=" <+> expr'
+    prettyConstraintContext ctx <+> solution' <+> "<=" <+> expr'
 
 instance
   (PrettyUsing rest (ArgInsertionProblem builtin `In` NamedBoundCtx)) =>

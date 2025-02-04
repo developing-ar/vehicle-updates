@@ -174,8 +174,8 @@ inferExpr e = do
       -- NOTE, different uses of the same hole name will be interpreted
       -- as different meta-variables.
       boundCtx <- getBoundCtx (Proxy @(Type builtin))
-      metaType <- unnormalised <$> freshMetaExpr p (TypeUniverse p 0) boundCtx
-      metaExpr <- unnormalised <$> freshMetaExpr p metaType boundCtx
+      metaType <- freshMetaExpr p (TypeUniverse p 0) boundCtx
+      metaExpr <- freshMetaExpr p metaType boundCtx
       return (metaExpr, metaType)
     Pi p binder resultType -> do
       checkedBinderType <- checkExpr (TypeUniverse p 0) (typeOf binder)
@@ -392,8 +392,7 @@ checkArgsAgainstPiType ctx problem binder resultType
         Nothing -> do
           logDebug MaxDetail $ "inserting argument for binder" <+> prettyVerbose binder
           let original = (originalFunction, originalArgs problem, originalType problem)
-          newArg <- instantiateArgForNonExplicitBinder ctx p original binder
-          return $ fmap unnormalised newArg
+          instantiateArgForNonExplicitBinder ctx p original binder
 
       -- Recurse if necessary to check the remaining unchecked args
       let newProblem =
@@ -417,7 +416,7 @@ instantiateArgForNonExplicitBinder ::
   Provenance ->
   (Expr builtin, [Arg builtin], Type builtin) ->
   Binder builtin ->
-  m (GluedArg builtin)
+  m (Arg builtin)
 instantiateArgForNonExplicitBinder boundCtx p (fun, funArgs, funType) binder = do
   let binderType = typeOf binder
   checkedExpr <- case visibilityOf binder of

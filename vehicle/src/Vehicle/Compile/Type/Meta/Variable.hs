@@ -54,18 +54,14 @@ makeMetaExpr ::
   Provenance ->
   MetaID ->
   BoundCtx (Type builtin) ->
-  GluedExpr builtin
+  Expr builtin
 makeMetaExpr p metaID boundCtx = do
   -- Create bound variables for everything in the context
   let dependencyLevels = [0 .. (length boundCtx - 1)]
   let unnormBoundEnv = [Arg p Explicit Relevant (BoundVar p $ Ix i) | i <- reverse dependencyLevels]
-  let normBoundEnv = [Arg p Explicit Relevant (VBoundVar (Lv i) []) | i <- dependencyLevels]
 
   -- Returns a meta applied to every bound variable in the context
-  Glued
-    { unnormalised = normAppList (Meta p metaID) unnormBoundEnv,
-      normalised = VMeta metaID normBoundEnv
-    }
+  normAppList (Meta p metaID) unnormBoundEnv
 
 -- | Creates a Pi type that abstracts over all bound variables
 makeMetaType ::

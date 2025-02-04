@@ -14,7 +14,6 @@ import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Builtin.Interface.Type
 import Vehicle.Data.Builtin.Standard (BuiltinConstructor (..), BuiltinFunction (..), BuiltinType (..))
 import Vehicle.Data.Code.DSL
-import Vehicle.Data.Code.Value (GluedExpr (..))
 import Vehicle.Data.DSL
 import Vehicle.Syntax.Builtin (Builtin (..))
 import Prelude hiding (iterate, pi)
@@ -178,7 +177,7 @@ convertToDecidabilityBuiltins p b args =
     convertTo t = return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) (implicit (Hole p "_t") : args)
 
 freshDecidabilityMeta :: (MonadTypeChecker DecidabilityBuiltin m) => Provenance -> m (Expr DecidabilityBuiltin)
-freshDecidabilityMeta p = unnormalised <$> freshMetaExpr p (TypeUniverse p 0) mempty
+freshDecidabilityMeta p = freshMetaExpr p (TypeUniverse p 0) mempty
 
 restrictDecidabilityDeclType ::
   forall m.

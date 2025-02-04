@@ -31,7 +31,7 @@ newtype BlockingStatus = BlockingStatus (Maybe MetaSet)
 instance Pretty BlockingStatus where
   pretty (BlockingStatus status) = case status of
     Nothing -> ""
-    Just v -> "blockedBy:" <+> pretty v
+    Just v -> "blockedBy:" <+> prettyFlatList (fmap pretty (MetaSet.toList v))
 
 unknownBlockingStatus :: BlockingStatus
 unknownBlockingStatus = BlockingStatus Nothing
@@ -112,8 +112,8 @@ data ArgInsertionProblem builtin = ArgInsertionProblem
   deriving (Show)
 
 data ApplicationConstraint builtin = InferArgs
-  { typeSolutionMeta :: MetaID,
-    exprSolutionMeta :: MetaID,
+  { typeSolution :: Expr builtin,
+    exprSolution :: Expr builtin,
     argInsertionProblem :: ArgInsertionProblem builtin
   }
   deriving (Show)
@@ -161,7 +161,7 @@ goalExpr InstanceGoal {..} = VBuiltin goalHead goalSpine
 
 data InstanceConstraint builtin = Resolve
   { instanceOrigin :: InstanceConstraintOrigin builtin,
-    instanceSolutionMeta :: MetaID,
+    instanceSolution :: Expr builtin,
     instanceRelevance :: Relevance,
     instanceGoal :: InstanceGoal builtin
   }

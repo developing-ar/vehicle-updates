@@ -213,7 +213,7 @@ freshMeta ::
   Provenance ->
   Type builtin ->
   BoundCtx (Type builtin) ->
-  m (MetaID, GluedExpr builtin)
+  m (Expr builtin)
 freshMeta p metaType boundCtx = do
   -- Create a fresh id for the meta
   TypeCheckerState {..} <- getMetaState
@@ -231,10 +231,10 @@ freshMeta p metaType boundCtx = do
 
   logDebug MaxDetail $
     "fresh-meta"
-      <+> prettyFriendly (WithContext (unnormalised metaExpr) (toNamedBoundCtx boundCtx))
+      <+> prettyFriendly (WithContext metaExpr (toNamedBoundCtx boundCtx))
       <+> ":"
       <+> prettyVerbose metaType
-  return (metaID, metaExpr)
+  return metaExpr
 
 -- | Ensures the meta has no dependencies on the bound context. Returns true
 -- if dependencies were removed to achieve this.
@@ -244,8 +244,8 @@ removeMetaDependencies _ m = do
   if null ctx
     then return False
     else do
-      newMeta <- snd <$> freshMeta p t mempty
-      solveMeta m (unnormalised newMeta) mempty
+      newMeta <- freshMeta p t mempty
+      solveMeta m newMeta mempty
       return True
 
 --------------------------------------------------------------------------------
