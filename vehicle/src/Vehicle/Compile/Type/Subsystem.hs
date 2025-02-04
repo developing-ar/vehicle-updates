@@ -48,10 +48,14 @@ typeCheckWithSubsystem ::
   Prog Builtin ->
   m (Either CompileError (Prog builtin))
 typeCheckWithSubsystem typingSystem instanceCandidates preprocess prog = do
+  callDepth <- getCallDepth
   logCompilerPass MinDetail ("typing using" <+> quotePretty typingSystem <+> "type subsystem") $ do
     typeClassFreeProg <- resolveInstanceArgumentsAndCasts prog
     preprocessedProg <- preprocess typeClassFreeProg
-    runExceptT $ typeCheckProg instanceCandidates mempty preprocessedProg
+    result <- runExceptT $ typeCheckProg instanceCandidates mempty preprocessedProg
+    -- Need to reset the call depth explicitly as type-checking may have errored.
+    setCallDepth (callDepth + 1)
+    return result
 
 simplifyTypes ::
   (MonadCompile m) =>

@@ -67,7 +67,6 @@ generaliseOverConstraint allConstraints (decl, rejected) c@(WithContext tc ctx) 
   substTC <- substMetas tc
   constraintMetas <- metasIn substTC
   let prependable = constraintMetas `MetaSet.isSubsetOf` linkedMetas
-
   if not prependable
     then do
       logDebug MaxDetail $ "Found non-prependable type-class constraint" <+> prettyVerbose c
@@ -83,8 +82,7 @@ prependConstraint ::
   m (Decl builtin)
 prependConstraint decl (WithContext (Resolve _origin meta relevance goal) ctx) = do
   let p = originalProvenance ctx
-  let typeClass = quote p 0 $ goalExpr goal
-
+  let typeClass = quote p (contextDBLevel ctx) $ goalExpr goal
   substTypeClass <- substMetas typeClass
   logCompilerPass MaxDetail ("generalisation over" <+> prettyVerbose substTypeClass) $
     prependBinderAndSolveMeta meta (BinderDisplayForm OnlyType True) (Instance True) relevance substTypeClass decl
@@ -188,12 +186,10 @@ prependBinderAndSolveMeta meta f v r binderType decl = do
   let solution = BoundVar p (Ix $ length metaCtx - 1)
   solveMeta meta solution metaCtx
 
-  logDebug MaxDetail $ "prepended-fresh-binder:" <+> prettyVerbose updatedDecl
-
   -- Substitute the new meta solution through.
   resultDecl <- substMetas updatedDecl
 
-  logCompilerPassOutput $ prettyVerbose resultDecl
+  logCompilerPassOutput $ prettyExternal resultDecl
   return resultDecl
 
 removeContextsOfMetasIn ::
@@ -212,7 +208,7 @@ removeContextsOfMetasIn binderType decl =
       else do
         substDecl <- substMetas decl
         substBinderType <- substMetas binderType
-        logCompilerPassOutput (prettyVerbose substDecl)
+        logCompilerPassOutput (prettyExternal substDecl)
         return (substBinderType, substDecl)
 
 addNewArgumentToMetaUses :: MetaID -> Decl builtin -> Decl builtin
