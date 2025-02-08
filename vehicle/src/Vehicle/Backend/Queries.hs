@@ -172,7 +172,7 @@ compileSingleProperty ::
   Value Builtin ->
   m ()
 compileSingleProperty expr = do
-  queries <- flip runSupplyT [1 :: QueryID ..] $ eliminateUserVariables expr
+  queries <- runSupplyT [1 :: QueryID ..] $ eliminateUserVariables expr
 
   PropertyMetaData {..} <- ask
 

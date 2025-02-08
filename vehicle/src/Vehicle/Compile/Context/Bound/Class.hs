@@ -46,6 +46,9 @@ getCurrentLv p = boundCtxLv <$> getBoundCtx p
 -- | State for generating fresh names.
 type FreshNameState = Int
 
+freshName :: Int -> Name
+freshName i = "_x" <> layoutAsText (pretty i)
+
 -- TODO not currently sound.
 getFreshName ::
   forall expr m.
@@ -54,7 +57,7 @@ getFreshName ::
   m Name
 getFreshName _t = do
   boundCtx <- getBoundCtx (Proxy @expr)
-  return $ "_x" <> layoutAsText (pretty (length boundCtx))
+  return $ freshName (length boundCtx)
 
 getBinderNameOrFreshName :: (MonadBoundContext expr m) => Maybe Name -> expr -> m Name
 getBinderNameOrFreshName piName typ = case piName of

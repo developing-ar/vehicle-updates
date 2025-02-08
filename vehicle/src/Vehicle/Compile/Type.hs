@@ -119,7 +119,7 @@ typeCheckAbstractDef p ident defSort uncheckedType = do
 
   logUnsolvedUnknowns (Just substDecl)
 
-  finalDecl <- generaliseOverUnsolvedMetaVariables substDecl
+  finalDecl <- runSupplyT [0 :: Int ..] $ generaliseOverUnsolvedMetaVariables substDecl
   return finalDecl
 
 typeCheckFunction ::
@@ -161,9 +161,10 @@ typeCheckFunction p ident anns typ body = do
           else return substDecl
       logUnsolvedUnknowns (Just substDecl)
 
-      checkedDecl2 <- generaliseOverUnsolvedConstraints checkedDecl1
-      checkedDecl3 <- generaliseOverUnsolvedMetaVariables checkedDecl2
-      return checkedDecl3
+      runSupplyT [0 :: Int ..] $ do
+        checkedDecl2 <- generaliseOverUnsolvedConstraints checkedDecl1
+        checkedDecl3 <- generaliseOverUnsolvedMetaVariables checkedDecl2
+        return checkedDecl3
 
 checkDeclType :: forall builtin m. (TCM builtin m) => Identifier -> Expr builtin -> m (Type builtin)
 checkDeclType ident declType = do

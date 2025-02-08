@@ -37,7 +37,7 @@ reduceTensorVariable ::
   Name ->
   TensorShape ->
   ([Name], Tensor Variable, Value Builtin)
-reduceTensorVariable lv varName shape = runSupply (go shape []) [lv ..]
+reduceTensorVariable lv varName shape = runSupply [lv ..] $ go shape []
   where
     createRatVar :: TensorIndices -> Lv -> ([Name], Tensor Variable, Value Builtin)
     createRatVar indices currentLv = do

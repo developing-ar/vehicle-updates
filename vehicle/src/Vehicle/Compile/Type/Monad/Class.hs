@@ -137,6 +137,13 @@ instance (MonadTypeChecker builtin m) => MonadTypeChecker builtin (BoundContextT
   clearFreshNames = lift . clearFreshNames
   getInstanceCandidates = lift getInstanceCandidates
 
+instance (MonadTypeChecker builtin m) => MonadTypeChecker builtin (SupplyT a m) where
+  getMetaState = lift getMetaState
+  modifyMetaCtx = lift . modifyMetaCtx
+  getFreshName = lift . getFreshName
+  clearFreshNames = lift . clearFreshNames
+  getInstanceCandidates = lift getInstanceCandidates
+
 --------------------------------------------------------------------------------
 -- Operations
 
