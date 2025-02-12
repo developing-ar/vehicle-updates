@@ -189,7 +189,8 @@ acceptCandidate (WithContext Resolve {..} constraintCtx) goal candidate = do
   -- Allow the candidate to access all the arguments in the goal telescope.
   let goalCtxExtension = goalTelescope goal
   let extendedGoalCtx = goalCtxExtension ++ boundContext constraintCtx
-  let extendedGoalInfo = (setConstraintBoundCtx constraintCtx extendedGoalCtx, instanceOrigin)
+  let newConstraintCtx = setConstraintBoundCtx constraintCtx extendedGoalCtx
+  let extendedGoalInfo = (newConstraintCtx, instanceOrigin)
 
   -- Instantiate the candidate telescope with metas and subst into body.
   (substCandidateExpr, substCandidateSolution, recInstanceConstraints) <-
@@ -199,11 +200,10 @@ acceptCandidate (WithContext Resolve {..} constraintCtx) goal candidate = do
   -- Unify the goal and candidate bodies
   goalConstraint <- createInstanceUnification extendedGoalInfo (goalExpr goal) substCandidateExpr
 
-  normCandidateSolution <- normaliseInEnv (boundContextToEnv extendedGoalCtx) substCandidateSolution
-  solutionConstraint <- createInstanceUnification extendedGoalInfo normCandidateSolution instanceSolution
+  instantiateInstanceConstraintSolution (WithContext Resolve {..} newConstraintCtx) substCandidateSolution
 
   -- Add the constriants
-  addUnificationConstraints [goalConstraint, solutionConstraint]
+  addUnificationConstraints [goalConstraint]
 
 -- | Generate meta variables for each binder in the telescope of the candidate
 -- and then substitute them into the candidate expression.

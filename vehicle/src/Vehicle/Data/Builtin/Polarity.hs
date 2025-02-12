@@ -169,6 +169,26 @@ instance BuiltinHasNatLiterals PolarityBuiltin where
   accessAddNatBuiltin = functionAccessor (Add AddNat)
   accessMulNatBuiltin = functionAccessor (Mul MulNat)
 
+instance BuiltinHasListLiterals PolarityBuiltin where
+  accessNilBuiltin =
+    Access
+      { getExpr = \case
+          PolarityConstructor Nil -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> PolarityConstructor Nil
+      }
+
+  accessConsBuiltin =
+    Access
+      { getExpr = \case
+          PolarityConstructor Cons -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> PolarityConstructor Cons
+      }
+
+  accessMapListBuiltin = functionAccessor MapList
+  accessFoldListBuiltin = functionAccessor FoldList
+
 instance BuiltinHasIterate PolarityBuiltin where
   accessIterateBuiltin = functionAccessor Iterate
 

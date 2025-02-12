@@ -21,6 +21,7 @@ import Vehicle.Compile.Type.System
 import Vehicle.Data.Builtin.Decidability (DecidabilityBuiltin)
 import Vehicle.Data.Builtin.Decidability.Instances (decidabilityBuiltinInstances)
 import Vehicle.Data.Builtin.Decidability.Type ()
+import Vehicle.Data.Builtin.Interface (BuiltinHasListLiterals)
 import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin (..))
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Linearity (LinearityBuiltin)
@@ -28,6 +29,7 @@ import Vehicle.Data.Builtin.Linearity.Type ()
 import Vehicle.Data.Builtin.Polarity (PolarityBuiltin)
 import Vehicle.Data.Builtin.Polarity.Type ()
 import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Code.Interface
 import Vehicle.Libraries.StandardLibrary.Definitions (StdLibFunction (..))
 
 polarityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Either CompileError (Prog PolarityBuiltin))
@@ -41,7 +43,7 @@ decidabilityTypeCheck = typeCheckWithSubsystem DecidabilityTypes decidabilityBui
 
 typeCheckWithSubsystem ::
   forall builtin m.
-  (HasTypeSystem builtin, NormalisableBuiltin builtin, MonadCompile m) =>
+  (HasTypeSystem builtin, NormalisableBuiltin builtin, BuiltinHasListLiterals builtin, MonadCompile m) =>
   SecondaryTypeSystem ->
   InstanceDatabase builtin ->
   (Prog Builtin -> m (Prog Builtin)) ->
@@ -69,7 +71,7 @@ simplifyTypes prog = do
 
 resolveInstanceArgumentsAndCasts ::
   forall m builtin.
-  (MonadCompile m, NormalisableBuiltin builtin, Show builtin) =>
+  (MonadCompile m, NormalisableBuiltin builtin, BuiltinHasListLiterals builtin, Show builtin) =>
   Prog builtin ->
   m (Prog builtin)
 resolveInstanceArgumentsAndCasts prog =
@@ -99,7 +101,10 @@ resolveInstanceArgumentsAndCasts prog =
         then do
           (inst, remainingArgs) <- findInstanceArg ident args
           return $ substArgs inst remainingArgs
-        else return $ normAppList (FreeVar p ident) args'
+        else
+          if ident == identifierOf StdAppendList
+            then return $ evalAppendList args'
+            else return $ normAppList (FreeVar p ident) args'
 
     removeCasts :: BuiltinUpdate m builtin builtin
     removeCasts p b args = case isCast b of
@@ -121,6 +126,14 @@ resolveInstanceArgumentsAndCasts prog =
           Pi _ binder res -> Pi p (fmap go binder) (go res)
           Let _ e1 binder e2 -> Let p (go e1) (fmap go binder) (go e2)
           Lam _ binder e -> Lam p (fmap go binder) (go e)
+
+    evalAppendList :: [Arg builtin] -> Expr builtin
+    evalAppendList = \case
+      args@[t, xs, ys] -> case argExpr xs of
+        INil _ -> argExpr ys
+        ICons _ v vs -> ICons t v (evalAppendList [t, explicit vs, ys])
+        _ -> normAppList (FreeVar mempty $ identifierOf StdAppendList) args
+      _ -> developerError "malformed append list!"
 
 removeImplicitArgs ::
   forall m builtin.

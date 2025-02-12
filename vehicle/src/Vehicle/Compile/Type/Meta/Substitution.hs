@@ -119,7 +119,7 @@ instance MetaSubstitutable m builtin (UnificationConstraint builtin) where
 
 instance MetaSubstitutable m builtin (InstanceConstraint builtin) where
   subst s (Resolve origin m r g) =
-    Resolve <$> subst s origin <*> subst s m <*> pure r <*> subst s g
+    Resolve <$> subst s origin <*> pure m <*> pure r <*> subst s g
 
 instance MetaSubstitutable m builtin (InstanceGoal builtin) where
   subst s (InstanceGoal t h spine) =

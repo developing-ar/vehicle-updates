@@ -193,6 +193,26 @@ instance BuiltinHasNatLiterals LinearityBuiltin where
   accessAddNatBuiltin = functionAccessor (Add AddNat)
   accessMulNatBuiltin = functionAccessor (Mul MulNat)
 
+instance BuiltinHasListLiterals LinearityBuiltin where
+  accessNilBuiltin =
+    Access
+      { getExpr = \case
+          LinearityConstructor Nil -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> LinearityConstructor Nil
+      }
+
+  accessConsBuiltin =
+    Access
+      { getExpr = \case
+          LinearityConstructor Cons -> Just ()
+          _ -> Nothing,
+        mkExpr = \() -> LinearityConstructor Cons
+      }
+
+  accessMapListBuiltin = functionAccessor MapList
+  accessFoldListBuiltin = functionAccessor FoldList
+
 instance BuiltinHasIterate LinearityBuiltin where
   accessIterateBuiltin = functionAccessor Iterate
 

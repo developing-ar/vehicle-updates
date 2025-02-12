@@ -28,16 +28,15 @@ solveIndexConstraint ::
   WithContext (InstanceConstraint Builtin) ->
   m ()
 solveIndexConstraint constraint = do
-  normConstraint@(WithContext (Resolve origin instanceSolution _ goal) ctx) <- substMetas constraint
+  normConstraint <- substMetas constraint
   logDebug MaxDetail $ "Forced:" <+> prettyFriendly normConstraint
 
-  let args = mapMaybe getExplicitArg $ goalSpine goal
+  let args = mapMaybe getExplicitArg $ goalSpine $ instanceGoal $ objectIn normConstraint
   progress <- solveInDomain normConstraint args
   case progress of
     Nothing -> do
-      let solution = VBuiltin (BuiltinConstructor UnitLiteral) []
-      solutionConstraint <- createInstanceUnification (ctx, origin) instanceSolution solution
-      addUnificationConstraints [solutionConstraint]
+      let solution = Builtin mempty (BuiltinConstructor UnitLiteral)
+      instantiateInstanceConstraintSolution normConstraint solution
     Just metas -> do
       let blockedConstraint = blockConstraintOn normConstraint metas
       addAuxiliaryInstanceConstraints [blockedConstraint]

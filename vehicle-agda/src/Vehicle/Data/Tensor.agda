@@ -8,9 +8,12 @@ open import Data.Nat.Base using (ℕ; zero; suc)
 open import Data.List.Base using (List; []; _∷_; tabulate; concat; foldr)
 open import Data.Vec.Functional using (Vector)
 import Data.Vec.Functional as Vec
+import Data.Vec.Functional.Relation.Binary.Pointwise as Vec
 open import Data.Fin using (Fin)
 import Data.Rational as ℚ
 open import Data.Rational using (ℚ)
+open import Function.Base using (flip)
+open import Vehicle.Utils
 
 Dimension : Set
 Dimension = ℕ
@@ -30,7 +33,16 @@ Tensor A []       = A
 Tensor A (d ∷ ds) = Vector (Tensor A ds) d
 
 Pointwise : (A → B → Set p) → Tensor A ds → Tensor B ds → Set p
-Pointwise = {!!}
+Pointwise {ds = []}      P xs ys = P xs ys
+Pointwise {ds = d ∷ ds} P xs ys = Vec.Pointwise (Pointwise P) xs ys
+
+StackType : (A B : Set) → Dimension → Set
+StackType A B zero    = B
+StackType A B (suc n) = A → StackType A B n
+
+stack : StackType (Tensor A ds) (Tensor A (d ∷ ds)) d
+stack {d = zero}  = {!!}
+stack {d = suc d} t = {!!}
 
 foreach : (Fin d → Tensor A ds) → Tensor A (d ∷ ds)
 foreach f = f
@@ -102,10 +114,10 @@ _≤ᵇ_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool []
 xs ≤ᵇ ys = reduceAnd (zipWith ℚ._≤ᵇ_ xs ys)
 
 _<ᵇ_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool []
-xs <ᵇ ys = reduceAnd (zipWith {!!} xs ys)
+xs <ᵇ ys = reduceAnd (zipWith _ℚ<ᵇ_ xs ys)
 
 _≥ᵇ_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool []
-xs ≥ᵇ ys = reduceAnd (zipWith {!!} xs ys)
+xs ≥ᵇ ys = reduceAnd (zipWith (flip ℚ._≤ᵇ_) xs ys)
 
 _>ᵇ_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool []
-xs >ᵇ ys = reduceAnd (zipWith {!!} xs ys)
+xs >ᵇ ys = reduceAnd (zipWith (flip _ℚ<ᵇ_) xs ys)

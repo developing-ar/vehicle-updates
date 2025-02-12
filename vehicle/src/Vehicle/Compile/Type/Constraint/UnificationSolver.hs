@@ -2,7 +2,7 @@
 
 module Vehicle.Compile.Type.Constraint.UnificationSolver
   ( runUnificationSolver,
-    solve,
+    unify,
     UnificationResult (..),
   )
 where
@@ -22,7 +22,6 @@ import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Normalise.Quote (Quote (..), unnormalise)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyExternal, prettyFriendly, prettyVerbose)
-import Vehicle.Compile.Type.Constraint.Core (runConstraintSolver)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Force (forceHead)
 import Vehicle.Compile.Type.Meta
@@ -82,7 +81,7 @@ solveUnificationConstraint ::
   WithContext (UnificationConstraint builtin) ->
   m ()
 solveUnificationConstraint (WithContext (Unify origin e1 e2) ctx) = do
-  result <- solve (boundContextOf ctx) e1 e2
+  result <- unify (boundContextOf ctx) e1 e2
   case result of
     Success -> return ()
     Blocked blockedProblems -> do
@@ -104,14 +103,14 @@ createNewConstraint constraintCtx origin ((boundCtx, e1, e2), blockingMetas) = d
   newConstraint <- WithContext (Unify origin e1 e2) <$> copyContext constraintCtx (Just boundCtx)
   return $ blockConstraintOn newConstraint blockingMetas
 
-solve ::
+unify ::
   forall builtin m.
   (MonadUnify builtin m) =>
   BoundCtx (Type builtin) ->
   Value builtin ->
   Value builtin ->
   m (UnificationResult builtin)
-solve ctx e1 e2 = do
+unify ctx e1 e2 = do
   -- Force the heads of both expressions
   let namedCtx = toNamedBoundCtx ctx
   (ne1, e1BlockingMetas) <- forceHead namedCtx e1
@@ -145,7 +144,7 @@ subUnify ::
   Value builtin ->
   Value builtin ->
   m (UnificationResult builtin)
-subUnify info = solve (infoBoundCtx info)
+subUnify info = unify (infoBoundCtx info)
 
 block ::
   (MonadUnify builtin m) =>

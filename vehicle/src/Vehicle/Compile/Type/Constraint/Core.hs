@@ -1,105 +1,30 @@
 module Vehicle.Compile.Type.Constraint.Core
   ( runConstraintSolver,
-    blockOn,
     malformedConstraintError,
     extractHeadFromInstanceCandidate,
     findInstanceGoalHead,
-    parseInstanceGoal,
     createInstanceUnification,
     mkCandidate,
     makeInstanceDatabase,
-    AuxiliaryConstraintProgress (..),
-    handleAuxiliaryConstraintProgress,
+    instantiateInstanceConstraintSolution,
   )
 where
 
 import Data.Bifunctor (Bifunctor (..))
-import Data.Data (Proxy (..))
 import Data.HashMap.Strict (HashMap, fromListWith, mapMaybeWithKey)
 import Data.Hashable (Hashable)
+import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Error
+import Vehicle.Compile.Normalise.NBE (normaliseInEnv)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
 import Vehicle.Compile.Type.Core
-import Vehicle.Compile.Type.Meta (MetaSet)
-import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
+import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
+import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Code.Value
 import Vehicle.Data.DSL
-
--- | Attempts to solve as many constraints as possible. Takes in
--- the set of meta-variables solved since the solver was last run and outputs
--- the set of meta-variables solved during this run.
-runConstraintSolver ::
-  forall builtin m constraint.
-  (MonadTypeChecker builtin m, PrettyExternal (Contextualised constraint (ConstraintContext builtin))) =>
-  Proxy builtin ->
-  m [Contextualised constraint (ConstraintContext builtin)] ->
-  ([Contextualised constraint (ConstraintContext builtin)] -> m ()) ->
-  (Contextualised constraint (ConstraintContext builtin) -> m ()) ->
-  m ()
-runConstraintSolver _ getConstraints setConstraints attemptToSolveConstraint = loop 0
-  where
-    loop :: Int -> m ()
-    loop loopNumber = do
-      unsolvedConstraints <- getConstraints
-      if null unsolvedConstraints
-        then return mempty
-        else do
-          isUnblocked <- getIsUnblockedFn
-
-          case findFirstConstraint isUnblocked unsolvedConstraints of
-            Nothing -> return mempty
-            Just (unblockedConstraint, remainingConstraints) -> do
-              -- We have made useful progress so start a new pass
-              setConstraints remainingConstraints
-
-              logCompilerSection MaxDetail ("trying:" <+> prettyExternal unblockedConstraint) $
-                attemptToSolveConstraint unblockedConstraint
-
-              loop (loopNumber + 1)
-
--- | Find the first constraint satisfying `p` appending all the constraints that don't satisfy it to
--- the end of the list, so we don't search through them again immediately next time.
-findFirstConstraint :: forall a. (a -> Bool) -> [a] -> Maybe (a, [a])
-findFirstConstraint p xs = (\(found, seen, unseen) -> (found, unseen <> seen)) <$> go xs
-  where
-    go :: [a] -> Maybe (a, [a], [a])
-    go = \case
-      [] -> Nothing
-      c : cs
-        | p c -> Just (c, [], cs)
-        | otherwise -> fmap (\(found, seen, unseen) -> (found, c : seen, unseen)) (go cs)
-
-data AuxiliaryConstraintProgress builtin
-  = Stuck MetaSet
-  | Progress [WithContext (UnificationConstraint builtin)] [WithContext (InstanceConstraint builtin)]
-  deriving (Show)
-
-handleAuxiliaryConstraintProgress ::
-  (MonadTypeChecker builtin m) =>
-  Value builtin ->
-  WithContext (InstanceConstraint builtin) ->
-  AuxiliaryConstraintProgress builtin ->
-  m ()
-handleAuxiliaryConstraintProgress solution originalConstraint@(WithContext constraint ctx) = \case
-  Stuck metas -> addAuxiliaryInstanceConstraints [blockConstraintOn originalConstraint metas]
-  Progress newUnificationConstraints newAuxiliaryConstraints -> do
-    solutionConstraint <- createInstanceUnification (ctx, instanceOrigin constraint) solution (instanceSolution constraint)
-    addUnificationConstraints (solutionConstraint : newUnificationConstraints)
-    addAuxiliaryInstanceConstraints newAuxiliaryConstraints
-
-instance Semigroup (AuxiliaryConstraintProgress builtin) where
-  Stuck m1 <> Stuck m2 = Stuck (m1 <> m2)
-  Stuck {} <> x@Progress {} = x
-  x@Progress {} <> Stuck {} = x
-  Progress u1 r1 <> Progress u2 r2 = Progress (u1 <> u2) (r1 <> r2)
-
-blockOn :: (MonadCompile m) => [MetaID] -> Maybe (m (AuxiliaryConstraintProgress builtin))
-blockOn metas = Just $ do
-  logDebug MaxDetail $ "stuck-on metas" <+> pretty metas
-  return $ Stuck $ MetaSet.fromList metas
 
 malformedConstraintError ::
   (PrintableBuiltin builtin, MonadCompile m) =>
@@ -144,20 +69,6 @@ findInstanceGoalHead = \case
   Builtin _ b -> Right b
   expr -> Left expr
 
-parseInstanceGoal ::
-  forall builtin.
-  (PrintableBuiltin builtin) =>
-  Value builtin ->
-  InstanceGoal builtin
-parseInstanceGoal originalValue = go [] originalValue
-  where
-    go :: Telescope builtin -> Value builtin -> InstanceGoal builtin
-    go telescope = \case
-      VPi binder _body
-        | not (isExplicit binder) -> developerError "Instance goals with telescopes not yet supported"
-      VBuiltin b spine -> InstanceGoal telescope b spine
-      _ -> developerError $ "Malformed instance goal" <+> prettyVerbose originalValue
-
 mkCandidate :: (DSLExpr builtin, DSLExpr builtin, Bool) -> InstanceCandidate builtin
 mkCandidate (expr, solution, defaultInstance) = do
   let p = mempty
@@ -179,3 +90,19 @@ makeInstanceDatabase allInstances searchDepth = do
         [] -> Nothing
         [inst] -> Just inst
         _ -> developerError $ "Multiple default instances found for" <+> quotePretty b
+
+instantiateInstanceConstraintSolution ::
+  forall builtin m.
+  (MonadTypeChecker builtin m) =>
+  WithContext (InstanceConstraint builtin) ->
+  Expr builtin ->
+  m ()
+instantiateInstanceConstraintSolution (WithContext (Resolve origin meta _ _) ctx) solution = do
+  metaSubst <- getMetaSubstitution (Proxy @builtin)
+  let boundCtx = boundContextOf ctx
+  case MetaMap.lookup meta metaSubst of
+    Nothing -> solveMeta meta solution boundCtx
+    Just existingSolution -> do
+      normSolution <- normaliseInEnv (boundContextToEnv boundCtx) solution
+      newConstraint <- createInstanceUnification (ctx, origin) normSolution (normalised existingSolution)
+      addUnificationConstraints [newConstraint]

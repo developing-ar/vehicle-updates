@@ -488,7 +488,7 @@ compileBuiltin b args = case b of
     At -> annotateInfixApp [FunctionBase] (-1) Nothing "_$_" args
     If -> annotateInfixApp [DataBool] 0 Nothing "if_then_else_" args
     Foreach -> annotateApp [DataTensor] Nothing "foreach" args
-    StackTensor {} -> unsupportedError
+    StackTensor {} -> annotateApp [DataTensor] Nothing "stack" args
     Iterate -> unsupportedError
     PowRat -> unsupportedError
   DecidabilityBuiltinFunction f -> case f of

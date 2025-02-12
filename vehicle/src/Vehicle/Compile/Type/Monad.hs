@@ -7,6 +7,7 @@ module Vehicle.Compile.Type.Monad
     adoptHypotheticalState,
     -- Meta variables
     freshMetaExpr,
+    freshSolutionMeta,
     getMetaType,
     getMetaCtx,
     getMetaProvenance,
@@ -20,6 +21,7 @@ module Vehicle.Compile.Type.Monad
     prettyMetas,
     substMetas,
     -- Constraints
+    runConstraintSolver,
     copyContext,
     createFreshUnificationConstraint,
     createFreshInstanceConstraint,
@@ -41,15 +43,18 @@ import Control.Monad.Except (MonadError (..), runExceptT)
 import Control.Monad.Trans.Except (ExceptT)
 import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Context.Free
-import Vehicle.Compile.Error (CompileError (..))
+import Vehicle.Compile.Error (CompileError (..), compilerDeveloperError)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Type.Constraint.Core
+import Vehicle.Compile.Print (PrettyExternal, prettyExternal, prettyVerbose)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta (MetaSet)
+import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
+import Vehicle.Compile.Type.Meta.Variable (MetaInfo (..))
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.Monad.Instance
+import Vehicle.Data.Builtin.Interface.Print (PrintableBuiltin)
 import Vehicle.Data.Builtin.Interface.Type (TypableBuiltin (..))
 import Vehicle.Data.Code.Value
 
@@ -97,7 +102,14 @@ freshMetaExpr ::
   m (Expr builtin)
 freshMetaExpr p t boundCtx = do
   let ctx = if useDependentMetas (Proxy @builtin) then boundCtx else mempty
-  freshMeta p t ctx
+  snd <$> freshMeta p t ctx
+
+freshSolutionMeta ::
+  (MonadTypeChecker builtin m) =>
+  Provenance ->
+  Type builtin ->
+  m (MetaID, Expr builtin)
+freshSolutionMeta p t = freshMeta p t mempty
 
 -- | Adds an entirely new unification constraint (as opposed to one
 -- derived from another constraint).
@@ -129,13 +141,13 @@ createFreshApplicationConstraint ::
   m (Expr builtin, Type builtin)
 createFreshApplicationConstraint ctx problem blockingMetas = do
   let p = provenanceOf $ originalFun problem
-  finalType <- freshMetaExpr p (TypeUniverse p 0) ctx
-  finalExpr <- freshMetaExpr p finalType ctx
+  (finalTypeID, finalType) <- freshSolutionMeta p (TypeUniverse p 0)
+  (finalExprID, finalExpr) <- freshSolutionMeta p finalType
 
   let constraint =
         InferArgs
-          { exprSolution = finalExpr,
-            typeSolution = finalType,
+          { exprSolution = finalExprID,
+            typeSolution = finalTypeID,
             argInsertionProblem = problem
           }
 
@@ -158,14 +170,13 @@ createFreshInstanceConstraint ::
   m (Expr builtin)
 createFreshInstanceConstraint auxiliaryConstraint boundCtx p origin relevance tcExpr = do
   let env = boundContextToEnv boundCtx
-  metaExpr <- freshMetaExpr p tcExpr boundCtx
-  normMetaExpr <- normaliseInEnv env metaExpr
+  (metaID, metaExpr) <- freshSolutionMeta p tcExpr
 
   let originProvenance = provenanceOf tcExpr
   context <- createFreshConstraintCtx originProvenance p boundCtx
   nTCExpr <- normaliseInEnv env tcExpr
   let goal = parseInstanceGoal nTCExpr
-  let constraint = WithContext (Resolve origin normMetaExpr relevance goal) context
+  let constraint = WithContext (Resolve origin metaID relevance goal) context
 
   if auxiliaryConstraint
     then addAuxiliaryInstanceConstraints [constraint]
@@ -182,12 +193,122 @@ createDerivedInstanceConstraint ::
   m (Expr builtin, WithContext (InstanceConstraint builtin))
 createDerivedInstanceConstraint (ctx, origin) r t = do
   let p = provenanceOf ctx
-  let boundCtx = boundContext ctx
   let dbLevel = contextDBLevel ctx
   let newTypeClassExpr = quote p dbLevel t
-  metaExpr <- freshMetaExpr p newTypeClassExpr boundCtx
-  normMetaExpr <- normaliseInEnv (boundContextToEnv boundCtx) metaExpr
-  let newConstraint = Resolve origin normMetaExpr r $ parseInstanceGoal t
+  (metaID, metaExpr) <- freshSolutionMeta p newTypeClassExpr
+  let newConstraint = Resolve origin metaID r $ parseInstanceGoal t
 
   newCtx <- copyContext ctx Nothing
   return (metaExpr, WithContext newConstraint newCtx)
+
+parseInstanceGoal ::
+  forall builtin.
+  (PrintableBuiltin builtin) =>
+  Value builtin ->
+  InstanceGoal builtin
+parseInstanceGoal originalValue = go [] originalValue
+  where
+    go :: Telescope builtin -> Value builtin -> InstanceGoal builtin
+    go telescope = \case
+      VPi binder _body
+        | not (isExplicit binder) -> developerError "Instance goals with telescopes not yet supported"
+      VBuiltin b spine -> InstanceGoal telescope b spine
+      _ -> developerError $ "Malformed instance goal" <+> prettyVerbose originalValue
+
+solveMeta ::
+  forall builtin m.
+  (MonadTypeChecker builtin m) =>
+  MetaID ->
+  Expr builtin ->
+  BoundCtx (Type builtin) ->
+  m ()
+solveMeta m solution solutionCtx = do
+  MetaInfo _ _ metaCtx <- getMetaInfo m
+  let abstractedSolution = abstractOverCtx metaCtx solution
+
+  logDebug MaxDetail $
+    "solved"
+      <+> pretty m
+      <+> "as"
+      <+> prettyExternal (WithContext solution (toNamedBoundCtx solutionCtx))
+
+  metaSubst <- getMetaSubstitution (Proxy @builtin)
+  case MetaMap.lookup m metaSubst of
+    Just existing ->
+      compilerDeveloperError $
+        "meta-variable"
+          <+> pretty m
+          <+> "already solved as"
+          <+> line
+          <> indent 2 (squotes (prettyVerbose (unnormalised existing)))
+          <> line
+          <> "but is being re-solved as"
+            <+> line
+          <> indent 2 (squotes (prettyVerbose abstractedSolution))
+          <> line
+          <> "in context" <+> pretty (toNamedBoundCtx solutionCtx)
+    Nothing -> do
+      let env = boundContextToEnv metaCtx
+      gluedSolution <- glueNBE env abstractedSolution
+      modifyMetaCtx $ \TypeCheckerState {..} ->
+        TypeCheckerState
+          { currentSubstitution = MetaMap.insert m gluedSolution currentSubstitution,
+            solvedMetaState = registerSolvedMeta m solvedMetaState,
+            ..
+          }
+
+-- | Ensures the meta has no dependencies on the bound context. Returns true
+-- if dependencies were removed to achieve this.
+removeMetaDependencies :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> MetaID -> m Bool
+removeMetaDependencies _ m = do
+  MetaInfo p t ctx <- getMetaInfo @builtin m
+  if null ctx
+    then return False
+    else do
+      newMeta <- freshMetaExpr p t mempty
+      solveMeta m newMeta mempty
+      return True
+
+-- | Attempts to solve as many constraints as possible. Takes in
+-- the set of meta-variables solved since the solver was last run and outputs
+-- the set of meta-variables solved during this run.
+runConstraintSolver ::
+  forall builtin m constraint.
+  (MonadTypeChecker builtin m, PrettyExternal (Contextualised constraint (ConstraintContext builtin))) =>
+  Proxy builtin ->
+  m [Contextualised constraint (ConstraintContext builtin)] ->
+  ([Contextualised constraint (ConstraintContext builtin)] -> m ()) ->
+  (Contextualised constraint (ConstraintContext builtin) -> m ()) ->
+  m ()
+runConstraintSolver _ getConstraints setConstraints attemptToSolveConstraint = loop 0
+  where
+    loop :: Int -> m ()
+    loop loopNumber = do
+      unsolvedConstraints <- getConstraints
+      if null unsolvedConstraints
+        then return mempty
+        else do
+          isUnblocked <- getIsUnblockedFn
+
+          case findFirstConstraint isUnblocked unsolvedConstraints of
+            Nothing -> return mempty
+            Just (unblockedConstraint, remainingConstraints) -> do
+              -- We have made useful progress so start a new pass
+              setConstraints remainingConstraints
+
+              logCompilerSection MaxDetail ("trying:" <+> prettyExternal unblockedConstraint) $
+                attemptToSolveConstraint unblockedConstraint
+
+              loop (loopNumber + 1)
+
+-- | Find the first constraint satisfying `p` appending all the constraints that don't satisfy it to
+-- the end of the list, so we don't search through them again immediately next time.
+findFirstConstraint :: forall a. (a -> Bool) -> [a] -> Maybe (a, [a])
+findFirstConstraint p xs = (\(found, seen, unseen) -> (found, unseen <> seen)) <$> go xs
+  where
+    go :: [a] -> Maybe (a, [a], [a])
+    go = \case
+      [] -> Nothing
+      c : cs
+        | p c -> Just (c, [], cs)
+        | otherwise -> fmap (\(found, seen, unseen) -> (found, c : seen, unseen)) (go cs)

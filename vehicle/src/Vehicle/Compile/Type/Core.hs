@@ -112,8 +112,8 @@ data ArgInsertionProblem builtin = ArgInsertionProblem
   deriving (Show)
 
 data ApplicationConstraint builtin = InferArgs
-  { typeSolution :: Expr builtin,
-    exprSolution :: Expr builtin,
+  { typeSolution :: MetaID,
+    exprSolution :: MetaID,
     argInsertionProblem :: ArgInsertionProblem builtin
   }
   deriving (Show)
@@ -161,7 +161,7 @@ goalExpr InstanceGoal {..} = VBuiltin goalHead goalSpine
 
 data InstanceConstraint builtin = Resolve
   { instanceOrigin :: InstanceConstraintOrigin builtin,
-    instanceSolution :: Value builtin,
+    instanceSolution :: MetaID,
     instanceRelevance :: Relevance,
     instanceGoal :: InstanceGoal builtin
   }

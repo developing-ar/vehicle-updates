@@ -220,7 +220,7 @@ freshMeta ::
   Provenance ->
   Type builtin ->
   BoundCtx (Type builtin) ->
-  m (Expr builtin)
+  m (MetaID, Expr builtin)
 freshMeta p metaType boundCtx = do
   -- Create a fresh id for the meta
   TypeCheckerState {..} <- getMetaState
@@ -241,19 +241,7 @@ freshMeta p metaType boundCtx = do
       <+> prettyFriendly (WithContext metaExpr (toNamedBoundCtx boundCtx))
       <+> ":"
       <+> prettyVerbose metaType
-  return metaExpr
-
--- | Ensures the meta has no dependencies on the bound context. Returns true
--- if dependencies were removed to achieve this.
-removeMetaDependencies :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> MetaID -> m Bool
-removeMetaDependencies _ m = do
-  MetaInfo p t ctx <- getMetaInfo @builtin m
-  if null ctx
-    then return False
-    else do
-      newMeta <- freshMeta p t mempty
-      solveMeta m newMeta mempty
-      return True
+  return (metaID, metaExpr)
 
 --------------------------------------------------------------------------------
 -- Meta information retrieval
@@ -345,48 +333,6 @@ abstractOverCtx ctx body = do
   -- then actualy using `t` here results in meta-substitution looping.
   let lam binder = Lam p (Binder p (lamBinderForm (nameOf binder)) Explicit (relevanceOf binder) (TypeUniverse p 0))
   foldr lam body (reverse ctx)
-
-solveMeta ::
-  forall builtin m.
-  (MonadTypeChecker builtin m) =>
-  MetaID ->
-  Expr builtin ->
-  BoundCtx (Type builtin) ->
-  m ()
-solveMeta m solution solutionCtx = do
-  MetaInfo _ _ metaCtx <- getMetaInfo m
-  let abstractedSolution = abstractOverCtx metaCtx solution
-
-  logDebug MaxDetail $
-    "solved"
-      <+> pretty m
-      <+> "as"
-      <+> prettyExternal (WithContext solution (toNamedBoundCtx solutionCtx))
-
-  metaSubst <- getMetaSubstitution (Proxy @builtin)
-  case MetaMap.lookup m metaSubst of
-    Just existing ->
-      compilerDeveloperError $
-        "meta-variable"
-          <+> pretty m
-          <+> "already solved as"
-          <+> line
-          <> indent 2 (squotes (prettyVerbose (unnormalised existing)))
-          <> line
-          <> "but is being re-solved as"
-            <+> line
-          <> indent 2 (squotes (prettyVerbose abstractedSolution))
-          <> line
-          <> "in context" <+> pretty (toNamedBoundCtx solutionCtx)
-    Nothing -> do
-      let env = boundContextToEnv metaCtx
-      gluedSolution <- glueNBE env abstractedSolution
-      modifyMetaCtx $ \TypeCheckerState {..} ->
-        TypeCheckerState
-          { currentSubstitution = MetaMap.insert m gluedSolution currentSubstitution,
-            solvedMetaState = registerSolvedMeta m solvedMetaState,
-            ..
-          }
 
 prettyMetas :: forall builtin m a. (MonadTypeChecker builtin m) => Proxy builtin -> MetaSet -> m (Doc a)
 prettyMetas _ metas = do

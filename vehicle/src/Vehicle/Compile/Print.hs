@@ -512,9 +512,8 @@ instance
   PrettyUsing rest (InstanceConstraint builtin `In` ConstraintContext builtin)
   where
   prettyUsing (Resolve _ solution _ goal, ctx) = do
-    let nameCtx = namedBoundCtxOf ctx
-    let solution' = prettyUsing @rest (solution, nameCtx)
-    let expr' = prettyUsing @rest (goalExpr goal, nameCtx)
+    let solution' = pretty solution
+    let expr' = prettyUsing @rest (goalExpr goal, namedBoundCtxOf ctx)
     prettyConstraintContext ctx <+> solution' <+> "<=" <+> expr'
 
 instance
@@ -526,8 +525,8 @@ instance
   prettyUsing (InferArgs {..}, ctx) = do
     let nameCtx = namedBoundCtxOf ctx
     let problemDoc = prettyUsing @rest (argInsertionProblem, nameCtx)
-    let exprDoc = prettyUsing @rest (exprSolution, nameCtx)
-    let typeDoc = prettyUsing @rest (typeSolution, nameCtx)
+    let exprDoc = pretty exprSolution
+    let typeDoc = pretty typeSolution
     prettyConstraintContext ctx <+> parens (exprDoc <+> "=" <+> problemDoc) <+> ":" <+> typeDoc
 
 instance

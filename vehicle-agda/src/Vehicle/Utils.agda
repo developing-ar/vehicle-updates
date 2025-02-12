@@ -6,10 +6,11 @@
 {-# OPTIONS --allow-exec #-}
 
 open import Algebra.Core using (Op₂)
-open import Level using (Level)
-open import Data.Bool.Base using (T; Bool; if_then_else_; not; _∨_)
+open import Level using (Level; 0ℓ)
+open import Data.Bool.Base using (T; Bool; true; false; _∧_; if_then_else_; not; _∨_)
 open import Data.Char.Properties using (_≟_)
 open import Data.String using (String; _++_; lines; toList)
+open import Data.Integer.Base as ℤ using (ℤ; +_; -[1+_])
 open import Data.Nat.Base as ℕ using (ℕ; suc)
 open import Data.Vec.Base using (Vec; []; _∷_)
 open import Data.Vec.Functional as Vector using (Vector)
@@ -19,7 +20,7 @@ open import Data.Float.Base using (Float; _≤ᵇ_)
 open import Data.List.Base using ([]; _∷_)
 open import Data.List.Relation.Binary.Infix.Heterogeneous.Properties using (infix?)
 open import Data.Unit.Base using (⊤; tt)
-open import Data.Rational.Base as ℚ using (ℚ)
+open import Data.Rational.Base as ℚ using (ℚ; ↥_; ↧_)
 open import Relation.Nullary using (does)
 open import Relation.Binary.Core using (Rel)
 
@@ -27,12 +28,23 @@ module Vehicle.Utils where
 
 _⇒_ : Op₂ Bool
 x ⇒ y = not x ∨ y
-
+{-
 _≤_ :  Rel Float _
 x ≤ y = T (x ≤ᵇ y)
-
+-}
 _⊆_ : String → String → Bool
 s ⊆ t = does (infix? _≟_ (toList s) (toList t))
+
+infix  4 _ℤ<ᵇ_ _ℚ<ᵇ_
+
+_ℤ<ᵇ_ : ℤ → ℤ → Bool
++ n ℤ<ᵇ + m = n ℕ.<ᵇ m
++ n ℤ<ᵇ -[1+ m ] = false
+-[1+ n ] ℤ<ᵇ + m = true
+-[1+ n ] ℤ<ᵇ -[1+ m ] = m ℕ.<ᵇ n
+
+_ℚ<ᵇ_ : ℚ → ℚ → Bool
+p ℚ<ᵇ q = (↥ p ℤ.* ↧ q) ℤ<ᵇ (↥ q ℤ.* ↧ p)
 
 record HasAdd {a} (A : Set a) : Set a where
   constructor hasAdd
