@@ -10,7 +10,7 @@ module Vehicle.Compile.Type.Meta.Variable
   )
 where
 
-import Control.Monad.Writer (MonadWriter (..), execWriterT)
+import Control.Monad.Writer (MonadWriter (..), execWriter)
 import Data.Bifunctor (Bifunctor (..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
@@ -93,10 +93,10 @@ getNormMetaDependencies = \case
 -- Objects which have meta variables in.
 
 class HasMetas a where
-  findMetas :: (MonadLogger m, MonadWriter MetaSet m) => a -> m ()
+  findMetas :: (MonadWriter MetaSet m) => a -> m ()
 
-  metasIn :: (MonadLogger m) => a -> m MetaSet
-  metasIn e = execWriterT (findMetas e)
+  metasIn :: a -> MetaSet
+  metasIn e = execWriter (findMetas e)
 
 instance HasMetas (Expr builtin) where
   findMetas expr = case expr of

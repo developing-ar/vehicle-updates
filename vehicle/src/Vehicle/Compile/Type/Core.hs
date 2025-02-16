@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Vehicle.Compile.Type.Core where
@@ -45,7 +46,13 @@ isStillBlocked solvedMetas (BlockingStatus status) =
 --------------------------------------------------------------------------------
 -- Constraint contexts
 
-type ConstraintID = Int
+newtype ConstraintID = ConstraintID
+  { unConstraintID :: Int
+  }
+  deriving (Show, Ord, Eq, Num)
+
+instance Pretty ConstraintID where
+  pretty (ConstraintID cid) = "#" <> pretty cid
 
 data ConstraintContext builtin = ConstraintContext
   { -- | The id for the constraint, used primarily for logging purposes.

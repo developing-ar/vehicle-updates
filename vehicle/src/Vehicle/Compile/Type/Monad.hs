@@ -13,7 +13,6 @@ module Vehicle.Compile.Type.Monad
     getMetaProvenance,
     getUnsolvedMetas,
     solveMeta,
-    extendBoundCtxOfMeta,
     removeMetaDependencies,
     getMetasLinkedToMetasIn,
     trackSolvedMetas,
@@ -36,11 +35,15 @@ module Vehicle.Compile.Type.Monad
     -- Other
     clearMetaCtx,
     glueNBE,
+    logUnsolvedUnknowns,
+    findFirstConstraint,
   )
 where
 
+import Control.Monad (when)
 import Control.Monad.Except (MonadError (..), runExceptT)
 import Control.Monad.Trans.Except (ExceptT)
+import Data.List (partition, sortOn)
 import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Context.Free
 import Vehicle.Compile.Error (CompileError (..), compilerDeveloperError)
@@ -51,6 +54,7 @@ import Vehicle.Compile.Print (PrettyExternal, prettyExternal, prettyVerbose)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
+import Vehicle.Compile.Type.Meta.Substitution qualified as MetaSubstitution
 import Vehicle.Compile.Type.Meta.Variable (MetaInfo (..))
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.Monad.Instance
@@ -78,7 +82,7 @@ runTypeCheckerTHypothetically e = do
   callDepth <- getCallDepth
   freeCtx <- getFreeCtx (Proxy @builtin)
   instanceCandidates <- getInstanceCandidates
-  state <- getMetaState
+  state <- getTypeCheckerState
   result <- runExceptT $ runTypeCheckerT freeCtx instanceCandidates state e
   case result of
     Right value -> return $ Right value
@@ -91,7 +95,7 @@ runTypeCheckerTHypothetically e = do
 
 -- | Accepts the hypothetical outcome of the type-checker.
 adoptHypotheticalState :: (MonadTypeChecker builtin m) => TypeCheckerState builtin -> m ()
-adoptHypotheticalState = modifyMetaCtx . const
+adoptHypotheticalState = modifyTypeCheckerState . const
 
 freshMetaExpr ::
   forall builtin m.
@@ -223,15 +227,6 @@ solveMeta ::
   BoundCtx (Type builtin) ->
   m ()
 solveMeta m solution solutionCtx = do
-  MetaInfo _ _ metaCtx <- getMetaInfo m
-  let abstractedSolution = abstractOverCtx metaCtx solution
-
-  logDebug MaxDetail $
-    "solved"
-      <+> pretty m
-      <+> "as"
-      <+> prettyExternal (WithContext solution (toNamedBoundCtx solutionCtx))
-
   metaSubst <- getMetaSubstitution (Proxy @builtin)
   case MetaMap.lookup m metaSubst of
     Just existing ->
@@ -244,13 +239,25 @@ solveMeta m solution solutionCtx = do
           <> line
           <> "but is being re-solved as"
             <+> line
-          <> indent 2 (squotes (prettyVerbose abstractedSolution))
+          <> indent 2 (squotes (prettyVerbose solution))
           <> line
           <> "in context" <+> pretty (toNamedBoundCtx solutionCtx)
     Nothing -> do
-      let env = boundContextToEnv metaCtx
+      MetaInfo _ _ metaCtx <- getMetaInfo m
+      let abstractedSolution = abstractOverCtx metaCtx solution
+
+      let env = boundContextToEnv solutionCtx
+
+      logDebug MaxDetail $
+        "solved"
+          <+> pretty m
+          <+> "as"
+          <+> prettyExternal (WithContext solution (toNamedBoundCtx solutionCtx))
+      -- <+> prettyExternal (WithContext abstractedSolution (toNamedBoundCtx solutionCtx))
+      -- <+> prettyVerbose solutionCtx
+
       gluedSolution <- glueNBE env abstractedSolution
-      modifyMetaCtx $ \TypeCheckerState {..} ->
+      modifyTypeCheckerState $ \TypeCheckerState {..} ->
         TypeCheckerState
           { currentSubstitution = MetaMap.insert m gluedSolution currentSubstitution,
             solvedMetaState = registerSolvedMeta m solvedMetaState,
@@ -261,13 +268,14 @@ solveMeta m solution solutionCtx = do
 -- if dependencies were removed to achieve this.
 removeMetaDependencies :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> MetaID -> m Bool
 removeMetaDependencies _ m = do
-  MetaInfo p t ctx <- getMetaInfo @builtin m
-  if null ctx
-    then return False
-    else do
-      newMeta <- freshMetaExpr p t mempty
-      solveMeta m newMeta mempty
-      return True
+  logCompilerPass MaxDetail ("removing dependencies of meta" <+> pretty m) $ do
+    MetaInfo p t ctx <- getMetaInfo @builtin m
+    if null ctx
+      then return False
+      else do
+        newMeta <- freshMetaExpr p t mempty
+        solveMeta m newMeta mempty
+        return True
 
 -- | Attempts to solve as many constraints as possible. Takes in
 -- the set of meta-variables solved since the solver was last run and outputs
@@ -275,12 +283,19 @@ removeMetaDependencies _ m = do
 runConstraintSolver ::
   forall builtin m constraint.
   (MonadTypeChecker builtin m, PrettyExternal (Contextualised constraint (ConstraintContext builtin))) =>
-  Proxy builtin ->
   m [Contextualised constraint (ConstraintContext builtin)] ->
   ([Contextualised constraint (ConstraintContext builtin)] -> m ()) ->
   (Contextualised constraint (ConstraintContext builtin) -> m ()) ->
+  Bool ->
+  Proxy builtin ->
   m ()
-runConstraintSolver _ getConstraints setConstraints attemptToSolveConstraint = loop 0
+runConstraintSolver getConstraints setConstraints attemptToSolveConstraint topLevel proxy = do
+  unsolvedConstraints <- getConstraints
+  if null unsolvedConstraints
+    then logDebug MaxDetail "No constraints found"
+    else do
+      when topLevel $ logUnsolvedUnknowns proxy
+      loop 0
   where
     loop :: Int -> m ()
     loop loopNumber = do
@@ -300,6 +315,56 @@ runConstraintSolver _ getConstraints setConstraints attemptToSolveConstraint = l
                 attemptToSolveConstraint unblockedConstraint
 
               loop (loopNumber + 1)
+
+logUnsolvedUnknowns :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m ()
+logUnsolvedUnknowns proxy = do
+  logDebugM MaxDetail $ do
+    maybeDecl <- getCurrentDecl
+    newSubstitution <- getMetaSubstitution proxy
+    updatedSubst <- substMetas newSubstitution
+
+    unsolvedMetas <- getUnsolvedMetas proxy
+    unsolvedMetasDoc <- prettyMetas proxy unsolvedMetas
+    unsolvedConstraints <- getActiveConstraints @builtin
+
+    isUnblocked <- getIsUnblockedFn
+    let (unblockedConstraints, blockedConstraints) = partition isUnblocked unsolvedConstraints
+    let constraintsDoc =
+          "unsolved-blocked-constraints:"
+            <> line
+            <> indent 2 (prettyConstraints blockedConstraints)
+            <> line
+            <> "unsolved-unblocked-constraints:"
+            <> line
+            <> indent 2 (prettyConstraints unblockedConstraints)
+            <> line
+
+    updatedDecl <- traverse (MetaSubstitution.subst updatedSubst) maybeDecl
+    let declDoc = case updatedDecl of
+          Nothing -> ""
+          Just decl ->
+            "current-decl:"
+              <> line
+              <> indent 2 (prettyExternal decl)
+              <> line
+
+    return $
+      "current-solution:"
+        <> line
+        <> indent 2 (prettyVerbose (fmap unnormalised updatedSubst))
+        <> line
+        <> "unsolved-metas:"
+        <> line
+        <> indent 2 unsolvedMetasDoc
+        <> line
+        <> constraintsDoc
+        <> declDoc
+
+prettyConstraints :: (PrintableBuiltin builtin) => [WithContext (Constraint builtin)] -> Doc a
+prettyConstraints constraints = do
+  let sortedConstraints = sortOn (constraintID . contextOf) constraints
+  let pairs = fmap (\c -> prettyExternal c <> "   " <> pretty (blockedBy $ contextOf c)) sortedConstraints
+  prettySetLike pairs
 
 -- | Find the first constraint satisfying `p` appending all the constraints that don't satisfy it to
 -- the end of the list, so we don't search through them again immediately next time.

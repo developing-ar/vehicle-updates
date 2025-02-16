@@ -1,6 +1,7 @@
 module Vehicle.Compile.Type.System where
 
 import Data.Hashable (Hashable)
+import Data.Proxy (Proxy)
 import Vehicle.Compile.Context.Free (MonadFreeContext)
 import Vehicle.Compile.Error (MonadCompile)
 import Vehicle.Compile.Normalise.Quote (Quote (..))
@@ -42,7 +43,7 @@ class (Eq builtin, Hashable builtin, NormalisableBuiltin builtin, TypableBuiltin
 
   generateDefaultAuxiliaryConstraint ::
     (MonadTypeChecker builtin m) =>
-    Maybe (Decl builtin) ->
+    Proxy builtin ->
     m Bool
 
   isAuxiliaryConstraint ::
@@ -54,6 +55,17 @@ class (Eq builtin, Hashable builtin, NormalisableBuiltin builtin, TypableBuiltin
     (MonadTypeChecker builtin m, MonadFreeContext builtin m) =>
     WithContext (InstanceConstraint builtin) ->
     m ()
+
+-- | Attempts to solve as many type-class constraints as possible.
+runAuxiliarySolver :: forall builtin m. (TCM builtin m) => Proxy builtin -> m ()
+runAuxiliarySolver proxy = do
+  logCompilerPass MaxDetail "auxiliary solver run" $
+    runConstraintSolver @builtin
+      getActiveAuxiliaryInstanceConstraints
+      setAuxiliaryInstanceConstraints
+      solveAuxiliaryInstanceConstraint
+      False
+      proxy
 
 -----------------------------------------------------------------------------
 -- Standard builtins

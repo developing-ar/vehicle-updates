@@ -36,11 +36,11 @@ instance (PrintableBuiltin builtin) => Pretty (DefaultCandidate builtin) where
 addNewInstanceConstraintUsingDefaults ::
   forall builtin m.
   (MonadTypeChecker builtin m, Hashable builtin) =>
-  Maybe (Decl builtin) ->
+  Proxy builtin ->
   m Bool
-addNewInstanceConstraintUsingDefaults maybeDecl = do
+addNewInstanceConstraintUsingDefaults proxy = do
   instanceConstraints <- getActiveInstanceConstraints @builtin
-  defaultableConstraints <- getDefaultableConstraints maybeDecl instanceConstraints
+  defaultableConstraints <- getDefaultableConstraints proxy instanceConstraints
   result <- chooseDefaultConstraint defaultableConstraints
   case result of
     Just candidate -> do
@@ -51,10 +51,11 @@ addNewInstanceConstraintUsingDefaults maybeDecl = do
 getDefaultableConstraints ::
   forall constraint ctx builtin m.
   (MonadInstanceDefault builtin m, HasMetas constraint, PrettyVerbose (Contextualised constraint ctx `In` NoCtx)) =>
-  Maybe (Decl builtin) ->
+  Proxy builtin ->
   [Contextualised constraint ctx] ->
   m [Contextualised constraint ctx]
-getDefaultableConstraints maybeDecl possibleConstraints = do
+getDefaultableConstraints proxy possibleConstraints = do
+  maybeDecl <- getCurrentDecl @builtin
   result <- case maybeDecl of
     Just decl | not (isAbstractDecl decl) -> do
       -- We only want to generate default solutions for constraints
@@ -66,11 +67,11 @@ getDefaultableConstraints maybeDecl possibleConstraints = do
       typeMetas <- getMetasLinkedToMetasIn constraints declType
 
       logDebugM MaxDetail $ do
-        unsolvedMetasInTypeDoc <- prettyMetas (Proxy @builtin) typeMetas
+        unsolvedMetasInTypeDoc <- prettyMetas proxy typeMetas
         return $ "Metas transitively related to type-signature:" <+> line <> indent 2 unsolvedMetasInTypeDoc
 
       flip filterM possibleConstraints $ \tc -> do
-        constraintMetas <- metasIn (objectIn tc)
+        let constraintMetas = metasIn (objectIn tc)
         return $ MetaSet.disjoint constraintMetas typeMetas
     _ -> return possibleConstraints
 
@@ -109,10 +110,11 @@ findDefault database constraint = do
     Nothing -> Nothing
 
 acceptDefaultCandidate ::
+  forall builtin m.
   (MonadInstanceDefault builtin m) =>
   DefaultCandidate builtin ->
   m ()
 acceptDefaultCandidate c@(DefaultCandidate (constraint, goal, candidate)) = do
   logDebug MaxDetail $ "using default" <+> pretty c
-  removeInstanceConstraint constraint
+  _ <- removeInstanceConstraint (Proxy @builtin) (constraintID $ contextOf constraint)
   acceptCandidate constraint goal (WithContext candidate (boundContextOf $ contextOf constraint))

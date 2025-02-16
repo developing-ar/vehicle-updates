@@ -170,6 +170,14 @@ listOrd leq (x : xs) (y : ys) = le || (eq && listOrd leq xs ys)
     le = leq x y && not (leq y x)
     eq = leq x y && leq y x
 
+findAndDeleteElem :: (a -> Bool) -> [a] -> Maybe (a, [a])
+findAndDeleteElem p = go id
+  where
+    go _ [] = Nothing
+    go prefix (x : xs)
+      | p x = Just (x, prefix xs)
+      | otherwise = go (prefix . (x :)) xs
+
 -- | Used to distinguish between inputs and outputs of neural networks.
 data InputOrOutput
   = Input

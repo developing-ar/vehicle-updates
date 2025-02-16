@@ -2,6 +2,7 @@
 
 module Vehicle.Data.Builtin.Standard.Type () where
 
+import Data.Proxy (Proxy)
 import Vehicle.Compile.Context.Free (getFreeEnv)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Constraint.InstanceDefaultSolver
@@ -184,10 +185,10 @@ restrictStandardDeclType declSort (ident, p) typ = do
 -- | Tries to add new unification constraints using default values.
 addNewStandardAuxiliaryConstraintUsingDefaults ::
   (MonadTypeChecker Builtin m) =>
-  Maybe (Decl Builtin) ->
+  Proxy Builtin ->
   m Bool
-addNewStandardAuxiliaryConstraintUsingDefaults maybeDecl = do
+addNewStandardAuxiliaryConstraintUsingDefaults proxy = do
   -- Calculate the set of candidate constraints
   auxiliaryConstraints <- getActiveAuxiliaryInstanceConstraints
-  defaultableConstraints <- getDefaultableConstraints maybeDecl auxiliaryConstraints
+  defaultableConstraints <- getDefaultableConstraints proxy auxiliaryConstraints
   solveDefaultIndexConstraints defaultableConstraints

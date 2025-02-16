@@ -494,7 +494,7 @@ instance
 
 prettyConstraintContext :: ConstraintContext builtin -> Doc a
 prettyConstraintContext ctx =
-  "#" <> pretty (constraintID ctx) <> ". " -- <+> pretty ctx
+  pretty (constraintID ctx) <> ". " -- <+> pretty ctx
 
 instance
   (PrettyUsing rest (Value builtin `In` NamedBoundCtx)) =>
@@ -514,7 +514,7 @@ instance
   prettyUsing (Resolve _ solution _ goal, ctx) = do
     let solution' = pretty solution
     let expr' = prettyUsing @rest (goalExpr goal, namedBoundCtxOf ctx)
-    prettyConstraintContext ctx <+> solution' <+> "<=" <+> expr'
+    prettyConstraintContext ctx <+> solution' <+> "<=" <+> expr' <+> pretty (namedBoundCtxOf ctx)
 
 instance
   ( PrettyUsing rest (Expr builtin `In` NamedBoundCtx),

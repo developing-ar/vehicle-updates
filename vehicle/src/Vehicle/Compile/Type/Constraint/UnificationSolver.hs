@@ -40,14 +40,15 @@ import Vehicle.Data.DeBruijn
 -- for an excellent tutorial on the algorithm.
 
 -- | Attempts to solve as many unification constraints as possible.
-runUnificationSolver :: (MonadTypeChecker builtin m) => Proxy builtin -> m ()
-runUnificationSolver proxy =
+runUnificationSolver :: (MonadTypeChecker builtin m) => Proxy builtin -> Bool -> m ()
+runUnificationSolver proxy topLevel =
   logCompilerPass MaxDetail "unification solver run" $
     runConstraintSolver
-      proxy
       getActiveUnificationConstraints
       setUnificationConstraints
       solveUnificationConstraint
+      topLevel
+      proxy
 
 --------------------------------------------------------------------------------
 -- Unification algorithm
@@ -122,7 +123,8 @@ unify ctx e1 e2 = do
 
   -- Perform the unification
   let prettyExpr e = prettyExternal (WithContext e namedCtx)
-  logIndent MaxDetail ("unifying" <+> prettyExpr ne1 <+> "~" <+> prettyExpr ne2) $ do
+  let passDoc = "unifying" <+> prettyExpr ne1 <+> "~" <+> prettyExpr ne2 -- <+> "in context" <+> prettyVerbose ctx
+  logIndent MaxDetail passDoc $ do
     unification constraintInfo (ne1, ne2)
 
 instance Semigroup (UnificationResult builtin) where
@@ -328,7 +330,8 @@ pruneMetaDependencies ctx (solvingMetaID, solvingMetaSpine) attemptedSolution = 
         | otherwise -> do
             metaSubst <- getMetaSubstitution (Proxy @builtin)
             case MetaMap.lookup m metaSubst of
-              Just solution -> go =<< normaliseApp (normalised solution) spine
+              Just solution -> do
+                go =<< normaliseApp (normalised solution) spine
               Nothing -> do
                 let (deps, _) = getNormMetaDependencies solvingMetaSpine
                 let (jDeps, _) = getNormMetaDependencies spine

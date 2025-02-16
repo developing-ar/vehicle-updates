@@ -83,9 +83,6 @@ solveOp2Linearity shortCircuitLHS shortCircuitRHS combine info@(ctx, _) [lin1, l
     (VLinearityExpr l1, VLinearityExpr l2) -> Just $ do
       let p = originalProvenance ctx
       let linRes = VLinearityExpr $ combine p l1 l2
-      logDebug MaxDetail $ pretty $ show l1
-      logDebug MaxDetail $ pretty $ show l2
-      logDebug MaxDetail $ pretty $ show $ combine p l1 l2
       resEq <- createInstanceUnification info res linRes
       return $ Progress [resEq] []
     (VLinearityExpr Constant, _)

@@ -35,12 +35,13 @@ runInstanceSolver ::
   InstanceSearchDepth ->
   m ()
 runInstanceSolver proxy depth = do
-  logCompilerPass MaxDetail ("instance solver run" <> line) $
+  logCompilerPass MaxDetail "instance solver run" $
     runConstraintSolver
-      proxy
       getActiveInstanceConstraints
       setInstanceConstraints
       (solveInstanceConstraint depth)
+      False
+      proxy
 
 --------------------------------------------------------------------------------
 -- Algorithm
@@ -166,7 +167,7 @@ checkCandidate constraint goal depth candidate = do
 
       -- Run the solvers to check for conflicts
       let proxy = Proxy @builtin
-      runUnificationSolver proxy
+      runUnificationSolver proxy False
       if depth == 0
         then return mempty
         else runInstanceSolver proxy (depth - 1)

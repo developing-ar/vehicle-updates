@@ -103,6 +103,8 @@ instantiateInstanceConstraintSolution (WithContext (Resolve origin meta _ _) ctx
   case MetaMap.lookup meta metaSubst of
     Nothing -> solveMeta meta solution boundCtx
     Just existingSolution -> do
+      logDebug MaxDetail ("solved" <+> pretty meta <+> "as" <+> prettyVerbose solution)
+      logDebug MaxDetail (indent 2 ("however" <+> pretty meta <+> "=" <+> prettyVerbose (unnormalised existingSolution) <+> "already so unifying"))
       normSolution <- normaliseInEnv (boundContextToEnv boundCtx) solution
       newConstraint <- createInstanceUnification (ctx, origin) normSolution (normalised existingSolution)
       addUnificationConstraints [newConstraint]

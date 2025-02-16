@@ -80,8 +80,8 @@ instance (PrintableBuiltin builtin, MonadCompile m) => MonadFreeContext builtin 
   getFreeCtx = TypeCheckerT . getFreeCtx
 
 instance (Eq builtin, Hashable builtin, PrintableBuiltin builtin, NormalisableBuiltin builtin, TypableBuiltin builtin, MonadCompile m) => MonadTypeChecker builtin (TypeCheckerT builtin m) where
-  getMetaState = TypeCheckerT get
-  modifyMetaCtx f = TypeCheckerT $ modify f
+  getTypeCheckerState = TypeCheckerT get
+  modifyTypeCheckerState f = TypeCheckerT $ modify f
   getFreshName typ = TypeCheckerT $ getFreshNameInternal typ
   clearFreshNames _ = TypeCheckerT clearFreshNamesInternal
   getInstanceCandidates = TypeCheckerT ask
