@@ -7,15 +7,9 @@ import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as Map (findWithDefault, lookup)
 import Data.Hashable (Hashable)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Type.Meta.Map (MetaMap (..))
 import Vehicle.Compile.Type.Meta.Set (MetaSet)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
 import Vehicle.Data.Code.Value
-
---------------------------------------------------------------------------------
--- Meta variable substitution
-
-type MetaSubstitution builtin = MetaMap (GluedExpr builtin)
 
 --------------------------------------------------------------------------------
 -- Constraints

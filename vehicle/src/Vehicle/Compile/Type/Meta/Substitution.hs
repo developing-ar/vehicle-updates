@@ -1,5 +1,6 @@
 module Vehicle.Compile.Type.Meta.Substitution
   ( MetaSubstitutable,
+    MetaSubstitution,
     subst,
   )
 where
@@ -16,6 +17,8 @@ import Vehicle.Data.Code.Value
 
 --------------------------------------------------------------------------------
 -- Substitution operation
+
+type MetaSubstitution builtin = MetaMap (GluedExpr builtin)
 
 class MetaSubstitutable m builtin a | a -> builtin where
   -- | Substitutes meta-variables through the provided object, returning the
@@ -36,6 +39,9 @@ instance (MetaSubstitutable m builtin a) => MetaSubstitutable m builtin [a] wher
   subst s = traverse (subst s)
 
 instance (MetaSubstitutable m builtin a) => MetaSubstitutable m builtin (NonEmpty a) where
+  subst s = traverse (subst s)
+
+instance (MetaSubstitutable m builtin a) => MetaSubstitutable m builtin (Maybe a) where
   subst s = traverse (subst s)
 
 instance (MetaSubstitutable m builtin a) => MetaSubstitutable m builtin (GenericArg a) where
@@ -176,4 +182,4 @@ instance (MetaSubstitutable m builtin a) => MetaSubstitutable m builtin (MetaMap
   subst s (MetaMap t) = MetaMap <$> traverse (subst s) t
 
 instance MetaSubstitutable m builtin (MetaInfo builtin) where
-  subst s (MetaInfo p t ctx) = MetaInfo p <$> subst s t <*> pure ctx
+  subst s (MetaInfo p t ctx sol) = MetaInfo p <$> subst s t <*> pure ctx <*> subst s sol

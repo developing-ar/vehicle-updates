@@ -21,13 +21,14 @@ import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta
   ( HasMetas (..),
     MetaInfo (..),
-    extendMetaCtx,
+    MetaVariableContext,
+    findMetaInfo,
     makeMetaExpr,
   )
 import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
 import Vehicle.Compile.Type.Meta.Set (MetaSet)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
-import Vehicle.Compile.Type.Meta.Substitution as MetaSubstitution (MetaSubstitutable (..))
+import Vehicle.Compile.Type.Meta.Substitution as MetaSubstitution (MetaSubstitutable (..), MetaSubstitution)
 import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Interface.Type
@@ -72,9 +73,8 @@ type FreshNameState = Int
 data TypeCheckerState builtin = TypeCheckerState
   { -- | The origin and type of each meta variable.
     -- NB: these are stored in *reverse* order from which they were created.
-    metaInfo :: [MetaInfo builtin],
+    metaVariableCtx :: MetaVariableContext builtin,
     currentDecl :: Maybe (Decl builtin),
-    currentSubstitution :: MetaSubstitution builtin,
     applicationConstraints :: [WithContext (ApplicationConstraint builtin)],
     unificationConstraints :: [WithContext (UnificationConstraint builtin)],
     instanceConstraints :: [WithContext (InstanceConstraint builtin)],
@@ -88,9 +88,8 @@ data TypeCheckerState builtin = TypeCheckerState
 emptyTypeCheckerState :: TypeCheckerState builtin
 emptyTypeCheckerState =
   TypeCheckerState
-    { metaInfo = mempty,
+    { metaVariableCtx = mempty,
       currentDecl = Nothing,
-      currentSubstitution = mempty,
       applicationConstraints = mempty,
       unificationConstraints = mempty,
       instanceConstraints = mempty,
@@ -153,7 +152,7 @@ getsMetaCtx :: (MonadTypeChecker builtin m) => (TypeCheckerState builtin -> a) -
 getsMetaCtx f = f <$> getTypeCheckerState
 
 getNumberOfMetasCreated :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m Int
-getNumberOfMetasCreated _ = getsMetaCtx @builtin (length . metaInfo)
+getNumberOfMetasCreated _ = getsMetaCtx @builtin (length . metaVariableCtx)
 
 -- | Track the metas solved while performing the provided computation.
 -- Multiple calls can be nested arbitrarily deepily.
@@ -180,7 +179,7 @@ getMetaSubstitution ::
   (MonadTypeChecker builtin m) =>
   Proxy builtin ->
   m (MetaSubstitution builtin)
-getMetaSubstitution _ = currentSubstitution <$> getTypeCheckerState
+getMetaSubstitution _ = MetaMap.mapMaybe metaSolution . metaVariableCtx <$> getTypeCheckerState
 
 getIsUnblockedFn ::
   forall builtin m constraint.
@@ -226,17 +225,22 @@ freshMeta ::
 freshMeta p metaType boundCtx = do
   -- Create a fresh id for the meta
   TypeCheckerState {..} <- getTypeCheckerState
-  let nextMetaID = length metaInfo
+  let nextMetaID = length metaVariableCtx
   let metaID = MetaID nextMetaID
 
   -- Construct the information about the meta-variable
-  let info = MetaInfo p metaType boundCtx
+  let info = MetaInfo p metaType boundCtx Nothing
 
   -- Update the meta context
-  modifyTypeCheckerState $ const $ TypeCheckerState {metaInfo = info : metaInfo, ..}
+  modifyTypeCheckerState $
+    const $
+      TypeCheckerState
+        { metaVariableCtx = MetaMap.insert metaID info metaVariableCtx,
+          ..
+        }
 
   -- Create the expression
-  let metaExpr = makeMetaExpr p metaID boundCtx
+  metaExpr <- makeMetaExpr p metaID boundCtx
 
   logDebug MaxDetail $
     "fresh-meta"
@@ -248,18 +252,10 @@ freshMeta p metaType boundCtx = do
 --------------------------------------------------------------------------------
 -- Meta information retrieval
 
-findMetaInfo :: [MetaInfo builtin] -> MetaID -> MetaInfo builtin
-findMetaInfo metaInfo meta =
-  case metaInfo !!? getMetaIndex metaInfo meta of
-    Just info -> info
-    Nothing ->
-      developerError $
-        "Requesting info for unknown meta" <+> pretty meta <+> "not in context"
-
 getMetaInfo :: (MonadTypeChecker builtin m) => MetaID -> m (MetaInfo builtin)
 getMetaInfo meta = do
   TypeCheckerState {..} <- getTypeCheckerState
-  return $ findMetaInfo metaInfo meta
+  return $ findMetaInfo metaVariableCtx meta
 
 getMetaIndex :: [MetaInfo builtin] -> MetaID -> Int
 getMetaIndex metaInfo (MetaID m) = length metaInfo - m - 1
@@ -273,36 +269,6 @@ getMetaType m = metaType <$> getMetaInfo m
 -- | Get the bound context the meta-variable was created in.
 getMetaCtx :: (MonadTypeChecker builtin m) => Proxy builtin -> MetaID -> m (BoundCtx (Type builtin))
 getMetaCtx _ m = metaCtx <$> getMetaInfo m
-
-extendBoundContextOfMeta :: (MonadTypeChecker builtin m) => MetaID -> Binder builtin -> m ()
-extendBoundContextOfMeta m binder =
-  modifyTypeCheckerState
-    ( \TypeCheckerState {..} -> do
-        let metaIndex = getMetaIndex metaInfo m
-        case splitAt metaIndex metaInfo of
-          (_, []) ->
-            developerError $
-              "Increment meta-ctx for unknown meta-variable" <+> pretty m
-          (xs, info : ys) -> do
-            let info' = extendMetaCtx binder info
-            TypeCheckerState
-              { metaInfo = xs <> (info' : ys),
-                ..
-              }
-    )
-
-extendBoundContextOfConstraints :: forall builtin m. (MonadTypeChecker builtin m) => Binder builtin -> m ()
-extendBoundContextOfConstraints binder = do
-  let updateConstraintCtx = mapContextOf (`updateConstraintBoundCtx` (binder :))
-  modifyTypeCheckerState @builtin $ \TypeCheckerState {..} ->
-    TypeCheckerState
-      { instanceConstraints = fmap updateConstraintCtx instanceConstraints,
-        ..
-      }
-
-clearMetaSubstitution :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m ()
-clearMetaSubstitution _ = modifyTypeCheckerState @builtin $ \TypeCheckerState {..} ->
-  TypeCheckerState {currentSubstitution = mempty, ..}
 
 getSubstMetaTypes :: (MonadTypeChecker builtin m) => MetaSet -> m [(MetaID, Type builtin)]
 getSubstMetaTypes metas = traverse (\m -> (m,) <$> getSubstMetaType m) (MetaSet.toList metas)

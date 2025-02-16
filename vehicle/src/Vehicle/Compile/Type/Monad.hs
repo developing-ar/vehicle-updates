@@ -13,7 +13,6 @@ module Vehicle.Compile.Type.Monad
     getMetaProvenance,
     getUnsolvedMetas,
     solveMeta,
-    removeMetaDependencies,
     getMetasLinkedToMetasIn,
     trackSolvedMetas,
     prettyMeta,
@@ -55,7 +54,7 @@ import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
 import Vehicle.Compile.Type.Meta.Substitution qualified as MetaSubstitution
-import Vehicle.Compile.Type.Meta.Variable (MetaInfo (..))
+import Vehicle.Compile.Type.Meta.Variable (MetaInfo (..), addMetaSolution)
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.Monad.Instance
 import Vehicle.Data.Builtin.Interface.Print (PrintableBuiltin)
@@ -226,13 +225,13 @@ solveMeta ::
   Expr builtin ->
   BoundCtx (Type builtin) ->
   m ()
-solveMeta m solution solutionCtx = do
+solveMeta meta solution solutionCtx = do
   metaSubst <- getMetaSubstitution (Proxy @builtin)
-  case MetaMap.lookup m metaSubst of
+  case MetaMap.lookup meta metaSubst of
     Just existing ->
       compilerDeveloperError $
         "meta-variable"
-          <+> pretty m
+          <+> pretty meta
           <+> "already solved as"
           <+> line
           <> indent 2 (squotes (prettyVerbose (unnormalised existing)))
@@ -243,39 +242,25 @@ solveMeta m solution solutionCtx = do
           <> line
           <> "in context" <+> pretty (toNamedBoundCtx solutionCtx)
     Nothing -> do
-      MetaInfo _ _ metaCtx <- getMetaInfo m
-      let abstractedSolution = abstractOverCtx metaCtx solution
-
-      let env = boundContextToEnv solutionCtx
-
       logDebug MaxDetail $
         "solved"
-          <+> pretty m
+          <+> pretty meta
           <+> "as"
           <+> prettyExternal (WithContext solution (toNamedBoundCtx solutionCtx))
       -- <+> prettyExternal (WithContext abstractedSolution (toNamedBoundCtx solutionCtx))
       -- <+> prettyVerbose solutionCtx
 
+      metaInfo <- getMetaInfo meta
+      let abstractedSolution = abstractOverCtx (metaCtx metaInfo) solution
+      let env = boundContextToEnv solutionCtx
       gluedSolution <- glueNBE env abstractedSolution
+
       modifyTypeCheckerState $ \TypeCheckerState {..} ->
         TypeCheckerState
-          { currentSubstitution = MetaMap.insert m gluedSolution currentSubstitution,
-            solvedMetaState = registerSolvedMeta m solvedMetaState,
+          { metaVariableCtx = addMetaSolution gluedSolution meta metaVariableCtx,
+            solvedMetaState = registerSolvedMeta meta solvedMetaState,
             ..
           }
-
--- | Ensures the meta has no dependencies on the bound context. Returns true
--- if dependencies were removed to achieve this.
-removeMetaDependencies :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> MetaID -> m Bool
-removeMetaDependencies _ m = do
-  logCompilerPass MaxDetail ("removing dependencies of meta" <+> pretty m) $ do
-    MetaInfo p t ctx <- getMetaInfo @builtin m
-    if null ctx
-      then return False
-      else do
-        newMeta <- freshMetaExpr p t mempty
-        solveMeta m newMeta mempty
-        return True
 
 -- | Attempts to solve as many constraints as possible. Takes in
 -- the set of meta-variables solved since the solver was last run and outputs

@@ -5,11 +5,13 @@ module Vehicle.Compile.Type.Meta.Map
     singleton,
     lookup,
     map,
+    mapMaybe,
     insert,
     insertWith,
     keys,
     member,
     unions,
+    adjust,
     toList,
   )
 where
@@ -37,6 +39,12 @@ lookup m s = IntMap.lookup (coerce m) (coerce s)
 
 map :: (a -> a) -> MetaMap a -> MetaMap a
 map f = coerce . IntMap.map f . coerce
+
+mapMaybe :: (a -> Maybe b) -> MetaMap a -> MetaMap b
+mapMaybe f = coerce . IntMap.mapMaybe f . coerce
+
+adjust :: (a -> a) -> MetaID -> MetaMap a -> MetaMap a
+adjust f x = coerce . IntMap.adjust f (coerce x) . coerce
 
 insert :: MetaID -> a -> MetaMap a -> MetaMap a
 insert m e s = coerce (IntMap.insert (coerce m) e (coerce s))

@@ -1,12 +1,14 @@
 module Vehicle.Compile.Type.Meta.Variable
   ( MetaInfo (..),
-    MetaCtxSize,
     extendMetaCtx,
     makeMetaType,
     makeMetaExpr,
     getMetaDependencies,
     getNormMetaDependencies,
     HasMetas (..),
+    MetaVariableContext,
+    findMetaInfo,
+    addMetaSolution,
   )
 where
 
@@ -14,8 +16,11 @@ import Control.Monad.Writer (MonadWriter (..), execWriter)
 import Data.Bifunctor (Bifunctor (..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
+import Vehicle.Compile.Error (MonadCompile)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Core
+import Vehicle.Compile.Type.Meta.Map (MetaMap)
+import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
 import Vehicle.Compile.Type.Meta.Set (MetaSet)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
 import Vehicle.Data.Code.Value
@@ -26,12 +31,6 @@ import Vehicle.Data.Code.Value
 --------------------------------------------------------------------------------
 -- Meta information
 
--- | The size of a meta-variable's context (i.e. how many bound variables it
--- can depend on.) In theory this should be identical to the current `Lv`
--- but in practice, linearity/polarity/type-class insertion meta-variables
--- have a context of zero size as they cannot depend on the context.
-type MetaCtxSize = Int
-
 -- | The information stored about each meta-variable.
 data MetaInfo builtin = MetaInfo
   { -- | Location in the source file the meta-variable was generated
@@ -39,7 +38,9 @@ data MetaInfo builtin = MetaInfo
     -- | The type of the meta-variable
     metaType :: Type builtin,
     -- | The number of bound variables in scope when the meta-variable was created.
-    metaCtx :: BoundCtx (Expr builtin)
+    metaCtx :: BoundCtx (Expr builtin),
+    -- | The solution to the meta variable
+    metaSolution :: Maybe (GluedExpr builtin)
   }
 
 extendMetaCtx :: Binder builtin -> MetaInfo builtin -> MetaInfo builtin
@@ -49,19 +50,23 @@ extendMetaCtx binder MetaInfo {..} =
       ..
     }
 
+addSolutionToInfo :: GluedExpr builtin -> MetaInfo builtin -> MetaInfo builtin
+addSolutionToInfo solution info = info {metaSolution = Just solution}
+
 -- | Creates an expression that abstracts over all bound variables
 makeMetaExpr ::
+  (MonadCompile m) =>
   Provenance ->
   MetaID ->
   BoundCtx (Type builtin) ->
-  Expr builtin
+  m (Expr builtin)
 makeMetaExpr p metaID boundCtx = do
   -- Create bound variables for everything in the context
   let dependencyLevels = [0 .. (length boundCtx - 1)]
   let unnormBoundEnv = [Arg p Explicit Relevant (BoundVar p $ Ix i) | i <- reverse dependencyLevels]
 
   -- Returns a meta applied to every bound variable in the context
-  normAppList (Meta p metaID) unnormBoundEnv
+  return $ normAppList (Meta p metaID) unnormBoundEnv
 
 -- | Creates a Pi type that abstracts over all bound variables
 makeMetaType ::
@@ -161,3 +166,19 @@ instance HasMetas (Constraint builtin) where
     UnificationConstraint c -> findMetas c
     InstanceConstraint c -> findMetas c
     ApplicationConstraint c -> findMetas c
+
+--------------------------------------------------------------------------------
+-- Meta context
+
+type MetaVariableContext builtin = MetaMap (MetaInfo builtin)
+
+findMetaInfo :: MetaVariableContext builtin -> MetaID -> MetaInfo builtin
+findMetaInfo ctx meta =
+  case MetaMap.lookup meta ctx of
+    Just info -> info
+    Nothing ->
+      developerError $
+        "Requesting info for unknown meta" <+> pretty meta <+> "not in context"
+
+addMetaSolution :: GluedExpr builtin -> MetaID -> MetaVariableContext builtin -> MetaVariableContext builtin
+addMetaSolution solution = MetaMap.adjust (addSolutionToInfo solution)

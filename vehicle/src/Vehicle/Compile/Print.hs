@@ -570,14 +570,6 @@ instance
   where
   prettyUsing (es, ctx) = prettyFlatList (prettyUsing @rest . (,ctx) <$> es)
 
-instance
-  (PrettyUsing rest (a `In` ctx)) =>
-  PrettyUsing rest (Maybe a `In` ctx)
-  where
-  prettyUsing (e, ctx) = case e of
-    Nothing -> ""
-    Just x -> prettyUsing @rest (x, ctx)
-
 instance (PrettyUsing rest (a `In` ctx)) => PrettyUsing rest (MetaMap a `In` ctx) where
   prettyUsing (MetaMap m, ctx) = prettyMapEntries entries
     where
