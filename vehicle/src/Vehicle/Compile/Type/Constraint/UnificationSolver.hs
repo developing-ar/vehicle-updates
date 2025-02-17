@@ -25,7 +25,6 @@ import Vehicle.Compile.Print (prettyExternal, prettyFriendly, prettyVerbose)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Force (forceHead)
 import Vehicle.Compile.Type.Meta
-import Vehicle.Compile.Type.Meta.Map qualified as MetaMap (lookup)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet (null, singleton)
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class
@@ -89,8 +88,8 @@ solveUnificationConstraint (WithContext (Unify origin e1 e2) ctx) = do
       newConstraints <- forM blockedProblems $ createNewConstraint ctx origin
       addUnificationConstraints newConstraints
     HardFailure failedProblems -> do
-      finalFailedConstraints <- forM failedProblems $ \x ->
-        substMetas =<< createNewConstraint ctx origin (x, mempty)
+      finalFailedConstraints <- forM failedProblems $ \problem ->
+        createNewConstraint ctx origin (problem, mempty)
       freeEnv <- getFreeEnv
       throwError $ TypingError $ FailedUnificationConstraints $ FailedUnificationConstraintsError freeEnv finalFailedConstraints
 
@@ -328,8 +327,8 @@ pruneMetaDependencies ctx (solvingMetaID, solvingMetaSpine) attemptedSolution = 
                 <+> "found in own solution"
                 <+> squotes (prettyVerbose attemptedSolution)
         | otherwise -> do
-            metaSubst <- getMetaSubstitution (Proxy @builtin)
-            case MetaMap.lookup m metaSubst of
+            metaInfo <- getMetaInfo m
+            case metaSolution metaInfo of
               Just solution -> do
                 go =<< normaliseApp (normalised solution) spine
               Nothing -> do

@@ -57,7 +57,7 @@ typeCheckSolitaryExpr instanceCandidates freeCtx expr1 = do
     expr2 <- convertExprFromStandardTypes expr1
     (expr3, _exprType) <- inferExprType mempty Relevant expr2
     solveConstraints (Proxy @builtin)
-    expr4 <- substMetas expr3
+    expr4 <- substMetasAt 0 expr3
     checkAllUnknownsSolved (Proxy @builtin)
     return expr4
 
@@ -112,9 +112,7 @@ typeCheckAbstractDef p ident defSort uncheckedType = do
   setCurrentDecl $ Just $ DefAbstract p ident defSort finalCheckedType
 
   solveConstraints (Proxy @builtin)
-  substCheckedType <- substMetas finalCheckedType
-
-  let substDecl = DefAbstract p ident defSort substCheckedType
+  let substDecl = DefAbstract p ident defSort finalCheckedType
 
   logUnsolvedUnknowns (Proxy @builtin)
 
@@ -159,7 +157,9 @@ typeCheckFunction p ident anns typ body = do
         if isUserIdent ident
           then addAuxiliaryInputOutputConstraints substDecl
           else return substDecl
+
       logUnsolvedUnknowns (Proxy @builtin)
+      logDebug MaxDetail "Hi"
 
       runSupplyT [0 :: Int ..] $ do
         checkedDecl2 <- generaliseOverUnsolvedConstraints checkedDecl1

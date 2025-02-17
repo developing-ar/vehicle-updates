@@ -53,7 +53,7 @@ import Vehicle.Compile.Print (PrettyExternal, prettyExternal, prettyVerbose)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
-import Vehicle.Compile.Type.Meta.Substitution qualified as MetaSubstitution
+import Vehicle.Compile.Type.Meta.Substitution (metaCtxToMetaSubst)
 import Vehicle.Compile.Type.Meta.Variable (MetaInfo (..), addMetaSolution)
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.Monad.Instance
@@ -111,8 +111,9 @@ freshSolutionMeta ::
   (MonadTypeChecker builtin m) =>
   Provenance ->
   Type builtin ->
+  BoundCtx (Type builtin) ->
   m (MetaID, Expr builtin)
-freshSolutionMeta p t = freshMeta p t mempty
+freshSolutionMeta = freshMeta
 
 -- | Adds an entirely new unification constraint (as opposed to one
 -- derived from another constraint).
@@ -144,8 +145,8 @@ createFreshApplicationConstraint ::
   m (Expr builtin, Type builtin)
 createFreshApplicationConstraint ctx problem blockingMetas = do
   let p = provenanceOf $ originalFun problem
-  (finalTypeID, finalType) <- freshSolutionMeta p (TypeUniverse p 0)
-  (finalExprID, finalExpr) <- freshSolutionMeta p finalType
+  (finalTypeID, finalType) <- freshSolutionMeta p (TypeUniverse p 0) ctx
+  (finalExprID, finalExpr) <- freshSolutionMeta p finalType ctx
 
   let constraint =
         InferArgs
@@ -173,7 +174,7 @@ createFreshInstanceConstraint ::
   m (Expr builtin)
 createFreshInstanceConstraint auxiliaryConstraint boundCtx p origin relevance tcExpr = do
   let env = boundContextToEnv boundCtx
-  (metaID, metaExpr) <- freshSolutionMeta p tcExpr
+  (metaID, metaExpr) <- freshSolutionMeta p tcExpr boundCtx
 
   let originProvenance = provenanceOf tcExpr
   context <- createFreshConstraintCtx originProvenance p boundCtx
@@ -198,7 +199,7 @@ createDerivedInstanceConstraint (ctx, origin) r t = do
   let p = provenanceOf ctx
   let dbLevel = contextDBLevel ctx
   let newTypeClassExpr = quote p dbLevel t
-  (metaID, metaExpr) <- freshSolutionMeta p newTypeClassExpr
+  (metaID, metaExpr) <- freshSolutionMeta p newTypeClassExpr (boundContextOf ctx)
   let newConstraint = Resolve origin metaID r $ parseInstanceGoal t
 
   newCtx <- copyContext ctx Nothing
@@ -226,8 +227,8 @@ solveMeta ::
   BoundCtx (Type builtin) ->
   m ()
 solveMeta meta solution solutionCtx = do
-  metaSubst <- getMetaSubstitution (Proxy @builtin)
-  case MetaMap.lookup meta metaSubst of
+  metaInfo <- getMetaInfo meta
+  case metaSolution metaInfo of
     Just existing ->
       compilerDeveloperError $
         "meta-variable"
@@ -242,18 +243,15 @@ solveMeta meta solution solutionCtx = do
           <> line
           <> "in context" <+> pretty (toNamedBoundCtx solutionCtx)
     Nothing -> do
+      let abstractedSolution = abstractOverCtx (metaCtx metaInfo) solution
+      let env = boundContextToEnv solutionCtx
+      gluedSolution <- glueNBE env abstractedSolution
+
       logDebug MaxDetail $
         "solved"
           <+> pretty meta
           <+> "as"
           <+> prettyExternal (WithContext solution (toNamedBoundCtx solutionCtx))
-      -- <+> prettyExternal (WithContext abstractedSolution (toNamedBoundCtx solutionCtx))
-      -- <+> prettyVerbose solutionCtx
-
-      metaInfo <- getMetaInfo meta
-      let abstractedSolution = abstractOverCtx (metaCtx metaInfo) solution
-      let env = boundContextToEnv solutionCtx
-      gluedSolution <- glueNBE env abstractedSolution
 
       modifyTypeCheckerState $ \TypeCheckerState {..} ->
         TypeCheckerState
@@ -304,9 +302,10 @@ runConstraintSolver getConstraints setConstraints attemptToSolveConstraint topLe
 logUnsolvedUnknowns :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m ()
 logUnsolvedUnknowns proxy = do
   logDebugM MaxDetail $ do
-    maybeDecl <- getCurrentDecl
-    newSubstitution <- getMetaSubstitution proxy
-    updatedSubst <- substMetas newSubstitution
+    maybeDecl <- getCurrentDecl @builtin
+    metaVarCtx <- getMetaVariableCtx @builtin
+    updatedMetaVarCtx <- substMetas metaVarCtx
+    let metaSubst = metaCtxToMetaSubst updatedMetaVarCtx
 
     unsolvedMetas <- getUnsolvedMetas proxy
     unsolvedMetasDoc <- prettyMetas proxy unsolvedMetas
@@ -324,8 +323,7 @@ logUnsolvedUnknowns proxy = do
             <> indent 2 (prettyConstraints unblockedConstraints)
             <> line
 
-    updatedDecl <- traverse (MetaSubstitution.subst updatedSubst) maybeDecl
-    let declDoc = case updatedDecl of
+    let declDoc = case maybeDecl of
           Nothing -> ""
           Just decl ->
             "current-decl:"
@@ -333,10 +331,12 @@ logUnsolvedUnknowns proxy = do
               <> indent 2 (prettyExternal decl)
               <> line
 
+    let solutions = unnormalised <$> MetaMap.mapMaybe metaSolution metaSubst
+
     return $
       "current-solution:"
         <> line
-        <> indent 2 (prettyVerbose (fmap unnormalised updatedSubst))
+        <> indent 2 (prettyVerbose solutions)
         <> line
         <> "unsolved-metas:"
         <> line

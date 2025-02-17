@@ -3,17 +3,15 @@
 {-# HLINT ignore "Use <|>" #-}
 module Vehicle.Compile.Type.Force where
 
-import Data.Data (Proxy (..))
 import Data.Maybe (fromMaybe)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyExternal)
-import Vehicle.Compile.Type.Meta (MetaSet)
-import Vehicle.Compile.Type.Meta.Map qualified as MetaMap (lookup)
+import Vehicle.Compile.Type.Meta (MetaSet, metaSolution)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet (singleton, unions)
 import Vehicle.Compile.Type.Monad.Class
   ( MonadTypeChecker,
-    getMetaSubstitution,
+    getMetaInfo,
   )
 import Vehicle.Data.Builtin.Interface.Normalise (BlockingArgs (..), NormalisableBuiltin (..))
 import Vehicle.Data.Code.Value
@@ -65,8 +63,8 @@ forceMeta ::
   Spine builtin ->
   m (Maybe (Value builtin), MetaSet)
 forceMeta m spine = do
-  subst <- getMetaSubstitution (Proxy @builtin)
-  case MetaMap.lookup m subst of
+  metaInfo <- getMetaInfo m
+  case metaSolution metaInfo of
     Just solution -> do
       normMetaExpr <- normaliseApp (normalised solution) spine
       (maybeForcedExpr, blockingMetas) <- forceExpr normMetaExpr

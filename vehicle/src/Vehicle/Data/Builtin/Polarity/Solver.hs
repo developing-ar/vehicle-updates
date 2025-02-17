@@ -21,9 +21,9 @@ solvePolarityConstraint ::
   (MonadPolaritySolver m) =>
   WithContext (InstanceConstraint PolarityBuiltin) ->
   m ()
-solvePolarityConstraint (WithContext constraint ctx) = do
-  normConstraint@(Resolve origin _ _ goal) <- substMetas constraint
-  logDebug MaxDetail $ "Forced:" <+> prettyFriendly (WithContext normConstraint ctx)
+solvePolarityConstraint constraintWithCtx = do
+  normConstraintWithCtx@(WithContext normConstraint@(Resolve origin _ _ goal) ctx) <- substMetas constraintWithCtx
+  logDebug MaxDetail $ "Forced:" <+> prettyFriendly normConstraintWithCtx
 
   (tc, spine) <- getTypeClass goal
   let maybeProgress = solve tc (ctx, origin) (mapMaybe getExplicitArg spine)

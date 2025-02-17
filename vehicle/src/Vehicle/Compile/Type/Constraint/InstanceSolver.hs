@@ -40,7 +40,7 @@ runInstanceSolver proxy depth = do
       getActiveInstanceConstraints
       setInstanceConstraints
       (solveInstanceConstraint depth)
-      False
+      True
       proxy
 
 --------------------------------------------------------------------------------
@@ -118,6 +118,7 @@ solveInstanceGoal constraint rawBuiltinCandidates depth goal = do
       logDebug MaxDetail "Multiple possible candidates found so deferring."
       -- TODO can we be more precise with the set of blocking metas?
       -- Probably not as the set of blocking metas will depend on the depth at which we're searching
+
       blockedConstraint <- blockConstraintOn constraint <$> getUnsolvedMetas (Proxy @builtin)
       addInstanceConstraints [blockedConstraint]
 

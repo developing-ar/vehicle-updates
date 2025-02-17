@@ -61,10 +61,8 @@ getDefaultableConstraints proxy possibleConstraints = do
       -- We only want to generate default solutions for constraints
       -- that *don't* appear in the type of the declaration, as those will be
       -- quantified over later.
-      declType <- substMetas (typeOf decl)
-
       constraints <- getActiveConstraints
-      typeMetas <- getMetasLinkedToMetasIn constraints declType
+      typeMetas <- getMetasLinkedToMetasIn constraints (typeOf decl)
 
       logDebugM MaxDetail $ do
         unsolvedMetasInTypeDoc <- prettyMetas proxy typeMetas

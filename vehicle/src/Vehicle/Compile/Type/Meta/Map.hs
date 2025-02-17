@@ -8,6 +8,7 @@ module Vehicle.Compile.Type.Meta.Map
     mapMaybe,
     insert,
     insertWith,
+    filter,
     keys,
     member,
     unions,
@@ -23,7 +24,7 @@ import Data.IntMap qualified as IntMap
 import Vehicle.Compile.Type.Meta.Set (MetaSet)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
 import Vehicle.Data.Meta (MetaID (..))
-import Prelude hiding (lookup, map)
+import Prelude hiding (filter, lookup, map)
 
 --------------------------------------------------------------------------------
 -- Meta substitution
@@ -45,6 +46,9 @@ mapMaybe f = coerce . IntMap.mapMaybe f . coerce
 
 adjust :: (a -> a) -> MetaID -> MetaMap a -> MetaMap a
 adjust f x = coerce . IntMap.adjust f (coerce x) . coerce
+
+filter :: (a -> Bool) -> MetaMap a -> MetaMap a
+filter f = coerce . IntMap.filter f . coerce
 
 insert :: MetaID -> a -> MetaMap a -> MetaMap a
 insert m e s = coerce (IntMap.insert (coerce m) e (coerce s))

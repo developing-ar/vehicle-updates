@@ -20,7 +20,7 @@ runApplicationSolver proxy = do
       getActiveApplicationConstraints
       setApplicationConstraints
       solveApplicationConstraint
-      False
+      True
       proxy
 
 solveApplicationConstraint ::

@@ -440,7 +440,7 @@ instantiateArgForNonExplicitBinder boundCtx p (fun, funArgs, funType) binder = d
 showCheckEntry :: forall builtin m. (MonadBidirectional builtin m) => Type builtin -> Expr builtin -> m ()
 showCheckEntry t e = do
   ctx <- getNamedBoundCtx (Proxy @(Type builtin))
-  logDebug MaxDetail $ "check-entry" <+> prettyExternal (WithContext e ctx) <+> ":" <+> prettyExternal (WithContext t ctx) -- <+> "::::" <+> prettyVerbose ctx)
+  logDebug MaxDetail $ "check-entry" <+> prettyExternal (WithContext e ctx) <+> ":" <+> prettyExternal (WithContext t ctx) <+> "::::" <+> pretty (length ctx)
   incrCallDepth
 
 showCheckExit :: forall builtin m. (MonadBidirectional builtin m) => Expr builtin -> m ()

@@ -21,9 +21,9 @@ solveLinearityConstraint ::
   (MonadLinearitySolver m) =>
   WithContext (InstanceConstraint LinearityBuiltin) ->
   m ()
-solveLinearityConstraint (WithContext constraint ctx) = do
-  normConstraint@(Resolve origin _ _ goal) <- substMetas constraint
-  logDebug MaxDetail $ "Forced:" <+> prettyFriendly (WithContext normConstraint ctx)
+solveLinearityConstraint constraintWithCtx = do
+  substConstraintWithCtx@(WithContext normConstraint@(Resolve origin _ _ goal) ctx) <- substMetas @LinearityBuiltin constraintWithCtx
+  logDebug MaxDetail $ "Forced:" <+> prettyFriendly substConstraintWithCtx
 
   (tc, spine) <- getTypeClass goal
   let nConstraint = WithContext normConstraint ctx

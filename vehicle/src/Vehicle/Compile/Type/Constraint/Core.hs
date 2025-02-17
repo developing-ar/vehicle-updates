@@ -13,13 +13,12 @@ where
 import Data.Bifunctor (Bifunctor (..))
 import Data.HashMap.Strict (HashMap, fromListWith, mapMaybeWithKey)
 import Data.Hashable (Hashable)
-import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Error
 import Vehicle.Compile.Normalise.NBE (normaliseInEnv)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
 import Vehicle.Compile.Type.Core
-import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
+import Vehicle.Compile.Type.Meta.Variable
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Data.Builtin.Interface.Print
@@ -98,13 +97,14 @@ instantiateInstanceConstraintSolution ::
   Expr builtin ->
   m ()
 instantiateInstanceConstraintSolution (WithContext (Resolve origin meta _ _) ctx) solution = do
-  metaSubst <- getMetaSubstitution (Proxy @builtin)
+  metaInfo <- getMetaInfo meta
   let boundCtx = boundContextOf ctx
-  case MetaMap.lookup meta metaSubst of
+  case metaSolution metaInfo of
     Nothing -> solveMeta meta solution boundCtx
     Just existingSolution -> do
       logDebug MaxDetail ("solved" <+> pretty meta <+> "as" <+> prettyVerbose solution)
       logDebug MaxDetail (indent 2 ("however" <+> pretty meta <+> "=" <+> prettyVerbose (unnormalised existingSolution) <+> "already so unifying"))
-      normSolution <- normaliseInEnv (boundContextToEnv boundCtx) solution
+      let abstractedSolution = abstractOverCtx (metaCtx metaInfo) solution
+      normSolution <- normaliseInEnv (boundContextToEnv boundCtx) abstractedSolution
       newConstraint <- createInstanceUnification (ctx, origin) normSolution (normalised existingSolution)
       addUnificationConstraints [newConstraint]

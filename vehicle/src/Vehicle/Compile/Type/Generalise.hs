@@ -23,7 +23,6 @@ import Vehicle.Compile.Type.Constraint.InstanceSolver (runInstanceSolver)
 import Vehicle.Compile.Type.Constraint.UnificationSolver (runUnificationSolver)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta
-import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.Monad.Class
@@ -44,6 +43,7 @@ generaliseOverUnsolvedConstraints ::
   m (Decl builtin)
 generaliseOverUnsolvedConstraints decl = do
   decl1 <- generaliseOverParticularUnsolvedConstraints getActiveInstanceConstraints decl
+  logUnsolvedUnknowns (Proxy @builtin)
   generaliseOverParticularUnsolvedConstraints getActiveAuxiliaryInstanceConstraints decl1
 
 -- Finds any unsolved type class constraints that are blocked on
@@ -83,28 +83,32 @@ findGeneralisableConstraints ::
   NonEmpty (WithContext (InstanceConstraint builtin)) ->
   Decl builtin ->
   m [ConstraintID]
-findGeneralisableConstraints allInstanceConstraints decl = do
-  unsolvedConstraints <- traverse substMetas =<< getActiveConstraints
-  let unsolvedConstraintsAndMetas = (\c -> (c, metasIn $ objectIn c)) <$> NonEmpty.toList allInstanceConstraints
+findGeneralisableConstraints constraintsToGeneralise decl = do
+  instanceConstraints <- getActiveInstanceConstraints
+  auxInstanceConstraints <- getActiveAuxiliaryInstanceConstraints
+  unsolvedInstanceConstraints <- substMetas (instanceConstraints <> auxInstanceConstraints)
+  let unsolvedConstraints = fmap (mapObject InstanceConstraint) unsolvedInstanceConstraints
 
   -- Find any unsolved meta variables that are transitively linked
   -- by constraints of the same type.
   linkedMetas <- getMetasLinkedToMetasIn unsolvedConstraints (typeOf decl)
-  metaSubst <- getMetaSubstitution (Proxy @builtin)
+  metaCtx <- getMetaVariableCtx @builtin
 
   -- The function that determines if we can generalise a constraint or not.
   let isGeneralisable (con@(WithContext constraint _ctx), constraintMetas) = do
         -- Only prepend the constraint if all variables in the constraint
         -- are so linked.
-        let allConstraintMetas = MetaSet.insert (instanceSolution constraint) constraintMetas
+        let solutionMeta = instanceSolution constraint
+        let allConstraintMetas = MetaSet.insert solutionMeta constraintMetas
         let metasAppearInType = not (allConstraintMetas `MetaSet.disjoint` linkedMetas)
 
         -- Don't generalise constraints whose solution meta has already been solved. These should
         -- get solved when the prior solution is prepended as a generalisable constraint.
-        let notAlreadySolved = isNothing (MetaMap.lookup (instanceSolution constraint) metaSubst)
+        let notAlreadySolved = isNothing $ metaSolution (findMetaInfo metaCtx solutionMeta)
         logDebug MaxDetail $ pretty notAlreadySolved <+> pretty metasAppearInType <+> prettyVerbose con
         return $ metasAppearInType && notAlreadySolved
 
+  let unsolvedConstraintsAndMetas = (\c -> (c, metasIn $ objectIn c)) <$> NonEmpty.toList constraintsToGeneralise
   generalisable <- filterM isGeneralisable unsolvedConstraintsAndMetas
 
   -- We need to sort topologically sort the generalisable constraints so that they
@@ -137,8 +141,9 @@ createBinderForConstraint declProv (index, constraintID) = do
   let metaSolution = instanceSolution constraint
   let relevance = instanceRelevance constraint
   let p = originalProvenance ctx
-  let typeClass = quote p (contextDBLevel ctx) $ goalExpr (instanceGoal constraint)
-  substTypeClass <- substMetas typeClass
+  let lv = contextDBLevel ctx
+  let typeClass = quote p lv $ goalExpr (instanceGoal constraint)
+  substTypeClass <- substMetasAt lv typeClass
   let binderForm = BinderDisplayForm (NameAndType ("_t" <> Text.pack (show index))) True
   let binder = Binder declProv binderForm (Instance True) relevance substTypeClass
   return (metaSolution, binder)
@@ -156,31 +161,32 @@ generaliseOverUnsolvedMetaVariables ::
   m (Decl builtin)
 generaliseOverUnsolvedMetaVariables decl =
   logCompilerPass MidDetail "generalisation of unsolved metas in declaration type" $ do
-    let declType = typeOf decl
+    substDecl <- substMetas decl
+    let declType = typeOf substDecl
 
     let unsolvedMetas =
           MetaSet.toList $
             if not (isTypeSynonym declType)
               then -- Quantify over the metas in the type of the declaration.
-                metasIn (typeOf decl)
+                metasIn (typeOf substDecl)
               else -- In a type synonym so quantify over metas in the body.
               -- Needed for the sub-typing systems (e.g. see issue700 test)
-                maybe mempty metasIn (bodyOf decl)
+                maybe mempty metasIn (bodyOf substDecl)
 
     -- Quantify over any unsolved type-level meta variables
     if null unsolvedMetas
-      then return decl
+      then return substDecl
       else do
-        let p = provenanceOf decl
+        let p = provenanceOf substDecl
         metaAndBinderTelescope <- traverse (getBinderForMeta p) unsolvedMetas
         result <- logCompilerPass MidDetail ("generalisation over" <+> pretty unsolvedMetas) $ do
-          prependTelescopeAndSolve metaAndBinderTelescope decl
+          prependTelescopeAndSolve metaAndBinderTelescope substDecl
 
         substMetas result
 
 getBinderForMeta :: forall builtin m. (MonadGeneralise builtin m) => Provenance -> MetaID -> m (MetaID, Binder builtin)
 getBinderForMeta p meta = do
-  metaType <- substMetas =<< getMetaType meta
+  metaType <- getSubstMetaType meta
   when (isMeta metaType) $
     compilerDeveloperError
       "When type of unsolved meta is also an unsolved meta need to implement topological sort."
@@ -229,7 +235,6 @@ prependTelescopeAndSolve telescope decl = do
   resultDecl <- substMetas updatedDecl
   setCurrentDecl $ Just resultDecl
 
-  logCompilerPassOutput $ prettyVerbose updatedDecl
   logCompilerPassOutput $ prettyExternal resultDecl
   return resultDecl
 
