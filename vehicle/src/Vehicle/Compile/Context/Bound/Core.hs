@@ -42,6 +42,9 @@ type NamedBoundCtx = GenericBoundCtx (Maybe Name)
 emptyNamedCtx :: NamedBoundCtx
 emptyNamedCtx = mempty
 
+prettyNamedBoundCtx :: NamedBoundCtx -> Doc a
+prettyNamedBoundCtx = prettyFlatList . fmap (maybe "_" pretty)
+
 --------------------------------------------------------------------------------
 -- Lookup functions
 

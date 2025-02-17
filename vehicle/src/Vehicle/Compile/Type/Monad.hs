@@ -16,7 +16,6 @@ module Vehicle.Compile.Type.Monad
     getMetasLinkedToMetasIn,
     trackSolvedMetas,
     prettyMeta,
-    prettyMetas,
     substMetas,
     -- Constraints
     runConstraintSolver,
@@ -36,6 +35,7 @@ module Vehicle.Compile.Type.Monad
     glueNBE,
     logUnsolvedUnknowns,
     findFirstConstraint,
+    checkAllConstraintsSolved,
   )
 where
 
@@ -43,9 +43,11 @@ import Control.Monad (when)
 import Control.Monad.Except (MonadError (..), runExceptT)
 import Control.Monad.Trans.Except (ExceptT)
 import Data.List (partition, sortOn)
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.Maybe (isJust)
 import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Context.Free
-import Vehicle.Compile.Error (CompileError (..), compilerDeveloperError)
+import Vehicle.Compile.Error (CompileError (..), TypingError (..), compilerDeveloperError)
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
@@ -53,7 +55,6 @@ import Vehicle.Compile.Print (PrettyExternal, prettyExternal, prettyVerbose)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta (MetaSet)
 import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
-import Vehicle.Compile.Type.Meta.Substitution (metaCtxToMetaSubst)
 import Vehicle.Compile.Type.Meta.Variable (MetaInfo (..), addMetaSolution)
 import Vehicle.Compile.Type.Monad.Class
 import Vehicle.Compile.Type.Monad.Instance
@@ -300,15 +301,12 @@ runConstraintSolver getConstraints setConstraints attemptToSolveConstraint topLe
               loop (loopNumber + 1)
 
 logUnsolvedUnknowns :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m ()
-logUnsolvedUnknowns proxy = do
+logUnsolvedUnknowns _proxy = do
   logDebugM MaxDetail $ do
     maybeDecl <- getCurrentDecl @builtin
     metaVarCtx <- getMetaVariableCtx @builtin
     updatedMetaVarCtx <- substMetas metaVarCtx
-    let metaSubst = metaCtxToMetaSubst updatedMetaVarCtx
 
-    unsolvedMetas <- getUnsolvedMetas proxy
-    unsolvedMetasDoc <- prettyMetas proxy unsolvedMetas
     unsolvedConstraints <- getActiveConstraints @builtin
 
     isUnblocked <- getIsUnblockedFn
@@ -331,16 +329,16 @@ logUnsolvedUnknowns proxy = do
               <> indent 2 (prettyExternal decl)
               <> line
 
-    let solutions = unnormalised <$> MetaMap.mapMaybe metaSolution metaSubst
+    let (solvedMetas, unsolvedMetas) = MetaMap.partition (isJust . metaSolution) updatedMetaVarCtx
 
     return $
-      "current-solution:"
+      "solved-metas:"
         <> line
-        <> indent 2 (prettyVerbose solutions)
+        <> indent 2 (prettyVerbose solvedMetas)
         <> line
         <> "unsolved-metas:"
         <> line
-        <> indent 2 unsolvedMetasDoc
+        <> indent 2 (prettyVerbose unsolvedMetas)
         <> line
         <> constraintsDoc
         <> declDoc
@@ -362,3 +360,17 @@ findFirstConstraint p xs = (\(found, seen, unseen) -> (found, unseen <> seen)) <
       c : cs
         | p c -> Just (c, [], cs)
         | otherwise -> fmap (\(found, seen, unseen) -> (found, c : seen, unseen)) (go cs)
+
+checkAllConstraintsSolved ::
+  (MonadTypeChecker builtin m) =>
+  Proxy builtin ->
+  m [Contextualised constraint (ConstraintContext builtin)] ->
+  (constraint -> Constraint builtin) ->
+  m ()
+checkAllConstraintsSolved _ getConstraints toConstraint = do
+  constraints <- getConstraints
+  case constraints of
+    [] -> return ()
+    (c : cs) -> do
+      let failedConstraints = mapObject toConstraint <$> (c :| cs)
+      throwError $ TypingError $ UnsolvedConstraints failedConstraints

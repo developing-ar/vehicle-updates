@@ -31,7 +31,9 @@ import Vehicle.Compile.Normalise.Quote (unnormalise)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Simplify
 import Vehicle.Compile.Type.Core
+import Vehicle.Compile.Type.Meta (MetaInfo (..))
 import Vehicle.Compile.Type.Meta.Map (MetaMap (..))
+import Vehicle.Compile.Type.Meta.Variable (MetaInfo)
 import Vehicle.Data.Assertion (Bounds (..), Inequality, NormalisedRelation (..))
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Standard.Core
@@ -174,6 +176,7 @@ type family StrategyFor (tags :: Tags) a :: Strategy where
   StrategyFor tags (UnificationConstraint builtin `In` ConstraintContext builtin) = StrategyFor tags (Value builtin `In` NamedBoundCtx)
   StrategyFor tags (ApplicationConstraint builtin `In` ConstraintContext builtin) = StrategyFor tags (Value builtin `In` NamedBoundCtx)
   StrategyFor tags (Constraint builtin `In` ConstraintContext builtin) = StrategyFor tags (Value builtin `In` NamedBoundCtx)
+  StrategyFor tags (MetaInfo builtin `In` NoCtx) = StrategyFor tags (Value builtin `In` NamedBoundCtx)
   ------------
   -- Pretty --
   ------------
@@ -512,9 +515,10 @@ instance
   PrettyUsing rest (InstanceConstraint builtin `In` ConstraintContext builtin)
   where
   prettyUsing (Resolve _ solution _ goal, ctx) = do
+    let nameCtx = namedBoundCtxOf ctx
     let solution' = pretty solution
-    let expr' = prettyUsing @rest (goalExpr goal, namedBoundCtxOf ctx)
-    prettyConstraintContext ctx <+> solution' <+> "<=" <+> expr' <+> pretty (namedBoundCtxOf ctx)
+    let expr' = prettyUsing @rest (goalExpr goal, nameCtx)
+    prettyConstraintContext ctx <+> solution' <+> "<=" <+> expr' <+> prettyNamedBoundCtx nameCtx
 
 instance
   ( PrettyUsing rest (Expr builtin `In` NamedBoundCtx),
@@ -540,6 +544,19 @@ instance
     UnificationConstraint uc -> prettyUsing @rest (uc, ctx)
     InstanceConstraint tc -> prettyUsing @rest (tc, ctx)
     ApplicationConstraint tc -> prettyUsing @rest (tc, ctx)
+
+instance
+  ( PrettyUsing rest (Type builtin `In` NamedBoundCtx)
+  ) =>
+  PrettyUsing rest (MetaInfo builtin `In` NoCtx)
+  where
+  prettyUsing (MetaInfo {..}, ()) = do
+    let nameCtx = toNamedBoundCtx metaCtx
+    let typeDoc = prettyUsing @rest (metaType, nameCtx)
+    let solutionDoc = case metaSolution of
+          Nothing -> "?"
+          Just solution -> prettyUsing @rest (unnormalised solution, nameCtx)
+    fill 40 typeDoc <+> "=" <+> solutionDoc <+> ":" <+> prettyNamedBoundCtx nameCtx
 
 --------------------------------------------------------------------------------
 -- Assertions

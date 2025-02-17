@@ -2,7 +2,6 @@ module Vehicle.Compile.Type.Meta.Variable
   ( MetaInfo (..),
     extendMetaCtx,
     makeMetaType,
-    makeMetaExpr,
     getMetaDependencies,
     getNormMetaDependencies,
     HasMetas (..),
@@ -16,7 +15,6 @@ import Control.Monad.Writer (MonadWriter (..), execWriter)
 import Data.Bifunctor (Bifunctor (..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
-import Vehicle.Compile.Error (MonadCompile)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Meta.Map (MetaMap)
@@ -52,21 +50,6 @@ extendMetaCtx binder MetaInfo {..} =
 
 addSolutionToInfo :: GluedExpr builtin -> MetaInfo builtin -> MetaInfo builtin
 addSolutionToInfo solution info = info {metaSolution = Just solution}
-
--- | Creates an expression that abstracts over all bound variables
-makeMetaExpr ::
-  (MonadCompile m) =>
-  Provenance ->
-  MetaID ->
-  BoundCtx (Type builtin) ->
-  m (Expr builtin)
-makeMetaExpr p metaID boundCtx = do
-  -- Create bound variables for everything in the context
-  let dependencyLevels = [0 .. (length boundCtx - 1)]
-  let unnormBoundEnv = [Arg p Explicit Relevant (BoundVar p $ Ix i) | i <- reverse dependencyLevels]
-
-  -- Returns a meta applied to every bound variable in the context
-  return $ normAppList (Meta p metaID) unnormBoundEnv
 
 -- | Creates a Pi type that abstracts over all bound variables
 makeMetaType ::

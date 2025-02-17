@@ -116,7 +116,7 @@ typeCheckAbstractDef p ident defSort uncheckedType = do
 
   logUnsolvedUnknowns (Proxy @builtin)
 
-  finalDecl <- runSupplyT [0 :: Int ..] $ generaliseOverUnsolvedMetaVariables substDecl
+  finalDecl <- generaliseOverUnsolvedMetasAndConstraints substDecl
   return finalDecl
 
 typeCheckFunction ::
@@ -159,12 +159,8 @@ typeCheckFunction p ident anns typ body = do
           else return substDecl
 
       logUnsolvedUnknowns (Proxy @builtin)
-      logDebug MaxDetail "Hi"
 
-      runSupplyT [0 :: Int ..] $ do
-        checkedDecl2 <- generaliseOverUnsolvedConstraints checkedDecl1
-        checkedDecl3 <- generaliseOverUnsolvedMetaVariables checkedDecl2
-        return checkedDecl3
+      generaliseOverUnsolvedMetasAndConstraints checkedDecl1
 
 checkDeclType :: forall builtin m. (TCM builtin m) => Identifier -> Expr builtin -> m (Type builtin)
 checkDeclType ident declType = do
@@ -257,24 +253,17 @@ solveConstraints proxy = logCompilerPass MidDetail "constraint solving" $ do
 -------------------------------------------------------------------------------
 -- Unsolved constraint checks
 
-checkAllUnknownsSolved :: (MonadTypeChecker builtin m) => Proxy builtin -> m ()
+checkAllUnknownsSolved :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m ()
 checkAllUnknownsSolved proxy = do
   -- First check all user constraints (i.e. unification and type-class
   -- constraints) are solved.
-  checkAllConstraintsSolved proxy
+  checkAllConstraintsSolved proxy getActiveConstraints id
   -- Then check all meta-variables have been solved.
   checkAllMetasSolved proxy
   -- Then clear the meta-ctx
   clearMetaCtx proxy
   -- ...and the fresh names
   clearFreshNames proxy
-
-checkAllConstraintsSolved :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m ()
-checkAllConstraintsSolved _ = do
-  constraints <- getActiveConstraints @builtin
-  case constraints of
-    [] -> return ()
-    (c : cs) -> throwError $ TypingError $ UnsolvedConstraints (c :| cs)
 
 checkAllMetasSolved :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m ()
 checkAllMetasSolved proxy = do

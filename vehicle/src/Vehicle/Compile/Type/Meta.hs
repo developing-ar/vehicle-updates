@@ -5,7 +5,6 @@ module Vehicle.Compile.Type.Meta
     extendMetaCtx,
     HasMetas (..),
     makeMetaType,
-    makeMetaExpr,
     getMetaDependencies,
     getNormMetaDependencies,
     findMetaInfo,

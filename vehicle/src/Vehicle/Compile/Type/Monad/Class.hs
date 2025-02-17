@@ -23,12 +23,11 @@ import Vehicle.Compile.Type.Meta
     MetaInfo (..),
     MetaVariableContext,
     findMetaInfo,
-    makeMetaExpr,
   )
 import Vehicle.Compile.Type.Meta.Map qualified as MetaMap
 import Vehicle.Compile.Type.Meta.Set (MetaSet)
 import Vehicle.Compile.Type.Meta.Set qualified as MetaSet
-import Vehicle.Compile.Type.Meta.Substitution as MetaSubstitution (MetaSubstitutable (..), MetaSubstitution, RawMetaSubstitutable (..), metaCtxToMetaSubst)
+import Vehicle.Compile.Type.Meta.Substitution as MetaSubstitution (MetaSubstitutable (..), RawMetaSubstitutable (..))
 import Vehicle.Data.Builtin.Interface.Normalise (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Interface.Type
@@ -177,13 +176,6 @@ trackSolvedMetas _ performComputation = do
           ..
         }
 
-getMetaSubstitution ::
-  forall builtin m.
-  (MonadTypeChecker builtin m) =>
-  Proxy builtin ->
-  m (MetaSubstitution builtin)
-getMetaSubstitution _ = metaCtxToMetaSubst . metaVariableCtx <$> getTypeCheckerState
-
 getIsUnblockedFn ::
   forall builtin m constraint.
   (MonadTypeChecker builtin m) =>
@@ -199,7 +191,7 @@ substMetas ::
   a ->
   m a
 substMetas x = do
-  s <- getMetaSubstitution (Proxy @builtin)
+  s <- getMetaVariableCtx
   MetaSubstitution.subst s x
 
 substMetasAt ::
@@ -209,7 +201,7 @@ substMetasAt ::
   a ->
   m a
 substMetasAt lv x = do
-  s <- getMetaSubstitution (Proxy @builtin)
+  s <- getMetaVariableCtx
   MetaSubstitution.substAt lv s x
 
 getSolvedMetas :: forall builtin m. (MonadTypeChecker builtin m) => Proxy builtin -> m MetaSet
@@ -320,6 +312,21 @@ getMetasLinkedToMetasIn allConstraints typeOfInterest = do
         if MetaSet.disjoint constraintMetas typeMetas
           then (constraint : nonRelatedConstraints, typeMetas)
           else (nonRelatedConstraints, MetaSet.unions [constraintMetas, typeMetas])
+
+-- | Creates an expression that abstracts over all bound variables
+makeMetaExpr ::
+  (MonadCompile m) =>
+  Provenance ->
+  MetaID ->
+  BoundCtx (Type builtin) ->
+  m (Expr builtin)
+makeMetaExpr p metaID boundCtx = do
+  -- Create bound variables for everything in the context
+  let dependencyLevels = [0 .. (length boundCtx - 1)]
+  let unnormBoundEnv = [Arg p Explicit Relevant (BoundVar p $ Ix i) | i <- reverse dependencyLevels]
+
+  -- Returns a meta applied to every bound variable in the context
+  return $ normAppList (Meta p metaID) unnormBoundEnv
 
 abstractOverCtx :: BoundCtx (Type builtin) -> Expr builtin -> Expr builtin
 abstractOverCtx ctx body = do

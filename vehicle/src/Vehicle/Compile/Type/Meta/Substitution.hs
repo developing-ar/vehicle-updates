@@ -2,7 +2,6 @@ module Vehicle.Compile.Type.Meta.Substitution
   ( MetaSubstitutable (..),
     RawMetaSubstitutable (..),
     MetaSubstitution,
-    metaCtxToMetaSubst,
   )
 where
 
@@ -13,16 +12,13 @@ import Vehicle.Compile.Context.Free
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Core
-import Vehicle.Compile.Type.Meta.Variable (MetaVariableContext, findMetaInfo, metaCtx, metaSolution)
+import Vehicle.Compile.Type.Meta.Variable (MetaVariableContext, findMetaInfo, metaCtx, metaSolution, metaType)
 import Vehicle.Data.Code.Value
 
 --------------------------------------------------------------------------------
 -- Substitution type
 
 type MetaSubstitution builtin = MetaVariableContext builtin
-
-metaCtxToMetaSubst :: MetaVariableContext builtin -> MetaSubstitution builtin
-metaCtxToMetaSubst = id
 
 --------------------------------------------------------------------------------
 -- Substitution operation at level
@@ -125,14 +121,6 @@ instance MetaSubstitutable m builtin (Closure builtin) where
 instance MetaSubstitutable m builtin (GluedExpr builtin) where
   substAt lv s (Glued a b) = Glued <$> substAt lv s a <*> substAt lv s b
 
-{-
-instance MetaSubstitutable m builtin (ApplicationConstraint builtin) where
-  subst s (InferArgs m1 m2 insertionProblem) = InferArgs m1 m2 <$> subst s insertionProblem
-
-instance MetaSubstitutable m builtin (UnificationConstraint builtin) where
-  subst s (Unify origin e1 e2) = Unify <$> subst s origin <*> subst s e1 <*> subst s e2
--}
-
 instance MetaSubstitutable m builtin (InstanceConstraint builtin) where
   substAt lv s (Resolve origin m r g) = do
     Resolve <$> substAt lv s origin <*> pure m <*> pure r <*> substAt lv s g
@@ -141,29 +129,6 @@ instance MetaSubstitutable m builtin (InstanceGoal builtin) where
   substAt lv s (InstanceGoal t h spine) =
     InstanceGoal t h <$> substAt lv s spine
 
-{-
-instance MetaSubstitutable m builtin (Constraint builtin) where
-  subst s = \case
-    UnificationConstraint c -> UnificationConstraint <$> subst s c
-    InstanceConstraint c -> InstanceConstraint <$> subst s c
-    ApplicationConstraint c -> ApplicationConstraint <$> subst s c
-
-instance (MetaSubstitutable m builtin constraint) => MetaSubstitutable m builtin (Contextualised constraint (ConstraintContext builtin)) where
-  subst s (WithContext constraint context) = do
-    newConstraint <- subst s constraint
-    return $ WithContext newConstraint context
-
-instance MetaSubstitutable m builtin (ArgInsertionProblem builtin) where
-  subst s (ArgInsertionProblem originalFun originalArgs originalType checkedArgs currentExpectedType uncheckedArgs rel) =
-    ArgInsertionProblem
-      <$> subst s originalFun
-      <*> subst s originalArgs
-      <*> subst s originalType
-      <*> subst s checkedArgs
-      <*> subst s currentExpectedType
-      <*> subst s uncheckedArgs
-      <*> pure rel
--}
 instance MetaSubstitutable m builtin (InstanceArgOrigin builtin) where
   substAt lv s (ArgOrigin tcOp tcOpArgs tcOpType tc) =
     ArgOrigin <$> substAt lv s tcOp <*> substAt lv s tcOpArgs <*> substAt lv s tcOpType <*> substAt lv s tc
@@ -177,25 +142,6 @@ instance MetaSubstitutable m builtin (InstanceConstraintOrigin builtin) where
     InstanceTypeRestrictionOrigin t -> InstanceTypeRestrictionOrigin <$> substAt lv s t
     InstanceArgOrigin t -> InstanceArgOrigin <$> substAt lv s t
 
-{-
-instance MetaSubstitutable m builtin (UnificationConstraintOrigin builtin) where
-  subst s = \case
-    CheckingExprType c -> CheckingExprType <$> subst s c
-    CheckingInstanceType c -> CheckingInstanceType <$> subst s c
-
-instance MetaSubstitutable m builtin (CheckingExprType builtin) where
-  subst s (CheckingExpr e t1 t2) = CheckingExpr <$> e' <*> subst s t1 <*> subst s t2
-    where
-      e' = case e of
-        Left l -> return $ Left l
-        Right r -> Right <$> subst s r
-
-instance (MetaSubstitutable m builtin a) => MetaSubstitutable m builtin (MetaMap a) where
-  subst s (MetaMap t) = MetaMap <$> traverse (subst s) t
-
-instance MetaSubstitutable m builtin (MetaInfo builtin) where
-  subst s (MetaInfo p t ctx sol) = MetaInfo p <$> subst s t <*> pure ctx <*> subst s sol
--}
 --------------------------------------------------------------------------------
 -- Substitution operation
 
@@ -223,8 +169,11 @@ instance (RawMetaSubstitutable m builtin a) => RawMetaSubstitutable m builtin [a
 
 instance RawMetaSubstitutable m builtin (MetaVariableContext builtin) where
   subst s ctx = for ctx $ \entry -> do
-    newSolution <- substAt (boundCtxLv (metaCtx entry)) s (metaSolution entry)
+    let lv = boundCtxLv (metaCtx entry)
+    newType <- substAt lv s (metaType entry)
+    newSolution <- substAt lv s (metaSolution entry)
     return $
       entry
-        { metaSolution = newSolution
+        { metaSolution = newSolution,
+          metaType = newType
         }
