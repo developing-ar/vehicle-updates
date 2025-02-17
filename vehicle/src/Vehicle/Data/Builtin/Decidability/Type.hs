@@ -5,7 +5,8 @@ module Vehicle.Data.Builtin.Decidability.Type
   )
 where
 
-import Vehicle.Compile.Context.Free (getFreeEnv)
+import Data.Proxy (Proxy (..))
+import Vehicle.Compile.Context.Free (getDeclType, getFreeEnv)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad
@@ -112,13 +113,31 @@ typeOfCast t = forAllDims $ \dims -> tBoolTensor dims ~> tTensor t dims
 --------------------------------------------------------------------------------
 
 instance HasTypeSystem DecidabilityBuiltin where
-  convertFromStandardBuiltins = convertToDecidabilityBuiltins
+  convertFromStandardBuiltins x = traverseFreeVarsM (const id) convertToDecidabilityFreeVars =<< traverseBuiltinsM convertToDecidabilityBuiltins x
   restrictDeclType = restrictDecidabilityDeclType
   isAuxiliaryConstraint _ = False
 
   solveAuxiliaryInstanceConstraint _ = return ()
   addAuxiliaryInputOutputConstraints = return
   generateDefaultAuxiliaryConstraint _ = return False
+
+convertToDecidabilityFreeVars ::
+  forall m.
+  (MonadTypeChecker DecidabilityBuiltin m) =>
+  FreeVarUpdate m DecidabilityBuiltin
+convertToDecidabilityFreeVars f p ident args = do
+  declType <- getDeclType (Proxy @DecidabilityBuiltin) ident
+  args' <- traverseArgs f args
+  finalArgs <- insertNewArgs args' declType
+  return $ normAppList (FreeVar p ident) finalArgs
+  where
+    insertNewArgs :: [Arg DecidabilityBuiltin] -> Type DecidabilityBuiltin -> m [Arg DecidabilityBuiltin]
+    insertNewArgs as = \case
+      Pi _ binder result -> do
+        if wasInsertedByCompiler binder && isImplicit binder
+          then (argFromBinder binder (Hole p "_") :) <$> insertNewArgs as result
+          else return as
+      _ -> return as
 
 convertToDecidabilityBuiltins ::
   forall m.

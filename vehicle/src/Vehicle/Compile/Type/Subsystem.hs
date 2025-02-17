@@ -65,8 +65,8 @@ simplifyTypes ::
   m (Prog Builtin)
 simplifyTypes prog = do
   irrelevantFreeProg <- removeIrrelevantCodeFromProg prog
-  monomorphsiedProg <- monomorphise isPropertyDecl "-" irrelevantFreeProg
-  implicitFreeProg <- removeImplicitArgs monomorphsiedProg
+  monomorphisedProg <- monomorphise isPropertyDecl (const True) "-" irrelevantFreeProg
+  implicitFreeProg <- removeImplicitArgs monomorphisedProg
   return implicitFreeProg
 
 resolveInstanceArgumentsAndCasts ::

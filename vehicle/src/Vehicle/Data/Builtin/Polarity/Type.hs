@@ -184,7 +184,7 @@ typeOfStack = typeOfVectorLiteral
 --------------------------------------------------------------------------------
 
 instance HasTypeSystem PolarityBuiltin where
-  convertFromStandardBuiltins = convertToPolarityTypes
+  convertFromStandardBuiltins = traverseBuiltinsM convertToPolarityTypes
   restrictDeclType = restrictDeclPolarityType
   isAuxiliaryConstraint _ = True
   solveAuxiliaryInstanceConstraint = solvePolarityConstraint

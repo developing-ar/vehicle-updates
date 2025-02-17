@@ -187,7 +187,7 @@ instance Pretty DecidabilityBuiltinType where
 
 instance Pretty DecidabilityBuiltinTypeClass where
   pretty t = case t of
-    HasCompare dom op -> "Has" <+> pretty dom <+> pretty op
+    HasCompare dom op -> "Has" <> pretty dom <> pretty op
     HasBoolTensorLiterals -> pretty $ show t
     IsBool -> pretty $ show t
     HasNot -> pretty $ show t

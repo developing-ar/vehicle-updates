@@ -152,7 +152,7 @@ typeOfVectorLiteral =
 --------------------------------------------------------------------------------
 
 instance HasTypeSystem Builtin where
-  convertFromStandardBuiltins = noOpBuiltinUpdate
+  convertFromStandardBuiltins = return
   restrictDeclType = restrictStandardDeclType
   isAuxiliaryConstraint e = case e of
     App (Builtin _ NatInDomainConstraint) _ -> True

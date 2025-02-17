@@ -29,7 +29,8 @@ type TCM builtin m =
 class (Eq builtin, Hashable builtin, NormalisableBuiltin builtin, TypableBuiltin builtin) => HasTypeSystem builtin where
   convertFromStandardBuiltins ::
     (MonadTypeChecker builtin m) =>
-    BuiltinUpdate m Builtin builtin
+    Expr Builtin ->
+    m (Expr builtin)
 
   restrictDeclType ::
     (MonadTypeChecker builtin m) =>

@@ -54,7 +54,7 @@ typeCheckSolitaryExpr ::
   m (Expr builtin)
 typeCheckSolitaryExpr instanceCandidates freeCtx expr1 = do
   runTypeCheckerTInitially freeCtx instanceCandidates $ do
-    expr2 <- convertExprFromStandardTypes expr1
+    expr2 <- convertFromStandardBuiltins expr1
     (expr3, _exprType) <- inferExprType mempty Relevant expr2
     solveConstraints (Proxy @builtin)
     expr4 <- substMetasAt 0 expr3
@@ -77,7 +77,7 @@ typeCheckDecl uncheckedDecl =
   logCompilerPass MidDetail ("typing" <+> quotePretty (identifierOf uncheckedDecl)) $ do
     logDebug MidDetail $ prettyExternal uncheckedDecl <> line
 
-    convertedDecl <- traverse convertExprFromStandardTypes uncheckedDecl
+    convertedDecl <- traverse convertFromStandardBuiltins uncheckedDecl
     setCurrentDecl $ Just convertedDecl
 
     decl <- case convertedDecl of
@@ -86,17 +86,10 @@ typeCheckDecl uncheckedDecl =
 
     checkAllUnknownsSolved (Proxy @builtin)
     finalDecl <- substMetas decl
-    logCompilerPassOutput $ prettyFriendly finalDecl
+    logCompilerPassOutput $ prettyExternal finalDecl
     setCurrentDecl @builtin Nothing
 
     return finalDecl
-
-convertExprFromStandardTypes ::
-  forall builtin m.
-  (HasTypeSystem builtin, TCM builtin m) =>
-  Expr Builtin ->
-  m (Expr builtin)
-convertExprFromStandardTypes = traverseBuiltinsM convertFromStandardBuiltins
 
 typeCheckAbstractDef ::
   forall builtin m.
@@ -132,7 +125,8 @@ typeCheckFunction p ident anns typ body = do
   checkedType <- checkDeclType ident typ
   finalCheckedType <-
     if isProperty anns
-      then restrictDeclType RestrictedProperty (ident, p) checkedType
+      then logCompilerPass MidDetail "checking suitability of type as @property" $ do
+        restrictDeclType RestrictedProperty (ident, p) checkedType
       else return checkedType
 
   -- Type check the body.
@@ -278,6 +272,7 @@ checkAllMetasSolved proxy = do
               origin <- getMetaProvenance proxy meta
               return (meta, origin)
           )
+      logUnsolvedUnknowns proxy
       throwError $ TypingError $ UnsolvedMetas proxy metasAndOrigins
 
 bidirectionalPassDoc :: Doc a

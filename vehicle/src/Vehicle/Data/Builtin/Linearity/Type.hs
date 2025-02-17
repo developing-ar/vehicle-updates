@@ -171,7 +171,7 @@ typeOfStack = typeOfVectorLiteral
 --------------------------------------------------------------------------------
 
 instance HasTypeSystem LinearityBuiltin where
-  convertFromStandardBuiltins = convertToLinearityTypes
+  convertFromStandardBuiltins = traverseBuiltinsM convertToLinearityTypes
   restrictDeclType = restrictLinearityDeclType
   isAuxiliaryConstraint _ = True
   solveAuxiliaryInstanceConstraint = solveLinearityConstraint

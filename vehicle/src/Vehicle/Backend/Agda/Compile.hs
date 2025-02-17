@@ -46,6 +46,7 @@ compileProgToAgda :: (MonadCompile m) => Prog DecidabilityBuiltin -> AgdaOptions
 compileProgToAgda prog options =
   logCompilerPass MinDetail currentPhase $ do
     monoProg <- resolveInstanceArgumentsAndCasts prog
+    logDebug MaxDetail $ prettyExternal monoProg
     prog2 <- capitaliseTypeNames monoProg
     programDoc <- runFreshNameContextT $ compileProg options prog2
     let programStream = layoutPretty defaultLayoutOptions programDoc
