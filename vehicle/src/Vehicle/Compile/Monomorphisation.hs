@@ -17,21 +17,17 @@ import Control.Monad.State
 import Control.Monad.Writer (MonadWriter (..), runWriterT)
 import Data.Bifunctor (Bifunctor (..))
 import Data.HashMap.Strict (HashMap)
-import Data.HashMap.Strict qualified as Map
-  ( delete,
-    insertWith,
-    lookup,
-    member,
-    singleton,
-  )
+import Data.HashMap.Strict qualified as HashMap
 import Data.Hashable (Hashable)
-import Data.LinkedHashSet (LinkedHashSet)
-import Data.LinkedHashSet qualified as HashSet (singleton, toList, union)
+import Data.LinkedHashSet qualified as HashSet (fromList, toList)
+import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NonEmpty
+import Data.Map (Map)
+import Data.Map qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Set qualified as Set (member, unions)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Vehicle.Compile.Context.Free (MonadFreeContext)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyExternal, prettyFriendly, prettyFriendlyEmptyCtx, prettyVerbose)
@@ -58,7 +54,7 @@ monomorphise isRootDecl isMonomorphisableBinder nameJoiner prog =
   logCompilerPass MinDetail "monomorphisation" $ do
     let readerState = (isRootDecl, isMonomorphisableBinder, nameJoiner)
     (prog2, substitutions) <- runReaderT (evalStateT (runWriterT (monomorphiseProg prog)) mempty) readerState
-    result <- runReaderT (insert prog2) substitutions
+    result <- runReaderT (replacePreviousApplications isMonomorphisableBinder prog2) substitutions
     logCompilerPassOutput $ prettyFriendly result
     return result
 
@@ -85,10 +81,10 @@ obtainArgsToMonomorphise shouldMonomorphiseBinder typ appArgs =
 -- Pass 2 - collects the sites for monomorphisation
 
 -- | Applications of monomorphisable functions
-type CandidateApplications builtin = HashMap Identifier (LinkedHashSet [Arg builtin])
+type CandidateApplications builtin = Map Identifier (NonEmpty [Arg builtin])
 
 -- | Solution identifier for a candidate monomorphisation application
-type SubsitutionSolutions builtin = HashMap (Identifier, [Arg builtin]) Identifier
+type SubsitutionSolutions builtin = Map Identifier (Type builtin, HashMap [Arg builtin] Identifier)
 
 type MonadCollect builtin m =
   ( MonadCompile m,
@@ -109,24 +105,25 @@ monomorphiseDecls top decl = do
   logCompilerSection MaxDetail ("Checking" <+> quotePretty ident) $ do
     newDecls <- monomorphiseDecl top decl
     forM_ newDecls $ traverse collectReferences
-    recursiveReferences <- gets (Map.member ident)
-    resursiveDecls <-
+    {-
+    recursiveReferences <- gets (Map.element ident)
+    recursiveDecls <-
       if recursiveReferences
         then monomorphiseDecls False decl
         else return []
-    return (newDecls <> resursiveDecls)
+    -}
+    return newDecls -- <> recursiveDecls)
 
 monomorphiseDecl :: (MonadCollect builtin m) => Bool -> Decl builtin -> m [Decl builtin]
 monomorphiseDecl top decl = do
   logDebug MaxDetail $ prettyExternal decl
   let ident = identifierOf decl
-  freeVarApplications <- get
-  modify (Map.delete ident)
-  case decl of
+  maybeApplications <- gets (Map.lookup ident)
+  result <- case decl of
     DefAbstract {} -> return [decl]
-    DefFunction p _ anns t e -> do
-      (isRootDecl, _, _) <- ask
-      case Map.lookup ident freeVarApplications of
+    DefFunction p _ anns typ e -> do
+      (isRootDecl, shouldMonomorphiseBinder, _) <- ask
+      case maybeApplications of
         Nothing -> do
           logDebug MaxDetail $ "No applications of" <+> quotePretty ident <+> "found."
           if isRootDecl decl
@@ -137,13 +134,28 @@ monomorphiseDecl top decl = do
               logDebug MaxDetail "Discarding declaration"
               return []
         Just applications -> do
-          let applicationList = HashSet.toList applications
-          let numberOfApplications = length applicationList
-          let allFreeVarsInArgs = Set.unions (freeVarsIn . argExpr <$> concat applicationList)
+          monomorphisations <- calculateMonomorphisations shouldMonomorphiseBinder typ applications
+          let numberOfApplications = length monomorphisations
+          let allFreeVarsInArgs = Set.unions (freeVarsIn . argExpr <$> concat monomorphisations)
           let createNewName = numberOfApplications > 1 || not top || ident `Set.member` allFreeVarsInArgs
           logDebug MaxDetail $ "Found" <+> pretty numberOfApplications <+> "type-unique application(s):"
-          logDebug MaxDetail $ indent 2 $ prettyVerbose applicationList <> line
-          traverse (performMonomorphisation (p, ident, anns, t, e) createNewName) applicationList
+          logDebug MaxDetail $ indent 2 $ prettyVerbose monomorphisations <> line
+          traverse (performMonomorphisation (p, ident, anns, typ, e) createNewName) monomorphisations
+
+  modify (Map.delete ident)
+  return result
+
+calculateMonomorphisations ::
+  (MonadCompile m, Hashable builtin) =>
+  (Binder builtin -> Bool) ->
+  Type builtin ->
+  NonEmpty [Arg builtin] ->
+  m [[Arg builtin]]
+calculateMonomorphisations shouldMonomorphiseBinder declType allApplications = do
+  let calculateMonomorphisation = obtainArgsToMonomorphise shouldMonomorphiseBinder declType
+  let monomorphisations = fmap (fst . calculateMonomorphisation) allApplications
+  let uniqueMonomorphisations = HashSet.fromList $ NonEmpty.toList monomorphisations
+  return $ HashSet.toList uniqueMonomorphisations
 
 performMonomorphisation ::
   (MonadCollect builtin m) =>
@@ -157,7 +169,7 @@ performMonomorphisation (p, ident, anns, typ, body) createNewName args = do
       then changeName ident <$> getMonomorphisedName (nameOf ident) args
       else return ident
   (newType, newBody) <- substituteArgsThrough (typ, body, args)
-  tell (Map.singleton (ident, args) newIdent)
+  tell (Map.singleton ident (typ, HashMap.singleton args newIdent))
   let newDecl = DefFunction p newIdent anns newType newBody
   logDebug MaxDetail $ prettyFriendly newDecl <> line
   return newDecl
@@ -190,7 +202,7 @@ collectReferences expr = void $ traverseFreeVarsM (const id) collectReference ex
     collectReference recGo p ident args = do
       logDebug MaxDetail $ "Found application:" <+> quotePretty ident <+> prettyVerbose args
       args' <- traverse (traverse recGo) args
-      modify (Map.insertWith HashSet.union ident (HashSet.singleton args'))
+      modify (Map.insert ident [args'])
       return $ normAppList (FreeVar p ident) args
 
 --------------------------------------------------------------------------------
@@ -199,43 +211,33 @@ collectReferences expr = void $ traverseFreeVarsM (const id) collectReference ex
 type MonadInsert builtin m =
   ( MonadCompile m,
     MonadReader (SubsitutionSolutions builtin) m,
-    MonadFreeContext builtin m,
     Hashable builtin,
     PrintableBuiltin builtin
   )
 
-insert :: (MonadInsert builtin m) => Prog builtin -> m (Prog builtin)
-insert = traverse (traverseCandidateApplications _ (const id) replaceCandidateApplication)
+replacePreviousApplications ::
+  forall builtin m.
+  (MonadInsert builtin m) =>
+  (Binder builtin -> Bool) ->
+  Prog builtin ->
+  m (Prog builtin)
+replacePreviousApplications shouldMonomorphiseBinder =
+  traverse (traverseFreeVarsM (const id) replaceCandidateApplication)
   where
-    traverseCandidateApplications ::
-      forall m builtin.
-      (MonadCompile m, MonadFreeContext builtin m) =>
-      (Binder builtin -> Bool) ->
-      (Binder builtin -> m (Expr builtin) -> m (Expr builtin)) ->
-      (Provenance -> Identifier -> [Arg builtin] -> [Arg builtin] -> m (Expr builtin)) ->
-      Expr builtin ->
-      m (Expr builtin)
-    traverseCandidateApplications shouldMonomorphiseBinder underBinder processApp = do
-      traverseFreeVarsM underBinder processApp2
-      where
-        processApp2 recGo p ident args = do
-          let result = splitArgs _ args
-          let (argsToMono, remainingArgs) = fromMaybe ([], args) result
-          remainingArgs' <- traverse (traverse recGo) (reverse remainingArgs)
-          processApp p ident (reverse argsToMono) remainingArgs'
-
     replaceCandidateApplication ::
       (MonadInsert builtin m) =>
-      Provenance ->
-      Identifier ->
-      [Arg builtin] ->
-      [Arg builtin] ->
-      m (Expr builtin)
-    replaceCandidateApplication p ident monoArgs remainingArgs = do
-      solution <- asks (Map.lookup (ident, monoArgs))
-      case solution of
-        Nothing -> return $ normAppList (FreeVar p ident) (monoArgs <> remainingArgs)
-        Just replacementIdent -> return $ normAppList (FreeVar p replacementIdent) remainingArgs
+      FreeVarUpdate m builtin
+    replaceCandidateApplication recGo p ident args = do
+      maybeSolution <- asks (Map.lookup ident)
+      case maybeSolution of
+        Nothing -> return $ normAppList (FreeVar p ident) args
+        Just (typ, applications) -> do
+          let (argsToMono, remainingArgs) = obtainArgsToMonomorphise shouldMonomorphiseBinder typ args
+          case HashMap.lookup argsToMono applications of
+            Nothing -> developerError $ "Missing application of" <+> pretty ident
+            Just newIdent -> do
+              remainingArgs' <- traverse (traverse recGo) (reverse remainingArgs)
+              return $ normAppList (FreeVar p newIdent) remainingArgs'
 
 getMonomorphisedName ::
   (MonadCollect builtin m) =>

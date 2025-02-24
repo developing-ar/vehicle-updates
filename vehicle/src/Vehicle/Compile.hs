@@ -4,7 +4,6 @@ module Vehicle.Compile
   )
 where
 
-import Control.Monad.Except (MonadError (..))
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy.Char8 (unpack)
@@ -89,14 +88,11 @@ compileToITP ::
   m ()
 compileToITP itp CompileOptions {..} typedProg@(Main ds) = do
   -- Prune all standard-library declarations that aren't used.
-  let declsToCompile = mapMaybe (\d -> if isUserIdent (identifierOf d) then Just (nameOf d) else Nothing) ds
+  let declsToCompile = mapMaybe (\d -> if isUserCode d then Just (nameOf d) else Nothing) ds
   prunedProg <- analyseDependenciesAndPrune typedProg declsToCompile
 
   -- Analyse the program to find out which `Bool`s are decidable and which aren't.
-  errorOrDecProg <- decidabilityTypeCheck prunedProg
-  decProg <- case errorOrDecProg of
-    Left err -> throwError err
-    Right decProg -> return decProg
+  decProg <- decidabilityTypeCheck prunedProg
 
   -- Compile depending on the ITP
   case itp of

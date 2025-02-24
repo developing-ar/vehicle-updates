@@ -23,7 +23,6 @@ import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, ixToPro
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
-import Vehicle.Compile.Type.Subsystem (resolveInstanceArgumentsAndCasts)
 import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Builtin.Standard (BuiltinType (..))
 import Vehicle.Data.Builtin.Standard hiding (TensorType)
@@ -45,9 +44,8 @@ data AgdaOptions = AgdaOptions
 compileProgToAgda :: (MonadCompile m) => Prog DecidabilityBuiltin -> AgdaOptions -> m (Doc a)
 compileProgToAgda prog options =
   logCompilerPass MinDetail currentPhase $ do
-    monoProg <- resolveInstanceArgumentsAndCasts prog
-    logDebug MaxDetail $ prettyExternal monoProg
-    prog2 <- capitaliseTypeNames monoProg
+    logDebug MaxDetail $ prettyExternal prog
+    prog2 <- capitaliseTypeNames prog
     programDoc <- runFreshNameContextT $ compileProg options prog2
     let programStream = layoutPretty defaultLayoutOptions programDoc
     -- Collects dependencies by first discarding precedence info and then
@@ -252,14 +250,17 @@ annotateInfixApp dependencies precedence qualifier op args
   | not (all isExplicit args) = annotateApp dependencies qualifier (pretty op) args
   | otherwise = do
       bracketedArgs <- compileArgs precedence args
-      let doc = insertInfixArgs qualifier op bracketedArgs
+      doc <- insertInfixArgs qualifier op bracketedArgs
+      logDebug MaxDetail $ "Hi" <+> doc
       return $ annotate (Set.fromList dependencies, precedence) doc
 
 -- | Inserts infix args into the correct positions
 --
 -- e.g. insertInfixArgs (Just "B") "if_then_else_" [a, b] = B.if a then b else_
-insertInfixArgs :: Maybe Code -> Text -> [Code] -> Code
-insertInfixArgs qual rawOp as = hsep (go qual rawOp as)
+insertInfixArgs :: (MonadCompile m) => Maybe Code -> Text -> [Code] -> m Code
+insertInfixArgs qual rawOp as = do
+  let components = go qual rawOp as
+  return $ hsep components
   where
     go :: Maybe Code -> Text -> [Code] -> [Code]
     go qualifier opText = \case
@@ -268,9 +269,8 @@ insertInfixArgs qual rawOp as = hsep (go qual rawOp as)
         | otherwise -> [pretty opText]
       arg : args -> do
         let (prefix, maybeSuffix) = Text.break (== '_') opText
-        let front = pretty prefix
-        let back = case Text.uncons maybeSuffix of
-              Just (_underscore, suffix) -> insertInfixArgs Nothing suffix args
+        let suffix = case Text.uncons maybeSuffix of
+              Just (_underscore, suff) -> suff
               Nothing ->
                 developerError $
                   "too many arguments"
@@ -278,13 +278,13 @@ insertInfixArgs qual rawOp as = hsep (go qual rawOp as)
                     <+> "but found the following arguments:"
                     <+> list args
 
-        case qualifier of
-          Nothing
-            | Text.null prefix -> [arg, back]
-            | otherwise -> [front, arg, back]
-          Just q
-            | Text.null prefix -> [arg, q <> "." <> back]
-            | otherwise -> [q <> "." <> front, arg, back]
+        if Text.null prefix
+          then arg : go qualifier suffix args
+          else do
+            let back = go Nothing suffix args
+            let front = pretty prefix
+            let qualifiedFront = maybe front (\q -> q <> "." <> front) qualifier
+            qualifiedFront : arg : back
 
 argBrackets :: Precedence -> Visibility -> Code -> Code
 argBrackets parentPrecedence v e = case v of
@@ -462,18 +462,18 @@ compileBuiltin b args = case b of
     Or -> annotateInfixApp [DataSum] 1 Nothing "_⊎_" args
     Not -> annotateInfixApp [RelNullary] 3 Nothing "¬_" args
     Implies -> annotateInfixApp [] minPrecedence Nothing "_→_" args
-    Add AddNat -> annotateInfixApp [DataNat] 6 (Just natQualifier) "_+_" args
+    Add AddNat -> annotateInfixApp [DataNat] 6 (Just natQualifier) "_⊕_" args
     Mul MulNat -> annotateInfixApp [DataNat] 7 (Just natQualifier) "_*_" args
-    Add AddRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_+_" args
-    Sub SubRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_-_" args
+    Add AddRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊕_" args
+    Sub SubRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊖_" args
     Mul MulRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_*_" args
     Div DivRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_÷_" args
     Neg NegRatTensor -> annotateInfixApp [DataTensor] 8 (Just tensorQualifier) "-_" args
     Min MinRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊓_" args
     Max MaxRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_⊔_" args
-    Compare CompareIndex op -> annotateInfixApp [DataFin] 4 (Just finQualifier) (comparisonOperator False op) args
-    Compare CompareNat op -> annotateInfixApp [DataNat] 4 (Just natQualifier) (comparisonOperator False op) args
-    Compare CompareRatTensor op -> annotateInfixApp [DataTensor] 4 (Just tensorQualifier) (comparisonOperator False op) args
+    Compare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator False op) args
+    Compare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator False op) args
+    Compare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator False op) args
     FoldList -> annotateApp [DataList] (Just listQualifier) "foldr" args
     MapList -> annotateApp [DataList] (Just listQualifier) "map" args
     ReduceAndTensor -> annotateApp [DataTensor] Nothing "reduceAnd" args
@@ -486,7 +486,7 @@ compileBuiltin b args = case b of
     QuantifyRatTensor q -> case reverse args of
       (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
       _ -> unsupportedArgsError
-    At -> annotateInfixApp [FunctionBase] (-1) Nothing "_$_" args
+    At -> annotateInfixApp [DataTensor] (-1) Nothing "_!_" args
     If -> annotateInfixApp [DataBool] 0 Nothing "if_then_else_" args
     Foreach -> annotateApp [DataTensor] Nothing "foreach" args
     StackTensor {} -> annotateApp [DataTensor] Nothing "stack" args
@@ -497,9 +497,9 @@ compileBuiltin b args = case b of
     DecAnd -> annotateInfixApp [DataBool] 6 Nothing "_∧_" args
     DecOr -> annotateInfixApp [DataBool] 5 Nothing "_∨_" args
     DecImplies -> annotateInfixApp [VehicleUtils] 4 Nothing "_⇒_" args
-    DecCompare CompareIndex op -> annotateInfixApp [DataFin] 4 (Just finQualifier) (comparisonOperator True op) args
-    DecCompare CompareNat op -> annotateInfixApp [DataNat] 4 (Just natQualifier) (comparisonOperator True op) args
-    DecCompare CompareRatTensor op -> annotateInfixApp [DataTensor] 4 (Just tensorQualifier) (comparisonOperator True op) args
+    DecCompare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator True op) args
+    DecCompare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator True op) args
+    DecCompare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator True op) args
     DecReduceAndTensor -> unsupportedError
     DecReduceOrTensor -> unsupportedError
     BoolTensorToDecBoolTensor -> unsupportedError
@@ -577,13 +577,13 @@ compileDecBoolLiteral = \case
 comparisonOperator :: Bool -> ComparisonOp -> Text
 comparisonOperator decidable order = do
   let orderDoc = case order of
-        Le -> "≤"
-        Lt -> "<"
-        Ge -> "≥"
-        Gt -> ">"
-        Eq -> "≡"
-        Ne -> "≢"
-  "_" <> orderDoc <> (if decidable then "ᵇ" else "") <> "_"
+        Le -> if decidable then "≤ᵇ" else "≤"
+        Lt -> if decidable then "<ᵇ" else "<"
+        Ge -> if decidable then "≥ᵇ" else "≥"
+        Gt -> if decidable then ">ᵇ" else ">"
+        Eq -> if decidable then "≡ᵇ" else "≈"
+        Ne -> if decidable then "≢ᵇ" else "≉"
+  "_" <> orderDoc <> "_"
 
 compileFunDef :: Code -> Code -> [Code] -> Code -> Code
 compileFunDef n t ns e =

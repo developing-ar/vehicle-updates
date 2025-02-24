@@ -6,7 +6,7 @@ module Vehicle.Compile.Type.Subsystem
   )
 where
 
-import Control.Monad.Except (runExceptT)
+import Control.Monad.Except (MonadError (..), runExceptT)
 import Data.List.NonEmpty qualified as NonEmpty
 import Vehicle.Backend.Prelude
 import Vehicle.Compile.Error
@@ -18,7 +18,7 @@ import Vehicle.Compile.Type (typeCheckProg)
 import Vehicle.Compile.Type.Core (InstanceDatabase, emptyInstanceDatabase)
 import Vehicle.Compile.Type.Irrelevance (removeIrrelevantCodeFromProg)
 import Vehicle.Compile.Type.System
-import Vehicle.Data.Builtin.Decidability (DecidabilityBuiltin)
+import Vehicle.Data.Builtin.Decidability (DecidabilityBuiltin (..))
 import Vehicle.Data.Builtin.Decidability.Instances (decidabilityBuiltinInstances)
 import Vehicle.Data.Builtin.Decidability.Type ()
 import Vehicle.Data.Builtin.Interface (BuiltinHasListLiterals)
@@ -38,8 +38,20 @@ polarityTypeCheck = typeCheckWithSubsystem PolarityTypes emptyInstanceDatabase s
 linearityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Either CompileError (Prog LinearityBuiltin))
 linearityTypeCheck = typeCheckWithSubsystem LinearityTypes emptyInstanceDatabase simplifyTypes
 
-decidabilityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Either CompileError (Prog DecidabilityBuiltin))
-decidabilityTypeCheck = typeCheckWithSubsystem DecidabilityTypes decidabilityBuiltinInstances return
+decidabilityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Prog DecidabilityBuiltin)
+decidabilityTypeCheck prog = do
+  errorOrDecProg <- typeCheckWithSubsystem DecidabilityTypes decidabilityBuiltinInstances return prog
+  decProg <- case errorOrDecProg of
+    Left err -> throwError err
+    Right decProg -> return decProg
+
+  instanceFreeProg <- resolveInstanceArgumentsAndCasts decProg
+  monomorphise isUserCode isDeclTypeClassBinder "-" instanceFreeProg
+  where
+    isDeclTypeClassBinder :: Binder DecidabilityBuiltin -> Bool
+    isDeclTypeClassBinder binder = case typeOf binder of
+      App (Builtin _ (DecidabilityBuiltinTypeClass {})) _ -> True
+      _ -> False
 
 typeCheckWithSubsystem ::
   forall builtin m.

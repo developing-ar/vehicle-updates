@@ -51,7 +51,7 @@ typeCheck loggingSettings options@TypeCheckOptions {..} = runCompileMonad loggin
     Nothing -> return ()
     Just LinearityTypes -> printPropertyTypes =<< linearityTypeCheck mergedProg
     Just PolarityTypes -> printPropertyTypes =<< polarityTypeCheck mergedProg
-    Just DecidabilityTypes -> printPropertyTypes =<< decidabilityTypeCheck mergedProg
+    Just DecidabilityTypes -> printPropertyTypes . Right =<< decidabilityTypeCheck mergedProg
 
 --------------------------------------------------------------------------------
 -- Useful functions that apply to multiple compiler passes

@@ -7,13 +7,17 @@ open import Data.Empty.Polymorphic using (⊥)
 open import Data.Nat.Base using (ℕ; zero; suc)
 open import Data.List.Base using (List; []; _∷_; tabulate; concat; foldr)
 open import Data.Vec.Functional using (Vector)
+open import Function.Base using (id; _$_)
 import Data.Vec.Functional as Vec
 import Data.Vec.Functional.Relation.Binary.Pointwise as Vec
+import Data.Vec.Functional.Relation.Binary.Pointwise.Properties as Vec
 open import Data.Fin using (Fin)
 import Data.Rational as ℚ
 open import Data.Rational using (ℚ)
 open import Function.Base using (flip)
 open import Vehicle.Utils
+open import Relation.Binary
+open import Relation.Binary.PropositionalEquality using (_≡_)
 
 Dimension : Set
 Dimension = ℕ
@@ -23,10 +27,11 @@ Dimensions = List Dimension
 
 private
   variable
-    a p : Level
+    a p ℓ : Level
     A B C : Set a
     d : Dimension
     ds : Dimensions
+    R : Rel A ℓ
 
 Tensor : Set a → Dimensions → Set a
 Tensor A []       = A
@@ -36,13 +41,39 @@ Pointwise : (A → B → Set p) → Tensor A ds → Tensor B ds → Set p
 Pointwise {ds = []}      P xs ys = P xs ys
 Pointwise {ds = d ∷ ds} P xs ys = Vec.Pointwise (Pointwise P) xs ys
 
-StackType : (A B : Set) → Dimension → Set
-StackType A B zero    = B
-StackType A B (suc n) = A → StackType A B n
+refl : Reflexive R → ∀ ds → Reflexive (Pointwise {ds = ds} R)
+refl R-refl []     = R-refl
+refl {R = R} R-refl (d ∷ ds) = Vec.refl {R = Pointwise {ds = ds} R} (refl R-refl ds)
 
-stack : StackType (Tensor A ds) (Tensor A (d ∷ ds)) d
-stack {d = zero}  = {!!}
-stack {d = suc d} t = {!!}
+sym : Symmetric R → ∀ ds → Symmetric (Pointwise {ds = ds} R)
+sym R-sym []     = R-sym
+sym {R = R} R-sym (d ∷ ds) = Vec.sym {R = Pointwise {ds = ds} R} (sym R-sym ds)
+
+trans : Transitive R → ∀ ds → Transitive (Pointwise {ds = ds} R)
+trans R-trans [] = R-trans
+trans {R = R} R-trans (d ∷ ds) = Vec.trans {R = Pointwise {ds = ds} R} (trans R-trans ds)
+
+decidable : Decidable R → ∀ ds → Decidable (Pointwise {ds = ds} R)
+decidable R? []        = R?
+decidable R? (d ∷ ds) = Vec.decidable (decidable R? ds)
+
+isEquivalence : IsEquivalence R → ∀ {ds} → IsEquivalence (Pointwise {ds = ds} R)
+isEquivalence {R = R} isEq {ds} = record
+  { refl = refl E.refl ds
+  ; sym = sym E.sym ds
+  ; trans = trans E.trans ds
+  }
+  where module E = IsEquivalence isEq
+
+isDecEquivalence : IsDecEquivalence R → ∀ {ds} → IsDecEquivalence (Pointwise {ds = ds} R)
+isDecEquivalence {R = R} isDecEq {ds} = record
+  { isEquivalence = isEquivalence E.isEquivalence
+  ; _≟_ = decidable E._≟_ ds
+  }
+  where module E = IsDecEquivalence isDecEq
+
+stack : Vector (Tensor A ds) d → Tensor A (d ∷ ds)
+stack = id
 
 foreach : (Fin d → Tensor A ds) → Tensor A (d ∷ ds)
 foreach f = f
@@ -65,6 +96,11 @@ toList {ds = d ∷ ds} xs = concat (tabulate λ i → toList (xs i))
 
 reduce : (A → B → B) → B → Tensor A ds → Tensor B []
 reduce f e xs = foldr f e (toList xs)
+
+infix 6 _!_
+
+_!_ : Tensor A (d ∷ ds) → Fin d → Tensor A ds
+_!_ = _$_
 
 --------------------------------------------------------------------------------
 -- Rational specialisations
@@ -97,6 +133,8 @@ reduceAnd = reduce _∧_ true
 reduceOr : Tensor Bool ds → Tensor Bool []
 reduceOr = reduce _∨_ false
 
+_≋_ : Tensor ℚ ds → Tensor ℚ ds → Set 0ℓ
+xs ≋ ys = Pointwise {A = ℚ} _≡_ xs ys
 
 _≤_ : Tensor ℚ ds → Tensor ℚ ds → Set 0ℓ
 xs ≤ ys = Pointwise ℚ._≤_ xs ys
@@ -121,3 +159,16 @@ xs ≥ᵇ ys = reduceAnd (zipWith (flip ℚ._≤ᵇ_) xs ys)
 
 _>ᵇ_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool []
 xs >ᵇ ys = reduceAnd (zipWith (flip _ℚ<ᵇ_) xs ys)
+
+--------------------------------------------------------------------------------
+-- Instances
+
+instance
+  subTensor : {{_ : HasSub A}} → HasSub (Tensor A ds)
+  subTensor {{sub}} = hasSub (zipWith (_⊖_ {{sub}}))
+
+  addTensor : ∀ {{_ : HasAdd A}} → HasAdd (Tensor A ds)
+  addTensor {{add}} = hasAdd (zipWith (_⊕_ {{add}}))
+
+  decEqTensor : ∀ {_≈_ : Rel A ℓ} {{_ : IsDecEquivalence _≈_}} → IsDecEquivalence (Pointwise {ds = ds} _≈_)
+  decEqTensor {{isEq}} = isDecEquivalence isEq
