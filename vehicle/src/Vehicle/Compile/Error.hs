@@ -135,6 +135,7 @@ data CompileError
   | NoQuantifierDomainFound DeclProvenance (GenericBinder ()) (Maybe [(Name, UnderConstrainedVariableStatus)])
   | -- ITP backend errors
     UnsupportedPolymorphicEquality ITP Provenance Name
+  | UnusedMonomorphisableDeclaration Provenance Identifier
   | -- Other
     UnsupportedInequality QueryFormatID DeclProvenance
   | QuantifiedIfCondition (ConstraintContext PolarityBuiltin)

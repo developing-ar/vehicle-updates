@@ -7,6 +7,7 @@ module Vehicle.Compile.Monomorphisation
 where
 
 import Control.Monad (forM_, void)
+import Control.Monad.Except (MonadError (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
 import Control.Monad.State
   ( MonadState (..),
@@ -128,8 +129,14 @@ monomorphiseDecl top decl = do
           logDebug MaxDetail $ "No applications of" <+> quotePretty ident <+> "found."
           if isRootDecl decl
             then do
-              logDebug MaxDetail "Keeping declaration"
-              return [decl]
+              let fakeArgs = explicit (Hole mempty "fakeArg") : fakeArgs
+              let (argsToMono, _) = obtainArgsToMonomorphise shouldMonomorphiseBinder typ fakeArgs
+              if not (null argsToMono)
+                then
+                  throwError $ UnusedMonomorphisableDeclaration p ident
+                else do
+                  logDebug MaxDetail "Keeping declaration"
+                  return [decl]
             else do
               logDebug MaxDetail "Discarding declaration"
               return []

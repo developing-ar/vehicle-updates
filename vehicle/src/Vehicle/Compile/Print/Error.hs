@@ -835,6 +835,17 @@ instance MeaningfulError CompileError where
                 <> indent 2 (prettyFriendly (WithContext problematicValue ctx)),
             fix = Nothing
           }
+    UnusedMonomorphisableDeclaration p ident ->
+      UError $
+        UserError
+          { provenance = p,
+            problem =
+              "Unable to compile declaration"
+                <+> quotePretty ident
+                <+> "as it is not used in any properties and therefore unable to decide"
+                <+> "whether or not it should be lifted to the type-level.",
+            fix = Just "remove the declaration or use it in a property."
+          }
 
 datasetDimensionsFix :: Doc a -> Identifier -> FilePath -> Doc a
 datasetDimensionsFix feature ident file =
