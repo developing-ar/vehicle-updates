@@ -360,6 +360,14 @@ getSubstMetaType m = do
   MetaInfo {..} <- getMetaInfo m
   substMetasAt (boundCtxLv metaCtx) metaType
 
+updateMetaType :: forall builtin m. (MonadTypeChecker builtin m) => MetaID -> Type builtin -> m ()
+updateMetaType m typ = do
+  let updateInfo info = info {metaType = typ}
+  modifyTypeCheckerState $ \state ->
+    state
+      { metaVariableCtx = MetaMap.adjust updateInfo m (metaVariableCtx state)
+      }
+
 --------------------------------------------------------------------------------
 -- Constraints
 

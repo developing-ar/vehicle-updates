@@ -15,6 +15,7 @@ import Data.Maybe (fromMaybe, isNothing)
 import Data.Text qualified as Text
 import Vehicle.Compile.Context.Bound
 import Vehicle.Compile.Error
+import Vehicle.Compile.Normalise.Quote qualified as Quote
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
 import Vehicle.Compile.Type.Constraint.UnificationSolver (UnificationResult (..), unify)
@@ -77,14 +78,12 @@ removeAllDependencies decl = do
           void $ solveInTermsOfNewMetaWithDependencies meta metaInfo mempty
 
   logCompilerPass MaxDetail "removing dependencies from and merging instance constraints" $ do
-    metaVariableCtx <- getMetaVariableCtx @builtin
-
     -- Remove instance constraint dependencies
     instanceConstraints <- getActiveInstanceConstraints @builtin
     auxiliaryInstanceConstraints <- getActiveAuxiliaryInstanceConstraints @builtin
 
-    newInstanceConstraints <- forM instanceConstraints $ removeInstanceDependencies metaVariableCtx
-    newAuxiliaryInstanceConstraints <- forM auxiliaryInstanceConstraints $ removeInstanceDependencies metaVariableCtx
+    newInstanceConstraints <- forM instanceConstraints removeInstanceDependencies
+    newAuxiliaryInstanceConstraints <- forM auxiliaryInstanceConstraints removeInstanceDependencies
 
     mergedInstanceConstraints <- mergeInstanceConstraints newInstanceConstraints
     mergedAuxiliaryInstanceConstraints <- mergeInstanceConstraints newAuxiliaryInstanceConstraints
@@ -104,33 +103,34 @@ removeAllDependencies decl = do
 
 removeInstanceDependencies ::
   (MonadGeneralise builtin m) =>
-  MetaVariableContext builtin ->
   WithContext (InstanceConstraint builtin) ->
   m (WithContext (InstanceConstraint builtin))
-removeInstanceDependencies metaVarCtx c@(WithContext constraint ctx) =
+removeInstanceDependencies c@(WithContext constraint ctx) =
   logCompilerSection MaxDetail "Removing dependencies from:" $ do
-    logDebug MaxDetail $ prettyExternal c
+    logDebug MaxDetail $ "Input: " <+> prettyExternal c
     let newCtx = updateConstraintBoundCtx ctx (const mempty)
     substConstraint <- substMetasAt (boundCtxLv $ boundContextOf ctx) constraint
-    newConstraint <- updateSolutionMeta metaVarCtx substConstraint
+    newConstraint <- updateSolutionMeta substConstraint
     let result = WithContext newConstraint newCtx
-    logDebug MaxDetail $ prettyExternal result
+    logDebug MaxDetail $ "Output:" <+> prettyExternal result
     return result
 
 updateSolutionMeta ::
   forall builtin m.
-  (MonadCompile m) =>
-  MetaVariableContext builtin ->
+  (MonadGeneralise builtin m) =>
   InstanceConstraint builtin ->
   m (InstanceConstraint builtin)
-updateSolutionMeta metaCtx constraint = do
+updateSolutionMeta constraint = do
   let originalMeta = instanceSolution constraint
   newMeta <- findUnsolvedMeta originalMeta
+  -- This is a hack that should disappear when we get
+  updateMetaType newMeta (Quote.unnormalise @(Value builtin) @(Expr builtin) 0 $ goalExpr $ instanceGoal constraint)
   return $ constraint {instanceSolution = newMeta}
   where
     findUnsolvedMeta :: MetaID -> m MetaID
     findUnsolvedMeta meta = do
-      case metaSolution (findMetaInfo metaCtx meta) of
+      metaInfo <- getMetaInfo meta
+      case metaSolution metaInfo of
         Nothing -> return meta
         Just solution -> findMetaSolvedInTermsOf $ unnormalised solution
 
