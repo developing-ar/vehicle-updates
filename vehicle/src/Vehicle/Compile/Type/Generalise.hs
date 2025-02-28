@@ -139,9 +139,9 @@ updateSolutionMeta constraint = do
       Lam _ _ body -> findMetaSolvedInTermsOf body
       Meta _ m -> findUnsolvedMeta m
       App (Meta _ m) _ -> findUnsolvedMeta m
-      _ ->
-        developerError
-          "Instance constraint meta solved in terms of a non-meta. This should mean the constraint was either failed or solvable"
+      e ->
+        developerError $
+          "Instance constraint meta solved in terms of a non-meta" <+> prettyVerbose e <+> "This should mean the constraint was either failed or solvable"
 
 mergeInstanceConstraints ::
   forall builtin m.

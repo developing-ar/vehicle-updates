@@ -443,8 +443,6 @@ compileBuiltin b args = case b of
     ListType -> annotateApp [DataList] Nothing "List" args
     TensorType -> annotateApp [DataTensor] Nothing "Tensor" args
     IndexType -> annotateApp [DataFin] Nothing "Fin" args
-  DecidabilityBuiltinType t -> case t of
-    DecBoolType -> return $ annotateConstant [DataBool] "Bool"
   StandardBuiltinConstructor c -> case c of
     Nil -> return $ annotateConstant [DataList] "[]"
     Cons -> annotateInfixApp [DataList] 5 Nothing "_∷_" args
@@ -455,13 +453,11 @@ compileBuiltin b args = case b of
     BoolTensorLiteral t -> return $ compileTensorLiteral compileBoolLiteral t
     RatTensorLiteral t -> return $ compileTensorLiteral compileRatLiteral t
     IndexTensorLiteral t -> return $ compileTensorLiteral compileIndexLiteral t
-  DecidabilityBuiltinConstructor c -> case c of
-    DecBoolTensor t -> return $ compileTensorLiteral compileDecBoolLiteral t
   StandardBuiltinFunction f -> case f of
-    And -> annotateInfixApp [DataProduct] 2 Nothing "_×_" args
-    Or -> annotateInfixApp [DataSum] 1 Nothing "_⊎_" args
-    Not -> annotateInfixApp [RelNullary] 3 Nothing "¬_" args
-    Implies -> annotateInfixApp [] minPrecedence Nothing "_→_" args
+    And -> annotateInfixApp [DataBool] 6 Nothing "_∧_" args
+    Or -> annotateInfixApp [DataBool] 5 Nothing "_∨_" args
+    Not -> annotateApp [DataBool] Nothing "not" args
+    Implies -> annotateInfixApp [VehicleUtils] 4 Nothing "_⇒_" args
     Add AddNat -> annotateInfixApp [DataNat] 6 (Just natQualifier) "_⊕_" args
     Mul MulNat -> annotateInfixApp [DataNat] 7 (Just natQualifier) "_*_" args
     Add AddRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊕_" args
@@ -471,9 +467,9 @@ compileBuiltin b args = case b of
     Neg NegRatTensor -> annotateInfixApp [DataTensor] 8 (Just tensorQualifier) "-_" args
     Min MinRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊓_" args
     Max MaxRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_⊔_" args
-    Compare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator False op) args
-    Compare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator False op) args
-    Compare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator False op) args
+    Compare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator True op) args
+    Compare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator True op) args
+    Compare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator True op) args
     FoldList -> annotateApp [DataList] (Just listQualifier) "foldr" args
     MapList -> annotateApp [DataList] (Just listQualifier) "map" args
     ReduceAndTensor -> annotateApp [DataTensor] Nothing "reduceAnd" args
@@ -493,16 +489,16 @@ compileBuiltin b args = case b of
     Iterate -> unsupportedError
     PowRat -> unsupportedError
   DecidabilityBuiltinFunction f -> case f of
-    DecNot -> annotateApp [DataBool] Nothing "not" args
-    DecAnd -> annotateInfixApp [DataBool] 6 Nothing "_∧_" args
-    DecOr -> annotateInfixApp [DataBool] 5 Nothing "_∨_" args
-    DecImplies -> annotateInfixApp [VehicleUtils] 4 Nothing "_⇒_" args
-    DecCompare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator True op) args
-    DecCompare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator True op) args
-    DecCompare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator True op) args
-    DecReduceAndTensor -> unsupportedError
-    DecReduceOrTensor -> unsupportedError
-    BoolTensorToDecBoolTensor -> unsupportedError
+    TypeTrue -> return $ annotateConstant [DataUnit] "⊤"
+    TypeFalse -> return $ annotateConstant [DataEmpty] "⊥"
+    TypeNot -> annotateInfixApp [RelNullary] 3 Nothing "¬_" args
+    TypeAnd -> annotateInfixApp [DataProduct] 2 Nothing "_×_" args
+    TypeOr -> annotateInfixApp [DataSum] 1 Nothing "_⊎_" args
+    TypeImplies -> annotateInfixApp [] minPrecedence Nothing "_→_" args
+    TypeCompare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator False op) args
+    TypeCompare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator False op) args
+    TypeCompare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator False op) args
+    BoolTensorToType -> monoError
   DecidabilityBuiltinTypeClass {} -> monoError
   DecidabilityBuiltinTypeClassOp {} -> monoError
   where
@@ -551,7 +547,9 @@ compileIntLiteral i
   | otherwise = annotate ([DataInteger], 6) (intQualifier <> ".-" <+> compileIntLiteral (-i))
 
 compileRatLiteral :: Rational -> Code
-compileRatLiteral r = annotate ([DataRat], 7) (num <+> "/" <+> denom)
+compileRatLiteral r
+  | denominator r == 1 = pretty $ numerator r
+  | otherwise = annotate ([DataRat], 7) (num <+> "/" <+> denom)
   where
     num = compileIntLiteral (fromInteger $ numerator r)
     denom = compileNatLiteral (fromInteger $ denominator r)
@@ -566,11 +564,6 @@ compileTensorLiteral compileElement =
 
 compileBoolLiteral :: Bool -> Code
 compileBoolLiteral = \case
-  True -> annotateConstant [DataUnit] "⊤"
-  False -> annotateConstant [DataEmpty] "⊥"
-
-compileDecBoolLiteral :: Bool -> Code
-compileDecBoolLiteral = \case
   True -> annotateConstant [DataBool] "true"
   False -> annotateConstant [DataBool] "false"
 

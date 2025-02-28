@@ -37,51 +37,51 @@ isDecidabilityConstructor = \case
   StandardBuiltinType {} -> False
   StandardBuiltinFunction {} -> False
   StandardBuiltinConstructor {} -> True
-  DecidabilityBuiltinType {} -> False
   DecidabilityBuiltinTypeClass {} -> False
   DecidabilityBuiltinTypeClassOp {} -> False
   DecidabilityBuiltinFunction {} -> False
-  DecidabilityBuiltinConstructor {} -> True
 
 typeDecidabilityBuiltin :: DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
 typeDecidabilityBuiltin = \case
   StandardBuiltinType t -> typeOfBuiltinType t
   StandardBuiltinConstructor c -> typeOfBuiltinConstructor c
   StandardBuiltinFunction f -> case f of
-    -- We change `If` to require decidable booleans
-    If -> forAllTypes $ \t -> tTensor tDecBool dimNil ~> t ~> t ~> t
+    QuantifyRatTensor {} -> forAllDims $ \_dims -> forAllTypes $ \t -> (t ~> type0) ~> type0
     _ -> typeOfBuiltinFunction f
-  DecidabilityBuiltinType t -> typeDecidableType t
   DecidabilityBuiltinTypeClass t -> typeDecidableTypeClass t
   DecidabilityBuiltinTypeClassOp t -> typeDecidableTypeClassOp t
-  DecidabilityBuiltinConstructor c -> typeDecidableConstructor c
   DecidabilityBuiltinFunction f -> typeDecidableFunction f
-
-typeDecidableType :: DecidabilityBuiltinType -> DSLExpr DecidabilityBuiltin
-typeDecidableType = \case
-  DecBoolType -> type0
 
 typeDecidableTypeClass :: DecidabilityBuiltinTypeClass -> DSLExpr DecidabilityBuiltin
 typeDecidableTypeClass = \case
-  IsBool -> type0 ~> type0
+  IsBoolType -> type0 ~> type0
+  IsTensorType -> type0 ~> tDims ~> type0
   HasBoolTensorLiterals -> type0 ~> type0
-  HasNot -> type0 ~> type0
-  HasAnd -> type0 ~> type0
-  HasOr -> type0 ~> type0
-  HasImplies -> type0 ~> type0
-  HasCompare {} -> type0 ~> type0
+  HasNot -> (tDims ~> type0) ~> tDims ~> type0
+  HasAnd -> (tDims ~> type0) ~> tDims ~> type0
+  HasOr -> (tDims ~> type0) ~> tDims ~> type0
+  HasImplies -> (tDims ~> type0) ~> tDims ~> type0
+  HasCompare {} -> (tDims ~> type0) ~> tDims ~> type0
   HasReduceAndTensor -> type0 ~> type0
   HasReduceOrTensor -> type0 ~> type0
 
 typeDecidableTypeClassOp :: DecidabilityBuiltinTypeClassOp -> DSLExpr DecidabilityBuiltin
 typeDecidableTypeClassOp = \case
-  BoolTypeTC -> constraint IsBool (const type0)
-  FromBoolTensorLitTC -> constraint HasBoolTensorLiterals typeOfCast
-  NotTC -> constraint HasNot typeOfTensorOp1
-  AndTC -> constraint HasAnd typeOfTensorOp2
-  OrTC -> constraint HasOr typeOfTensorOp2
-  ImpliesTC -> constraint HasImplies typeOfTensorOp2
-  CompareTC dom op -> constraint (HasCompare dom op) (typeOfComparisonOp dom)
+  BoolTypeTC -> constraint IsBoolType (const type0)
+  TensorTypeTC ->
+    forAllExpl "t" type0 $ \t ->
+      pi (Just "ds") Explicit Irrelevant tDims $ \ds ->
+        isTensorType t ds ~~~> type0
+  NotTC -> tensorOpConstraint HasNot (\t dims -> typeOp1 (t .@@ [dims]))
+  AndTC -> tensorOpConstraint HasAnd (\t dims -> typeOp2 (t .@@ [dims]))
+  OrTC -> tensorOpConstraint HasOr (\t dims -> typeOp2 (t .@@ [dims]))
+  ImpliesTC -> tensorOpConstraint HasImplies (\t dims -> typeOp2 (t .@@ [dims]))
+  FromBoolTensorLitTC ->
+    forAll "t" (tDims ~> type0) $ \t ->
+      builtin (DecidabilityBuiltinTypeClass HasBoolTensorLiterals) @@ [t] ~~~> typeOfCast t
+  CompareTC CompareIndex op -> constraint (HasCompare CompareIndex op) typeOfCompareIndex
+  CompareTC CompareNat op -> constraint (HasCompare CompareNat op) typeOfCompareNat
+  CompareTC CompareRatTensor op -> tensorOpConstraint (HasCompare CompareRatTensor op) typeOfCompareRatTensor
   ReduceAndTensorTC -> constraint HasReduceAndTensor typeOfTensorReduceOp
   ReduceOrTensorTC -> constraint HasReduceAndTensor typeOfTensorReduceOp
 
@@ -90,23 +90,47 @@ constraint c f =
   forAllTypes $ \t ->
     builtin (DecidabilityBuiltinTypeClass c) @@ [t] ~~~> f t
 
-typeDecidableConstructor :: DecidabilityBuiltinConstructor -> DSLExpr DecidabilityBuiltin
-typeDecidableConstructor = \case
-  DecBoolTensor bs -> tTensor tDecBool (shapeOf bs)
+tensorOpConstraint :: DecidabilityBuiltinTypeClass -> (DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin) -> DSLExpr DecidabilityBuiltin
+tensorOpConstraint c f =
+  forAllDims $ \dims ->
+    forAll "t" (tDims ~> type0) $ \t ->
+      builtin (DecidabilityBuiltinTypeClass c) @@ [t, dims] ~~~> f t dims
 
 typeDecidableFunction :: DecidabilityBuiltinFunction -> DSLExpr DecidabilityBuiltin
 typeDecidableFunction = \case
-  DecNot -> typeOfTensorOp1 tDecBool
-  DecAnd -> typeOfTensorOp2 tDecBool
-  DecOr -> typeOfTensorOp2 tDecBool
-  DecImplies -> typeOfTensorOp2 tDecBool
-  DecCompare dom _op -> typeOfComparisonOp dom tDecBool
-  DecReduceAndTensor -> typeOfTensorReduceOp tDecBool
-  DecReduceOrTensor -> typeOfTensorReduceOp tDecBool
-  BoolTensorToDecBoolTensor -> typeOfCast tDecBool
+  TypeTrue -> type0
+  TypeFalse -> type0
+  TypeNot -> typeOp1 type0
+  TypeAnd -> typeOp2 type0
+  TypeOr -> typeOp2 type0
+  TypeImplies -> typeOp2 type0
+  TypeCompare CompareIndex _op -> typeOfCompareIndex type0
+  TypeCompare CompareNat _op -> typeOfCompareNat type0
+  TypeCompare CompareRatTensor _op -> typeOfCompareRatTensor type0IgnoreDims type0
+  -- TypeReduceAndTensor -> typeOfTensorReduceOp tDecBool
+  -- TypeReduceOrTensor -> typeOfTensorReduceOp tDecBool
+  BoolTensorToType -> typeOfCast type0
+
+typeOfCompareIndex :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+typeOfCompareIndex tRes =
+  forAllIrrelevantNat "n1" $ \n1 ->
+    forAllIrrelevantNat "n2" $ \n2 ->
+      tIndex n1 ~> tIndex n2 ~> tRes
+
+typeOfCompareNat :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+typeOfCompareNat tRes = tNat ~> tNat ~> tRes
+
+typeOfCompareRatTensor :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+typeOfCompareRatTensor tRes dims = tTensor tRat dims ~> tTensor tRat dims ~> tRes .@@ [dims]
 
 typeOfCast :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
-typeOfCast t = forAllDims $ \dims -> tBoolTensor dims ~> tTensor t dims
+typeOfCast t = forAllDims $ \dims -> tBoolTensor dims ~> t .@@ [dims]
+
+typeOp1 :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+typeOp1 t = t ~> t
+
+typeOp2 :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+typeOp2 t = t ~> t ~> t
 
 --------------------------------------------------------------------------------
 -- TypeSystem
@@ -184,19 +208,15 @@ convertToDecidabilityBuiltins p b args =
       _ -> sameConstructor c
     BuiltinType s -> do
       let b' = case s of
-            BoolType {} -> DecidabilityBuiltinTypeClassOp BoolTypeTC
+            BoolType -> DecidabilityBuiltinTypeClassOp BoolTypeTC
+            TensorType -> DecidabilityBuiltinTypeClassOp TensorTypeTC
             _ -> StandardBuiltinType s
       return $ normAppList (Builtin p b') args
     _ -> monomorphisationError b args
   where
     sameFunction f = return $ normAppList (Builtin p (StandardBuiltinFunction f)) args
     sameConstructor c = return $ normAppList (Builtin p (StandardBuiltinConstructor c)) args
-    -- When converting to a TypeClassOp we need to insert an extra implicit for the type ensure
-    -- the implicit/instance resolution fires correctly in bidirectional typing.
-    convertTo t = return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) (implicit (Hole p "_t") : args)
-
-freshDecidabilityMeta :: (MonadTypeChecker DecidabilityBuiltin m) => Provenance -> m (Expr DecidabilityBuiltin)
-freshDecidabilityMeta p = freshMetaExpr p (TypeUniverse p 0) mempty
+    convertTo t = return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) args
 
 restrictDecidabilityDeclType ::
   forall m.
@@ -210,9 +230,7 @@ restrictDecidabilityDeclType rDecl declProv@(_, p) declType = do
   let origin = InstanceTypeRestrictionOrigin $ TypeRestrictionOrigin freeEnv declProv rDecl declType
   case rDecl of
     RestrictedProperty -> do
-      let elemType = Builtin p (StandardBuiltinType BoolType)
-      dims <- freshDecidabilityMeta p
-      let boolType = normAppList (Builtin p (StandardBuiltinType TensorType)) [explicit elemType, explicitIrrelevant dims]
-      createFreshUnificationConstraint p mempty (CheckingInstanceType origin) boolType declType
+      let desiredType = Universe mempty 0
+      createFreshUnificationConstraint p mempty (CheckingInstanceType origin) desiredType declType
       return declType
     _ -> return declType

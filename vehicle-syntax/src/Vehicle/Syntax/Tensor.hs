@@ -57,6 +57,11 @@ allValues f = \case
   Constant v -> f v
   Values vs -> Vector.all f vs
 
+anyValues :: (a -> Bool) -> TensorValue a -> Bool
+anyValues f = \case
+  Constant v -> f v
+  Values vs -> Vector.any f vs
+
 atValues :: [Int] -> Int -> TensorValue a -> TensorValue a
 atValues elemDims d = \case
   Constant v -> Constant v
@@ -107,6 +112,9 @@ tensorToList = Vector.toList . tensorToVector
 
 allTensor :: (a -> Bool) -> Tensor a -> Bool
 allTensor f = allValues f . tensorValue
+
+anyTensor :: (a -> Bool) -> Tensor a -> Bool
+anyTensor f = anyValues f . tensorValue
 
 zipWithTensor :: (a -> b -> c) -> Tensor a -> Tensor b -> Tensor c
 zipWithTensor f (Tensor shape c) (Tensor _shape d) = Tensor shape (zipWithValues f c d)

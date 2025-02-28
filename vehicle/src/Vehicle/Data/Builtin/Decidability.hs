@@ -6,29 +6,26 @@ where
 
 import Data.Hashable (Hashable)
 import GHC.Generics (Generic)
+import Prettyprinter (brackets)
 import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise (BlockingArgs (..), EvalScheme (..), MonadNormBuiltin, NormalisableBuiltin (..), evalFoldList, evalIterate, forceEvalSimpleBuiltin)
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Standard (Builtin, BuiltinConstructor (..), BuiltinFunction (..), BuiltinType)
+import Vehicle.Data.Code.DSL (tDims)
 import Vehicle.Data.Code.Interface
-import Vehicle.Data.DSL (DSLExpr, builtin)
-import Vehicle.Data.Tensor (BoolTensor)
-import Vehicle.Prelude (Pretty (..), developerError, (<+>))
+import Vehicle.Data.DSL
+import Vehicle.Data.Tensor (BoolTensor, anyTensor)
+import Vehicle.Prelude (Pretty (..), Relevance (..), Visibility (..), developerError, (<+>))
 import Vehicle.Syntax.Builtin.BasicOperations
 import Vehicle.Syntax.Sugar (BinderType (..))
 
 --------------------------------------------------------------------------------
 -- Data
 
-data DecidabilityBuiltinType
-  = DecBoolType
-  deriving (Eq, Ord, Show, Generic)
-
-instance Hashable DecidabilityBuiltinType
-
 data DecidabilityBuiltinTypeClass
-  = IsBool
+  = IsBoolType
+  | IsTensorType
   | HasBoolTensorLiterals
   | HasNot
   | HasAnd
@@ -43,6 +40,7 @@ instance Hashable DecidabilityBuiltinTypeClass
 
 data DecidabilityBuiltinTypeClassOp
   = BoolTypeTC
+  | TensorTypeTC
   | FromBoolTensorLitTC
   | NotTC
   | AndTC
@@ -58,14 +56,16 @@ instance Hashable DecidabilityBuiltinTypeClassOp
 -- | Constructors for types in the language. The types and type-classes
 -- are viewed as constructors for `Type`.
 data DecidabilityBuiltinFunction
-  = DecNot
-  | DecAnd
-  | DecOr
-  | DecImplies
-  | DecCompare ComparisonDomain ComparisonOp
-  | DecReduceAndTensor
-  | DecReduceOrTensor
-  | BoolTensorToDecBoolTensor
+  = TypeTrue
+  | TypeFalse
+  | TypeNot
+  | TypeAnd
+  | TypeOr
+  | TypeImplies
+  | TypeCompare ComparisonDomain ComparisonOp
+  | -- | TypeReduceAndTensor
+    -- | TypeReduceOrTensor
+    BoolTensorToType
   deriving (Eq, Ord, Show, Generic)
 
 instance Hashable DecidabilityBuiltinFunction
@@ -82,11 +82,9 @@ data DecidabilityBuiltin
   = StandardBuiltinType BuiltinType
   | StandardBuiltinFunction BuiltinFunction
   | StandardBuiltinConstructor BuiltinConstructor
-  | DecidabilityBuiltinType DecidabilityBuiltinType
   | DecidabilityBuiltinTypeClass DecidabilityBuiltinTypeClass
   | DecidabilityBuiltinTypeClassOp DecidabilityBuiltinTypeClassOp
   | DecidabilityBuiltinFunction DecidabilityBuiltinFunction
-  | DecidabilityBuiltinConstructor DecidabilityBuiltinConstructor
   deriving (Show, Eq, Generic)
 
 instance Hashable DecidabilityBuiltin
@@ -181,15 +179,12 @@ instance BuiltinHasIterate DecidabilityBuiltin where
 --------------------------------------------------------------------------------
 -- Pretty printing
 
-instance Pretty DecidabilityBuiltinType where
-  pretty t = case t of
-    DecBoolType -> "Bool?"
-
 instance Pretty DecidabilityBuiltinTypeClass where
   pretty t = case t of
     HasCompare dom op -> "Has" <> pretty dom <> pretty op
     HasBoolTensorLiterals -> pretty $ show t
-    IsBool -> pretty $ show t
+    IsBoolType -> pretty $ show t
+    IsTensorType -> pretty $ show t
     HasNot -> pretty $ show t
     HasAnd -> pretty $ show t
     HasOr -> pretty $ show t
@@ -199,14 +194,18 @@ instance Pretty DecidabilityBuiltinTypeClass where
 
 instance Pretty DecidabilityBuiltinFunction where
   pretty = \case
-    DecNot -> pretty Not <> "?"
-    DecAnd -> pretty And <> "?"
-    DecOr -> pretty Or <> "?"
-    DecImplies -> pretty Implies <> "?"
-    DecCompare dom op -> pretty (Compare dom op) <> "?"
-    DecReduceAndTensor -> pretty ReduceAndTensor <> "?"
-    DecReduceOrTensor -> pretty ReduceOrTensor <> "?"
-    BoolTensorToDecBoolTensor -> "boolTensorToDecBoolTensor"
+    TypeTrue -> "true" <> symbol
+    TypeFalse -> "false" <> symbol
+    TypeNot -> pretty Not <> symbol
+    TypeAnd -> pretty And <> symbol
+    TypeOr -> pretty Or <> symbol
+    TypeImplies -> pretty Implies <> symbol
+    TypeCompare dom op -> pretty (Compare dom op) <> symbol
+    -- TypeReduceAndTensor -> pretty ReduceAndTensor <> symbol
+    -- TypeReduceOrTensor -> pretty ReduceOrTensor <> symbol
+    BoolTensorToType -> "boolTensorToType"
+    where
+      symbol = "ᵗ"
 
 instance Pretty DecidabilityBuiltinConstructor where
   pretty = \case
@@ -215,6 +214,7 @@ instance Pretty DecidabilityBuiltinConstructor where
 instance Pretty DecidabilityBuiltinTypeClassOp where
   pretty t = case t of
     BoolTypeTC -> pretty $ show t
+    TensorTypeTC -> pretty $ show t
     FromBoolTensorLitTC -> pretty $ show t
     NotTC -> pretty $ show t
     AndTC -> pretty $ show t
@@ -222,29 +222,25 @@ instance Pretty DecidabilityBuiltinTypeClassOp where
     ImpliesTC -> pretty $ show t
     ReduceAndTensorTC -> pretty $ show t
     ReduceOrTensorTC -> pretty $ show t
-    CompareTC dom op -> "CompareTC" <+> pretty dom <+> pretty op
+    CompareTC dom op -> "CompareTC" <> brackets (pretty dom) <> brackets (pretty op)
 
 instance Pretty DecidabilityBuiltin where
   pretty = \case
     StandardBuiltinType t -> pretty t
     StandardBuiltinFunction f -> pretty f
     StandardBuiltinConstructor c -> pretty c
-    DecidabilityBuiltinType t -> pretty t
     DecidabilityBuiltinTypeClass t -> pretty t
     DecidabilityBuiltinTypeClassOp t -> pretty t
     DecidabilityBuiltinFunction f -> pretty f
-    DecidabilityBuiltinConstructor c -> pretty c
 
 instance ConvertableBuiltin DecidabilityBuiltin Builtin where
   convertBuiltin p b = case b of
     StandardBuiltinType t -> convertBuiltin p t
     StandardBuiltinFunction f -> convertBuiltin p f
     StandardBuiltinConstructor c -> convertBuiltin p c
-    DecidabilityBuiltinType t -> cheatConvertBuiltin p (pretty t)
     DecidabilityBuiltinTypeClass t -> cheatConvertBuiltin p (pretty t)
     DecidabilityBuiltinTypeClassOp t -> cheatConvertBuiltin p (pretty t)
     DecidabilityBuiltinFunction f -> cheatConvertBuiltin p (pretty f)
-    DecidabilityBuiltinConstructor c -> cheatConvertBuiltin p (pretty c)
 
 instance PrintableBuiltin DecidabilityBuiltin where
   coercionArgs _ = Nothing
@@ -267,19 +263,24 @@ instance NormalisableBuiltin DecidabilityBuiltin where
     _ -> False
 
   isCast e = case e of
-    DecidabilityBuiltinFunction BoolTensorToDecBoolTensor -> Just $ forceEvalSimpleBuiltin e evalBoolTensorToDecBoolTensor
+    DecidabilityBuiltinFunction BoolTensorToType -> Just $ forceEvalSimpleBuiltin e evalBoolTensorToType
     _ -> Nothing
 
-evalBoolTensorToDecBoolTensor ::
+evalBoolTensorToType ::
   (MonadNormBuiltin m, HasBuiltinConstructor expr) =>
-  Op1Args (expr DecidabilityBuiltin) ->
+  TensorOp1Args (expr DecidabilityBuiltin) ->
   m (expr DecidabilityBuiltin)
-evalBoolTensorToDecBoolTensor args = return $ case args of
-  Op1Args (getExpr accessBuiltinC -> Just (StandardBuiltinConstructor (BoolTensorLiteral t), [])) -> mkExpr accessBuiltinC (DecidabilityBuiltinConstructor (DecBoolTensor t), [])
-  _ -> developerError $ "Should not be possible to have non-literal" <+> pretty BoolTensorToDecBoolTensor <+> "args"
+evalBoolTensorToType args = return $ case args of
+  TensorOp1Args _ (getExpr accessBuiltinC -> Just (StandardBuiltinConstructor (BoolTensorLiteral t), [])) -> do
+    let op = if anyTensor not t then TypeFalse else TypeTrue
+    mkExpr accessBuiltinC (DecidabilityBuiltinFunction op, [])
+  _ -> developerError $ "Should not be possible to have non-literal" <+> pretty BoolTensorToType <+> "args"
 
 --------------------------------------------------------------------------------
 -- DSL
 
-tDecBool :: DSLExpr DecidabilityBuiltin
-tDecBool = builtin (DecidabilityBuiltinType DecBoolType)
+isTensorType :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+isTensorType tElem ds = builtin (DecidabilityBuiltinTypeClass IsTensorType) @@ [tElem] .@@ [ds]
+
+type0IgnoreDims :: DSLExpr DecidabilityBuiltin
+type0IgnoreDims = lam "ds" Explicit Irrelevant tDims $ const type0

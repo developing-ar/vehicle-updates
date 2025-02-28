@@ -8,6 +8,7 @@ module Vehicle.Data.Builtin.Decidability.Instances
   )
 where
 
+import Data.List.NonEmpty (NonEmpty)
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Core (InstanceCandidate (..), InstanceDatabase (..))
 import Vehicle.Data.Builtin.Core (BuiltinFunction (..))
@@ -27,43 +28,72 @@ decidabilityBuiltinInstances = makeInstanceDatabase allInstances mempty
 allInstances :: [InstanceCandidate DecidabilityBuiltin]
 allInstances =
   mkCandidate
-    <$> [ ( decTypeClass IsBool tBool,
+    <$> [ ( decTypeClass IsBoolType [tBool],
             tBool,
             False
           ),
-          ( decTypeClass IsBool tDecBool,
-            tDecBool,
+          ( decTypeClass IsBoolType [type0],
+            type0,
             False
           )
         ]
-      <> [ ( decTypeClass HasBoolTensorLiterals tBool,
+      <> [ ( decTypeClass HasBoolTensorLiterals [tBool],
              lamDims $ \ds ->
                explLam "bs" (tBoolTensor ds) $ \bs ->
                  bs,
              False
            ),
-           ( decTypeClass HasBoolTensorLiterals tDecBool,
-             decFunction BoolTensorToDecBoolTensor,
+           ( decTypeClass HasBoolTensorLiterals [type0IgnoreDims],
+             decFunction BoolTensorToType,
              False
            )
          ]
-      <> decCandidate HasNot Not DecNot
-      <> decCandidate HasAnd And DecAnd
-      <> decCandidate HasOr Or DecOr
-      <> decCandidate HasImplies Implies DecImplies
+      <> decCandidate HasNot Not TypeNot
+      <> decCandidate HasAnd And TypeAnd
+      <> decCandidate HasOr Or TypeOr
+      <> decCandidate HasImplies Implies TypeImplies
+      <> decCandidate HasReduceAndTensor ReduceAndTensor TypeAnd
+      <> decCandidate HasReduceOrTensor ReduceOrTensor TypeOr
       <> comparisonCandidates Le
       <> comparisonCandidates Lt
       <> comparisonCandidates Ge
       <> comparisonCandidates Gt
       <> comparisonCandidates Eq
       <> comparisonCandidates Ne
-      <> decCandidate HasReduceAndTensor ReduceAndTensor DecReduceAndTensor
-      <> decCandidate HasReduceOrTensor ReduceOrTensor DecReduceOrTensor
+      <> [
+           ------------------
+           -- IsTensorType --
+           ------------------
+           ( forAllDims $ \ds ->
+               isTensorType tBool ds,
+             lamDims $ \ds ->
+               tTensor tBool ds,
+             False
+           ),
+           ( forAllDims $ \ds ->
+               isTensorType type0 ds,
+             lamDims $ \_ds ->
+               type0,
+             False
+           ),
+           ( forAllDims $ \ds ->
+               isTensorType tNat ds,
+             lamDims $ \ds ->
+               tTensor tNat ds,
+             False
+           ),
+           ( forAllDims $ \ds ->
+               isTensorType tRat ds,
+             lamDims $ \ds ->
+               tTensor tRat ds,
+             False
+           )
+         ]
 
 type TempCandidate = (DSLExpr DecidabilityBuiltin, DSLExpr DecidabilityBuiltin, Bool)
 
-decTypeClass :: DecidabilityBuiltinTypeClass -> DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
-decTypeClass tc t = builtin (DecidabilityBuiltinTypeClass tc) @@ [t]
+decTypeClass :: DecidabilityBuiltinTypeClass -> NonEmpty (DSLExpr DecidabilityBuiltin) -> DSLExpr DecidabilityBuiltin
+decTypeClass tc args = builtin (DecidabilityBuiltinTypeClass tc) @@ args
 
 decFunction :: DecidabilityBuiltinFunction -> DSLExpr DecidabilityBuiltin
 decFunction f = builtin (DecidabilityBuiltinFunction f)
@@ -73,19 +103,23 @@ decCandidate ::
   BuiltinFunction ->
   DecidabilityBuiltinFunction ->
   [TempCandidate]
-decCandidate tc standardOp builtinOp =
-  [ ( decTypeClass tc tBool,
-      builtinFunction standardOp,
+decCandidate tc standardOp typeOp =
+  [ ( forAllDims $ \dims ->
+        decTypeClass tc [tTensorRaw @@ [tBool], dims],
+      lamDims $ \dims ->
+        builtinFunction standardOp .@@ [dims],
       False
     ),
-    ( decTypeClass tc tDecBool,
-      decFunction builtinOp,
+    ( forAllDims $ \dims ->
+        decTypeClass tc [type0IgnoreDims, dims],
+      lamDims $ \_dims ->
+        decFunction typeOp,
       False
     )
   ]
 
 comparisonCandidates :: ComparisonOp -> [TempCandidate]
 comparisonCandidates op =
-  decCandidate (HasCompare CompareIndex op) (Compare CompareIndex op) (DecCompare CompareIndex op)
-    <> decCandidate (HasCompare CompareNat op) (Compare CompareNat op) (DecCompare CompareNat op)
-    <> decCandidate (HasCompare CompareRatTensor op) (Compare CompareRatTensor op) (DecCompare CompareRatTensor op)
+  decCandidate (HasCompare CompareIndex op) (Compare CompareIndex op) (TypeCompare CompareIndex op)
+    <> decCandidate (HasCompare CompareNat op) (Compare CompareNat op) (TypeCompare CompareNat op)
+    <> decCandidate (HasCompare CompareRatTensor op) (Compare CompareRatTensor op) (TypeCompare CompareRatTensor op)

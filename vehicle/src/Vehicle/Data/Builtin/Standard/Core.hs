@@ -6,12 +6,14 @@ module Vehicle.Data.Builtin.Standard.Core
     accessFromNatToIndex,
     accessFromNatToRat,
     accessFromVectorToList,
+    isTensorType,
   )
 where
 
 import Vehicle.Data.Builtin.Core as Syntax
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Print
+import Vehicle.Data.Code.DSL
 import Vehicle.Data.Code.Expr
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.DSL
@@ -246,3 +248,6 @@ accessFromVectorToList ::
   (HasBuiltinConstructor expr) =>
   Accessor (expr Builtin) (VectorToListArgs (expr Builtin))
 accessFromVectorToList = accessArgs (castAccessor FromVectorToList)
+
+isTensorType :: DSLExpr Builtin -> DSLExpr Builtin -> DSLExpr Builtin
+isTensorType tElem ds = builtinTypeClass IsTensorType @@ [tElem] .@@ [ds]

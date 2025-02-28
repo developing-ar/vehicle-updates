@@ -2,10 +2,10 @@ module Vehicle.Data.Code.DSL where
 
 import Data.List.NonEmpty (NonEmpty (..))
 import Vehicle.Data.Builtin.Interface
-import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.DSL
 import Vehicle.Data.Tensor (Tensor (..), pattern ZeroDimTensor)
 import Vehicle.Prelude
+import Vehicle.Syntax.Builtin
 import Prelude hiding (pi)
 
 --------------------------------------------------------------------------------
@@ -22,8 +22,11 @@ tNat = builtinType NatType
 tBool = builtinType BoolType
 tRat = builtinType RatType
 
+tTensorRaw :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
+tTensorRaw = builtinType TensorType
+
 tTensor :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-tTensor tElem ds = builtinType TensorType @@ [tElem] .@@ [ds]
+tTensor tElem ds = tTensorRaw @@ [tElem] .@@ [ds]
 
 tListRaw :: (BuiltinHasStandardTypes builtin) => DSLExpr builtin
 tListRaw = builtinType ListType
@@ -147,9 +150,6 @@ hasRatLits t = typeClass HasRatLits [t]
 
 hasVecLits :: (BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
 hasVecLits tCont tElem d = typeClass HasVecLits [tCont, tElem, d]
-
-isTensorType :: (BuiltinHasStandardData builtin, BuiltinHasStandardTypeClasses builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-isTensorType tElem ds = builtinTypeClass IsTensorType @@ [tElem] .@@ [ds]
 
 validParameterType :: (BuiltinHasStandardTypeClasses builtin) => ParameterSort -> DSLExpr builtin -> DSLExpr builtin
 validParameterType s t = typeClass (ValidParameterType s) [t]
