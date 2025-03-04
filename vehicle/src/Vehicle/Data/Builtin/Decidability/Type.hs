@@ -55,7 +55,7 @@ typeDecidabilityBuiltin = \case
 typeDecidableTypeClass :: DecidabilityBuiltinTypeClass -> DSLExpr DecidabilityBuiltin
 typeDecidableTypeClass = \case
   IsBoolType -> type0 ~> type0
-  IsTensorType -> type0 ~> tDims ~> type0
+  IsTensorType -> type0 ~> type0
   HasBoolTensorLiterals -> type0 ~> type0
   HasNot -> (tDims ~> type0) ~> tDims ~> type0
   HasAnd -> (tDims ~> type0) ~> tDims ~> type0
@@ -70,8 +70,9 @@ typeDecidableTypeClassOp = \case
   BoolTypeTC -> constraint IsBoolType (const type0)
   TensorTypeTC ->
     forAllExpl "t" type0 $ \t ->
-      pi (Just "ds") Explicit Irrelevant tDims $ \ds ->
-        isTensorType t ds ~~~> type0
+      isTensorType t
+        ~~~> tDims
+        ~> type0
   NotTC -> tensorOpConstraint HasNot (\t dims -> typeOp1 (t .@@ [dims]))
   AndTC -> tensorOpConstraint HasAnd (\t dims -> typeOp2 (t .@@ [dims]))
   OrTC -> tensorOpConstraint HasOr (\t dims -> typeOp2 (t .@@ [dims]))

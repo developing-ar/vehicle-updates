@@ -106,7 +106,7 @@ removeInstanceDependencies ::
   WithContext (InstanceConstraint builtin) ->
   m (WithContext (InstanceConstraint builtin))
 removeInstanceDependencies c@(WithContext constraint ctx) =
-  logCompilerSection MaxDetail "Removing dependencies from:" $ do
+  logCompilerSection MaxDetail "Removing dependencies and updating solution:" $ do
     logDebug MaxDetail $ "Input: " <+> prettyExternal c
     let newCtx = updateConstraintBoundCtx ctx (const mempty)
     substConstraint <- substMetasAt (boundCtxLv $ boundContextOf ctx) constraint
@@ -130,15 +130,25 @@ updateSolutionMeta constraint = do
     findUnsolvedMeta :: MetaID -> m MetaID
     findUnsolvedMeta meta = do
       metaInfo <- getMetaInfo meta
-      case metaSolution metaInfo of
-        Nothing -> return meta
-        Just solution -> findMetaSolvedInTermsOf $ unnormalised solution
+      logDebug MaxDetail $ pretty meta <+> ":" <+> prettyVerbose (metaType metaInfo)
+      maybeNextMeta <- case metaSolution metaInfo of
+        Just solution -> findMetaInSolution $ unnormalised solution
+        Nothing -> return Nothing
 
-    findMetaSolvedInTermsOf :: Expr builtin -> m MetaID
-    findMetaSolvedInTermsOf = \case
-      Lam _ _ body -> findMetaSolvedInTermsOf body
-      Meta _ m -> findUnsolvedMeta m
-      App (Meta _ m) _ -> findUnsolvedMeta m
+      case maybeNextMeta of
+        Just nextMeta -> findUnsolvedMeta nextMeta
+        _ -> return meta
+
+    findMetaInSolution :: Expr builtin -> m (Maybe MetaID)
+    findMetaInSolution = \case
+      Lam _ _ body -> findMetaInSolution body
+      Meta _ m -> return $ Just m
+      App (Meta _ m) args -> do
+        metaInfo <- getMetaInfo @builtin m
+        return $
+          if length (metaCtx metaInfo) == length args
+            then return m
+            else Nothing
       e ->
         developerError $
           "Instance constraint meta solved in terms of a non-meta" <+> prettyVerbose e <+> "This should mean the constraint was either failed or solvable"

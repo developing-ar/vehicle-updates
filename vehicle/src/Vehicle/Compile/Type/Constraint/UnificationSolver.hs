@@ -258,12 +258,15 @@ solveFlexFlex ::
   (MetaID, Spine builtin) ->
   (MetaID, Spine builtin) ->
   m (UnificationResult builtin)
-solveFlexFlex info (meta1, spine1) (meta2, spine2) = do
-  -- It may be that only one of the two spines is invertible
-  maybeRenaming <- invert (boundCtxLv (infoBoundCtx info)) (meta1, spine1)
-  case maybeRenaming of
-    Nothing -> solveFlexRigid info (meta2, spine2) (VMeta meta1 spine1)
-    Just renaming -> solveFlexRigidWithRenaming (infoBoundCtx info) (meta1, spine1) renaming (VMeta meta2 spine2)
+solveFlexFlex info (meta1, spine1) (meta2, spine2)
+  | spine1 == spine2 = do
+      _
+  | otherwise = do
+      -- It may be that only one of the two spines is invertible
+      maybeRenaming <- invert (boundCtxLv (infoBoundCtx info)) (meta1, spine1)
+      case maybeRenaming of
+        Nothing -> solveFlexRigid info (meta2, spine2) (VMeta meta1 spine1)
+        Just renaming -> solveFlexRigidWithRenaming (infoBoundCtx info) (meta1, spine1) renaming (VMeta meta2 spine2)
 
 solveFlexRigid ::
   (MonadUnify builtin m) =>

@@ -15,6 +15,8 @@ import Vehicle.Data.Builtin.Core (BuiltinFunction (..))
 import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Code.DSL
 import Vehicle.Data.DSL
+import Vehicle.Prelude (Relevance (..))
+import Vehicle.Syntax.AST.Visibility (Visibility (..))
 
 decidabilityBuiltinInstances :: InstanceDatabase DecidabilityBuiltin
 decidabilityBuiltinInstances = makeInstanceDatabase allInstances mempty
@@ -64,28 +66,21 @@ allInstances =
            ------------------
            -- IsTensorType --
            ------------------
-           ( forAllDims $ \ds ->
-               isTensorType tBool ds,
-             lamDims $ \ds ->
-               tTensor tBool ds,
+           ( isTensorType tBool,
+             tTensorRaw @@ [tBool],
              False
            ),
-           ( forAllDims $ \ds ->
-               isTensorType type0 ds,
-             lamDims $ \_ds ->
+           ( isTensorType type0,
+             lam "ds" Explicit Relevant tDims $ \_ds ->
                type0,
              False
            ),
-           ( forAllDims $ \ds ->
-               isTensorType tNat ds,
-             lamDims $ \ds ->
-               tTensor tNat ds,
+           ( isTensorType tNat,
+             tTensorRaw @@ [tNat],
              False
            ),
-           ( forAllDims $ \ds ->
-               isTensorType tRat ds,
-             lamDims $ \ds ->
-               tTensor tRat ds,
+           ( isTensorType tRat,
+             tTensorRaw @@ [tRat],
              False
            )
          ]

@@ -279,8 +279,8 @@ evalBoolTensorToType args = return $ case args of
 --------------------------------------------------------------------------------
 -- DSL
 
-isTensorType :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
-isTensorType tElem ds = builtin (DecidabilityBuiltinTypeClass IsTensorType) @@ [tElem] .@@ [ds]
+isTensorType :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+isTensorType tElem = builtin (DecidabilityBuiltinTypeClass IsTensorType) @@ [tElem]
 
 type0IgnoreDims :: DSLExpr DecidabilityBuiltin
 type0IgnoreDims = lam "ds" Explicit Irrelevant tDims $ const type0
