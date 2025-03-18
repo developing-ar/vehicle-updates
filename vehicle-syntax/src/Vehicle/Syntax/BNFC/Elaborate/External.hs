@@ -393,13 +393,13 @@ elabExpr expr = case expr of
   B.HasFold tk -> builtinTypeClass V.HasFold tk []
   B.IsTensorType tk -> builtinTypeClass V.IsTensorType tk []
   -- NOTE: we reverse the arguments to make it well-typed.
-  B.Ann e tk t -> elabExpr (B.App (B.App (B.Var (B.Name (tkLocation tk, "typeAnn"))) (B.ExplicitArg t)) (B.ExplicitArg e))
+  B.Ann e tk t -> elabExpr (B.App (B.App (B.Var (B.Name (tkLocation tk, "typeAnn"))) (B.ExplicitArg mempty t)) (B.ExplicitArg mempty e))
 
 elabArg :: (MonadElab m) => B.Arg -> m V.Arg
 elabArg = \case
-  B.ExplicitArg e -> mkArg V.Explicit <$> elabExpr e
-  B.ImplicitArg e -> mkArg (V.Implicit False) <$> elabExpr e
-  B.InstanceArg e -> mkArg (V.Instance False) <$> elabExpr e
+  B.ExplicitArg modalities e -> mkArg modalities V.Explicit <$> elabExpr e
+  B.ImplicitArg modalities e -> mkArg modalities (V.Implicit False) <$> elabExpr e
+  B.InstanceArg modalities e -> mkArg modalities (V.Instance False) <$> elabExpr e
 
 elabName :: (MonadElab m) => B.Name -> m V.Identifier
 elabName n = do
@@ -408,34 +408,35 @@ elabName n = do
 
 elabBasicBinder :: (MonadElab m) => Bool -> B.BasicBinder -> m V.Binder
 elabBasicBinder folded = \case
-  B.ExplicitBinder m n _tk typ -> mkBinder folded (mkRelevance m) V.Explicit . These n =<< elabExpr typ
-  B.ImplicitBinder m n _tk typ -> mkBinder folded (mkRelevance m) (V.Implicit False) . These n =<< elabExpr typ
-  B.InstanceBinder m n _tk typ -> mkBinder folded (mkRelevance m) (V.Instance False) . These n =<< elabExpr typ
+  B.ExplicitBinder modalities n _tk typ -> mkBinder folded modalities V.Explicit . These n =<< elabExpr typ
+  B.ImplicitBinder modalities n _tk typ -> mkBinder folded modalities (V.Implicit False) . These n =<< elabExpr typ
+  B.InstanceBinder modalities n _tk typ -> mkBinder folded modalities (V.Instance False) . These n =<< elabExpr typ
 
 elabNameBinder :: (MonadElab m) => Bool -> B.NameBinder -> m V.Binder
 elabNameBinder folded = \case
-  B.ExplicitNameBinder m n -> mkBinder folded (mkRelevance m) V.Explicit (This n)
-  B.ImplicitNameBinder m n -> mkBinder folded (mkRelevance m) (V.Implicit False) (This n)
-  B.InstanceNameBinder m n -> mkBinder folded (mkRelevance m) (V.Instance False) (This n)
+  B.ExplicitNameBinder modalities n -> mkBinder folded modalities V.Explicit (This n)
+  B.ImplicitNameBinder modalities n -> mkBinder folded modalities (V.Implicit False) (This n)
+  B.InstanceNameBinder modalities n -> mkBinder folded modalities (V.Instance False) (This n)
   B.BasicNameBinder b -> elabBasicBinder folded b
 
 elabTypeBinder :: (MonadElab m) => Bool -> B.TypeBinder -> m V.Binder
 elabTypeBinder folded = \case
-  B.ExplicitTypeBinder t -> mkBinder folded V.Relevant V.Explicit . That =<< elabExpr t
-  B.ImplicitTypeBinder t -> mkBinder folded V.Relevant (V.Implicit False) . That =<< elabExpr t
-  B.InstanceTypeBinder t -> mkBinder folded V.Relevant (V.Instance False) . That =<< elabExpr t
+  B.ExplicitTypeBinder t -> mkBinder folded mempty V.Explicit . That =<< elabExpr t
+  B.ImplicitTypeBinder t -> mkBinder folded mempty (V.Implicit False) . That =<< elabExpr t
+  B.InstanceTypeBinder t -> mkBinder folded mempty (V.Instance False) . That =<< elabExpr t
   B.BasicTypeBinder b -> elabBasicBinder folded b
 
-mkRelevance :: [B.Modality] -> V.Relevance
-mkRelevance ms
+findRelevance :: [B.Modality] -> V.Relevance
+findRelevance ms
   | null ms = V.Relevant
   | otherwise = V.Irrelevant
 
-mkArg :: V.Visibility -> V.Expr -> V.Arg
-mkArg v e = V.Arg (V.expandByArgVisibility v (V.provenanceOf e)) v V.Relevant e
+mkArg :: [B.Modality] -> V.Visibility -> V.Expr -> V.Arg
+mkArg modalities v e = V.Arg (V.expandByArgVisibility v (V.provenanceOf e)) v (findRelevance modalities) e
 
-mkBinder :: (MonadElab m) => V.BinderFoldingForm -> V.Relevance -> V.Visibility -> These B.Name V.Expr -> m V.Binder
-mkBinder folded r v nameTyp = do
+mkBinder :: (MonadElab m) => V.BinderFoldingForm -> [B.Modality] -> V.Visibility -> These B.Name V.Expr -> m V.Binder
+mkBinder folded modalities visibility nameTyp = do
+  let relevance = findRelevance modalities
   (exprProv, form, typ) <- case nameTyp of
     This nameTk -> do
       p <- mkProvenance nameTk
@@ -453,9 +454,9 @@ mkBinder folded r v nameTyp = do
       let naming = V.NameAndType name
       return (p, naming, typ)
 
-  let prov = V.expandByArgVisibility v exprProv
+  let prov = V.expandByArgVisibility visibility exprProv
   let displayForm = V.BinderDisplayForm form folded
-  return $ V.Binder prov displayForm v r typ
+  return $ V.Binder prov displayForm visibility relevance typ
 
 elabLetDecl :: (MonadElab m) => B.LetDecl -> m (V.Binder, V.Expr)
 elabLetDecl (B.LDecl b e) = bitraverse (elabNameBinder False) elabExpr (b, e)
@@ -527,7 +528,7 @@ castToTensorType tElem tk = do
 app :: V.Expr -> [V.Expr] -> V.Expr
 app fun argExprs = V.normAppList fun args
   where
-    args = fmap (mkArg V.Explicit) argExprs
+    args = fmap (mkArg mempty V.Explicit) argExprs
 
 elabVecLiteral :: (MonadElab m, IsToken token) => token -> [B.Expr] -> m V.Expr
 elabVecLiteral tk xs = do
@@ -535,7 +536,7 @@ elabVecLiteral tk xs = do
   let tCont = V.Arg p (V.Implicit True) V.Relevant (V.mkHole p "tCont")
   let tElem = V.Arg p (V.Implicit True) V.Relevant (V.mkHole p "tElem")
   let n = V.Arg p (V.Implicit True) V.Relevant (V.Builtin p (V.BuiltinConstructor $ V.NatLiteral (length xs)))
-  xs' <- fmap (mkArg V.Explicit) <$> traverse elabExpr xs
+  xs' <- fmap (mkArg mempty V.Explicit) <$> traverse elabExpr xs
   return $ V.normAppList (V.Builtin p (V.TypeClassOp V.VecLiteralTC)) (tCont : tElem : n : xs')
 
 elabApp :: (MonadElab m) => B.Expr -> B.Arg -> m V.Expr
@@ -601,7 +602,7 @@ elabQuantifier tk q binders body = do
   let mkQuantifier binder newBody =
         V.normAppList
           quantBuiltin
-          [ mkArg V.Explicit (V.Lam (V.provenanceOf binder) binder newBody)
+          [ mkArg mempty V.Explicit (V.Lam (V.provenanceOf binder) binder newBody)
           ]
 
   return $ foldr mkQuantifier body' binders'
@@ -628,8 +629,8 @@ elabQuantifierIn tk q binder container body = do
   return $
     V.normAppList
       quantBuiltin
-      [ mkArg V.Explicit (V.Lam p' binder' body'),
-        mkArg V.Explicit container'
+      [ mkArg mempty V.Explicit (V.Lam p' binder' body'),
+        mkArg mempty V.Explicit container'
       ]
 
 elabForeach ::
@@ -647,7 +648,7 @@ elabForeach tk binders body = do
   let mkForeach binder newBody =
         V.normAppList
           (V.Builtin p $ V.BuiltinFunction V.Foreach)
-          [ mkArg V.Explicit (V.Lam (V.provenanceOf binder) binder newBody)
+          [ mkArg mempty V.Explicit (V.Lam (V.provenanceOf binder) binder newBody)
           ]
 
   return $ foldr mkForeach body' binders'

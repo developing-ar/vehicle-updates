@@ -81,11 +81,12 @@ instance Delaborate V.Expr B.Expr where
 
 instance Delaborate V.Arg B.Arg where
   delabM arg = do
+    let modalities = delabRelevance arg
     e' <- delabM (V.argExpr arg)
     return $ case V.visibilityOf arg of
-      V.Explicit {} -> B.ExplicitArg e'
-      V.Implicit {} -> B.ImplicitArg e'
-      V.Instance {} -> B.InstanceArg e'
+      V.Explicit {} -> B.ExplicitArg modalities e'
+      V.Implicit {} -> B.ImplicitArg modalities e'
+      V.Instance {} -> B.InstanceArg modalities e'
 
 instance Delaborate V.Binder B.BasicBinder where
   delabM binder = do
@@ -104,6 +105,11 @@ instance Delaborate V.Annotation B.Decl where
 -- | Used for things not in the user-syntax.
 cheatDelab :: Text -> B.Expr
 cheatDelab n = B.Var (delabSymbol n)
+
+delabRelevance :: (V.HasRelevance a) => a -> [B.Modality]
+delabRelevance x = case V.relevanceOf x of
+  V.Relevant -> []
+  V.Irrelevant -> [B.Irrelevant]
 
 delabNameBinder :: (MonadDelab m) => V.Binder -> m B.NameBinder
 delabNameBinder b = case V.binderNamingForm b of

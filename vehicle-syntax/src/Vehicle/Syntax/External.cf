@@ -109,9 +109,9 @@ BasicTypeBinder.    TypeBinder ::= BasicBinder;
 
 -- * Arguments
 
-ExplicitArg. Arg ::= Expr15;
-ImplicitArg. Arg ::= "{" Expr1 "}";
-InstanceArg. Arg ::= "{{" Expr1 "}}";
+ExplicitArg. Arg ::= [Modality] Expr15;
+ImplicitArg. Arg ::= "{" [Modality] Expr1 "}";
+InstanceArg. Arg ::= "{{" [Modality] Expr1 "}}";
 
 -- * Individual let declarations
 
