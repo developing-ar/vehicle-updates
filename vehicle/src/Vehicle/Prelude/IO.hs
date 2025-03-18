@@ -10,6 +10,7 @@ module Vehicle.Prelude.IO
     programOutput,
     getVehiclePath,
     ExternalOutputFormat (..),
+    CommentStyle (..),
     MonadStdIO (..),
   )
 where
@@ -164,9 +165,13 @@ getVehiclePath = do
 --------------------------------------------------------------------------------
 -- Other
 
+data CommentStyle
+  = Line (forall a. Doc a)
+  | Block (forall a. Doc a) (forall a. Doc a)
+
 data ExternalOutputFormat = ExternalOutputFormat
   { formatName :: forall a. Doc a,
     formatVersion :: Maybe Version,
-    commentToken :: forall a. Doc a,
+    commentStyle :: CommentStyle,
     emptyLines :: Bool
   }

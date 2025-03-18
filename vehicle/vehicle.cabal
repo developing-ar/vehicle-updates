@@ -117,6 +117,7 @@ library
   exposed-modules:
     Vehicle
     Vehicle.Backend.Agda
+    Vehicle.Backend.Rocq
     Vehicle.Backend.LossFunction.JSON
     Vehicle.Backend.LossFunction.LogicCompilation
     Vehicle.Backend.LossFunction.LossCompilation
@@ -180,6 +181,8 @@ library
     Vehicle.Backend.Agda.CapitaliseTypeNames
     Vehicle.Backend.Agda.Compile
     Vehicle.Backend.Agda.Interact
+    Vehicle.Backend.Rocq.Compile
+    Vehicle.Backend.Rocq.Interact
     Vehicle.Backend.LossFunction
     Vehicle.Backend.LossFunction.Core
     Vehicle.Backend.LossFunction.Domain

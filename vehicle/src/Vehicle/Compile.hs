@@ -9,6 +9,7 @@ import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy.Char8 (unpack)
 import Data.Maybe (mapMaybe)
 import Vehicle.Backend.Agda
+import Vehicle.Backend.Rocq
 import Vehicle.Backend.LossFunction (convertToLossTensors)
 import Vehicle.Backend.LossFunction.JSON
 import Vehicle.Backend.LossFunction.LogicCompilation (compileLogic)
@@ -100,6 +101,10 @@ compileToITP itp CompileOptions {..} typedProg@(Main ds) = do
       let agdaOptions = AgdaOptions verificationCache output moduleName
       agdaCode <- compileProgToAgda decProg agdaOptions
       writeAgdaFile output agdaCode
+    Rocq -> do
+      let rocqOptions = RocqOptions output moduleName
+      rocqCode <- compileProgToRocq decProg rocqOptions
+      writeRocqFile output rocqCode
 
 compileToLossFunction ::
   forall m.
