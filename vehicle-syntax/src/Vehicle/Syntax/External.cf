@@ -101,8 +101,8 @@ BasicNameBinder.    NameBinder ::= BasicBinder;
 separator NameBinder "";
 
 ExplicitTypeBinder. TypeBinder ::= Expr13;
-ImplicitTypeBinder. TypeBinder ::= "{" Expr1 "}";
-InstanceTypeBinder. TypeBinder ::= "{{" Expr1 "}}";
+ImplicitTypeBinder. TypeBinder ::= "{" [Modality] Expr1 "}";
+InstanceTypeBinder. TypeBinder ::= "{{" [Modality] Expr1 "}}";
 BasicTypeBinder.    TypeBinder ::= BasicBinder;
 
 -- separator TypeBinder "";

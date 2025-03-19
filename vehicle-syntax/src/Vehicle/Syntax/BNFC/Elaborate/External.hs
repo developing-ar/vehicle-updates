@@ -425,8 +425,8 @@ elabTypeBinder :: (MonadElab m) => Bool -> B.TypeBinder -> m V.Binder
 elabTypeBinder folded = \case
   B.ExplicitTypeBinder t -> mkBinder folded mempty V.Explicit . That =<< elabExpr t
   -- B.ExplicitTypeBinderMods m mods t -> mkBinder folded (m : mods) V.Explicit . That =<< elabExpr t
-  B.ImplicitTypeBinder t -> mkBinder folded mempty (V.Implicit False) . That =<< elabExpr t
-  B.InstanceTypeBinder t -> mkBinder folded mempty (V.Instance False) . That =<< elabExpr t
+  B.ImplicitTypeBinder modalities t -> mkBinder folded modalities (V.Implicit False) . That =<< elabExpr t
+  B.InstanceTypeBinder modalities t -> mkBinder folded modalities (V.Instance False) . That =<< elabExpr t
   B.BasicTypeBinder b -> elabBasicBinder folded b
 
 findRelevance :: [B.Modality] -> V.Relevance
