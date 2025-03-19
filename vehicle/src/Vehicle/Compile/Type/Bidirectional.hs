@@ -386,8 +386,9 @@ checkArgsAgainstPiType ctx problem binder resultType
       checkedArg <- case matchedUncheckedArg of
         Just arg -> do
           logDebug MaxDetail $ "checking existing argument for binder" <+> prettyVerbose binder
-          let relevance = if contextRelevance problem == Irrelevant then Irrelevant else relevanceOf binder
-          checkedArgExpr <- checkExprType ctx relevance (typeOf binder) (argExpr arg)
+          let relevance = relevanceOf binder
+          let ctxRelevance = if contextRelevance problem == Irrelevant then Irrelevant else relevance
+          checkedArgExpr <- checkExprType ctx ctxRelevance (typeOf binder) (argExpr arg)
           return $ Arg p (visibilityOf arg) relevance checkedArgExpr
         Nothing -> do
           logDebug MaxDetail $ "inserting argument for binder" <+> prettyVerbose binder

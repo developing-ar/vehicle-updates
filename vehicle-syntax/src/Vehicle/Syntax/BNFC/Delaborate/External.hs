@@ -83,10 +83,11 @@ instance Delaborate V.Arg B.Arg where
   delabM arg = do
     let modalities = delabRelevance arg
     e' <- delabM (V.argExpr arg)
-    return $ case V.visibilityOf arg of
-      V.Explicit {} -> B.ExplicitArg modalities e'
-      V.Implicit {} -> B.ImplicitArg modalities e'
-      V.Instance {} -> B.InstanceArg modalities e'
+    return $ case (V.visibilityOf arg, modalities) of
+      (V.Explicit {}, []) -> B.ExplicitArg e'
+      (V.Explicit {}, m : ms) -> B.ExplicitArgMods m ms e'
+      (V.Implicit {}, _) -> B.ImplicitArg modalities e'
+      (V.Instance {}, _) -> B.InstanceArg modalities e'
 
 instance Delaborate V.Binder B.BasicBinder where
   delabM binder = do
@@ -117,10 +118,14 @@ delabNameBinder b = case V.binderNamingForm b of
     developerError
       "Should not be delaborating the `OnlyType` binder to a `Binder Name`"
   V.NameAndType {} -> B.BasicNameBinder <$> delabM b
-  V.OnlyName name -> return $ case V.visibilityOf b of
-    V.Explicit -> B.ExplicitNameBinder (delabModalities b) (delabSymbol name)
-    V.Implicit {} -> B.ImplicitNameBinder (delabModalities b) (delabSymbol name)
-    V.Instance {} -> B.InstanceNameBinder (delabModalities b) (delabSymbol name)
+  V.OnlyName name -> do
+    let modalities = delabModalities b
+    let finalName = delabSymbol name
+    return $ case (V.visibilityOf b, modalities) of
+      (V.Explicit, []) -> B.ExplicitNameBinder finalName
+      (V.Explicit, _m : _ms) -> B.ExplicitNameBinder finalName -- B.ExplicitNameBinderMods m ms finalName
+      (V.Implicit {}, _) -> B.ImplicitNameBinder modalities finalName
+      (V.Instance {}, _) -> B.InstanceNameBinder modalities finalName
 
 delabModalities :: V.Binder -> [B.Modality]
 delabModalities binder
@@ -133,10 +138,14 @@ delabTypeBinder b = case V.binderNamingForm b of
     developerError
       "Should not be delaborating an `OnlyName` binder to a `TypeBinder`"
   V.NameAndType {} -> B.BasicTypeBinder <$> delabM b
-  V.OnlyType {} -> case V.visibilityOf b of
-    V.Explicit -> B.ExplicitTypeBinder <$> delabM (V.binderValue b)
-    V.Implicit {} -> B.ImplicitTypeBinder <$> delabM (V.binderValue b)
-    V.Instance {} -> B.InstanceTypeBinder <$> delabM (V.binderValue b)
+  V.OnlyType {} -> do
+    let modalities = delabModalities b
+    typ <- delabM (V.binderValue b)
+    return $ case (V.visibilityOf b, modalities) of
+      (V.Explicit, []) -> B.ExplicitTypeBinder typ
+      (V.Explicit, _m : _ms) -> B.ExplicitTypeBinder typ -- B.ExplicitTypeBinderMods m ms typ
+      (V.Implicit {}, _) -> B.ImplicitTypeBinder modalities typ
+      (V.Instance {}, _) -> B.InstanceTypeBinder modalities typ
 
 delabLetBinding :: (MonadDelab m) => (V.Binder, V.Expr) -> m B.LetDecl
 delabLetBinding (binder, bound) = B.LDecl <$> delabNameBinder binder <*> delabM bound

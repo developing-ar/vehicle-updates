@@ -253,15 +253,31 @@ solveClosure info (binder1, Closure env1 body1) (binder2, Closure env2 body2) = 
   return $ binderConstraint <> bodyConstraint
 
 solveFlexFlex ::
+  forall builtin m.
   (MonadUnify builtin m) =>
   ConstraintInfo builtin ->
   (MetaID, Spine builtin) ->
   (MetaID, Spine builtin) ->
   m (UnificationResult builtin)
-solveFlexFlex info (meta1, spine1) (meta2, spine2)
-  | spine1 == spine2 = do
-      _
-  | otherwise = do
+solveFlexFlex info (meta1, spine1) (meta2, spine2) = do
+  let proxy = Proxy @builtin
+  c1 <- length <$> getMetaCtx proxy meta1
+  c2 <- length <$> getMetaCtx proxy meta2
+  let (ctx1Args, extraArgs1) = splitAt c1 spine1
+  let (ctx2Args, extraArgs2) = splitAt c2 spine2
+  logDebug MaxDetail "Hit"
+  logDebug MaxDetail $ prettyVerbose ctx1Args
+  logDebug MaxDetail $ prettyVerbose ctx2Args
+  logDebug MaxDetail $ prettyVerbose extraArgs1
+  logDebug MaxDetail $ prettyVerbose extraArgs2
+
+  if not (null extraArgs1) && extraArgs1 == extraArgs2
+    then do
+      -- This is a massive hack assuming that the meta is always an injective function.
+      -- This is to allow the instance unification to work in the `Decidable` typing
+      -- subsystem when inferring if `(Tensor Bool) ds` -> `(\_ds -> Type)` or `Tensor Bool`)
+      subUnify info (VMeta meta1 ctx1Args) (VMeta meta2 ctx2Args)
+    else do
       -- It may be that only one of the two spines is invertible
       maybeRenaming <- invert (boundCtxLv (infoBoundCtx info)) (meta1, spine1)
       case maybeRenaming of

@@ -393,11 +393,12 @@ elabExpr expr = case expr of
   B.HasFold tk -> builtinTypeClass V.HasFold tk []
   B.IsTensorType tk -> builtinTypeClass V.IsTensorType tk []
   -- NOTE: we reverse the arguments to make it well-typed.
-  B.Ann e tk t -> elabExpr (B.App (B.App (B.Var (B.Name (tkLocation tk, "typeAnn"))) (B.ExplicitArg mempty t)) (B.ExplicitArg mempty e))
+  B.Ann e tk t -> elabExpr (B.App (B.App (B.Var (B.Name (tkLocation tk, "typeAnn"))) (B.ExplicitArg t)) (B.ExplicitArg e))
 
 elabArg :: (MonadElab m) => B.Arg -> m V.Arg
 elabArg = \case
-  B.ExplicitArg modalities e -> mkArg modalities V.Explicit <$> elabExpr e
+  B.ExplicitArg e -> mkArg mempty V.Explicit <$> elabExpr e
+  B.ExplicitArgMods modality modalities e -> mkArg (modality : modalities) V.Explicit <$> elabExpr e
   B.ImplicitArg modalities e -> mkArg modalities (V.Implicit False) <$> elabExpr e
   B.InstanceArg modalities e -> mkArg modalities (V.Instance False) <$> elabExpr e
 
@@ -414,7 +415,8 @@ elabBasicBinder folded = \case
 
 elabNameBinder :: (MonadElab m) => Bool -> B.NameBinder -> m V.Binder
 elabNameBinder folded = \case
-  B.ExplicitNameBinder modalities n -> mkBinder folded modalities V.Explicit (This n)
+  B.ExplicitNameBinder n -> mkBinder folded mempty V.Explicit (This n)
+  -- B.ExplicitNameBinderMods m modalities n -> mkBinder folded (m : modalities) V.Explicit (This n)
   B.ImplicitNameBinder modalities n -> mkBinder folded modalities (V.Implicit False) (This n)
   B.InstanceNameBinder modalities n -> mkBinder folded modalities (V.Instance False) (This n)
   B.BasicNameBinder b -> elabBasicBinder folded b
@@ -422,8 +424,9 @@ elabNameBinder folded = \case
 elabTypeBinder :: (MonadElab m) => Bool -> B.TypeBinder -> m V.Binder
 elabTypeBinder folded = \case
   B.ExplicitTypeBinder t -> mkBinder folded mempty V.Explicit . That =<< elabExpr t
-  B.ImplicitTypeBinder t -> mkBinder folded mempty (V.Implicit False) . That =<< elabExpr t
-  B.InstanceTypeBinder t -> mkBinder folded mempty (V.Instance False) . That =<< elabExpr t
+  -- B.ExplicitTypeBinderMods m mods t -> mkBinder folded (m : mods) V.Explicit . That =<< elabExpr t
+  B.ImplicitTypeBinder modalities t -> mkBinder folded modalities (V.Implicit False) . That =<< elabExpr t
+  B.InstanceTypeBinder modalities t -> mkBinder folded modalities (V.Instance False) . That =<< elabExpr t
   B.BasicTypeBinder b -> elabBasicBinder folded b
 
 findRelevance :: [B.Modality] -> V.Relevance

@@ -87,31 +87,34 @@ Irrelevant. Modality ::= "@0";
 
 separator Modality "";
 
--- * Binders
+-- * Basic binders
 
 ExplicitBinder. BasicBinder ::= "("  [Modality] Name TokElemOf Expr1 ")";
 ImplicitBinder. BasicBinder ::= "{"  [Modality] Name TokElemOf Expr1 "}";
 InstanceBinder. BasicBinder ::= "{{" [Modality] Name TokElemOf Expr1 "}}";
 
-ExplicitNameBinder. NameBinder ::= [Modality] Name;
+-- * Binders where the user must provide a name but can omit the type
+
+ExplicitNameBinder. NameBinder ::= Name;
 ImplicitNameBinder. NameBinder ::= "{" [Modality] Name "}";
 InstanceNameBinder. NameBinder ::= "{{" [Modality] Name "}}";
 BasicNameBinder.    NameBinder ::= BasicBinder;
 
 separator NameBinder "";
 
-ExplicitTypeBinder. TypeBinder ::= Expr13;
-ImplicitTypeBinder. TypeBinder ::= "{" Expr1 "}";
-InstanceTypeBinder. TypeBinder ::= "{{" Expr1 "}}";
-BasicTypeBinder.    TypeBinder ::= BasicBinder;
+-- * Binders where the user must provide a type but can omit the name
 
--- separator TypeBinder "";
+ExplicitTypeBinder. TypeBinder ::= Expr13;
+ImplicitTypeBinder. TypeBinder ::= "{" [Modality] Expr1 "}";
+InstanceTypeBinder. TypeBinder ::= "{{" [Modality] Expr1 "}}";
+BasicTypeBinder.    TypeBinder ::= BasicBinder;
 
 -- * Arguments
 
-ExplicitArg. Arg ::= [Modality] Expr15;
-ImplicitArg. Arg ::= "{" [Modality] Expr1 "}";
-InstanceArg. Arg ::= "{{" [Modality] Expr1 "}}";
+ExplicitArg.     Arg ::= Expr15;
+ExplicitArgMods. Arg ::= "(" Modality [Modality] Expr15 ")";
+ImplicitArg.     Arg ::= "{" [Modality] Expr1 "}";
+InstanceArg.     Arg ::= "{{" [Modality] Expr1 "}}";
 
 -- * Individual let declarations
 

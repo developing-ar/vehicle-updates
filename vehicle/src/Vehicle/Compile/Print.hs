@@ -55,7 +55,7 @@ type VerboseTags = 'Unnamed ('ShortVectors ('As 'Internal))
 
 type ExternalTags = 'Named ('ShortVectors ('As 'External))
 
-type FriendlyTags = 'Named ('Uninserted ('As 'External))
+type FriendlyTags = 'Named ('Cleaned ('As 'External))
 
 type PrettyVerbose a = PrettyWith VerboseTags a
 
@@ -98,8 +98,8 @@ data Tags
     Named Tags
   | -- | The `Unnamed` tag denotes that the term should not be converted back to using named binders
     Unnamed Tags
-  | -- | The `Uninserted` tag ensures that automatically inserted annotations and binders are removed.
-    Uninserted Tags
+  | -- | The `Cleaned` tag ensures that automatically inserted annotations, binders and modalities are removed.
+    Cleaned Tags
   | -- | The `ShortVectors` tag ensures that long vectors are printed out concisely.
     ShortVectors Tags
 
@@ -112,7 +112,7 @@ data Strategy
   | DescopeWithNames Strategy
   | PrintAs VehicleLang
   | QuoteValue Strategy
-  | UninsertArgsAndBinders Strategy
+  | Clean Strategy
   | ShortenVectors Strategy
   | Pretty
 
@@ -186,7 +186,7 @@ type family StrategyFor (tags :: Tags) a :: Strategy where
   --------------------
   -- Simplification --
   --------------------
-  StrategyFor ('Uninserted tags) a = 'UninsertArgsAndBinders (StrategyFor tags a)
+  StrategyFor ('Cleaned tags) a = 'Clean (StrategyFor tags a)
   StrategyFor ('ShortVectors tags) a = 'ShortenVectors (StrategyFor tags a)
   -- StrategyFor tags (Contextualised object (ConstraintContext builtin)) = 'SetupContext (StrategyFor tags (object `In` NamedBoundCtx))
   ----------------
@@ -415,9 +415,9 @@ instance PrettyUsing ('PrintAs 'External) S.Binder where
 
 instance
   (Simplify a, PrettyUsing rest a) =>
-  PrettyUsing ('UninsertArgsAndBinders rest) a
+  PrettyUsing ('Clean rest) a
   where
-  prettyUsing e = prettyUsing @rest (uninsert e)
+  prettyUsing e = prettyUsing @rest (clean e)
 
 instance
   (Simplify a, PrettyUsing rest a) =>
