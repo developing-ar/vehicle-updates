@@ -87,11 +87,13 @@ Irrelevant. Modality ::= "@0";
 
 separator Modality "";
 
--- * Binders
+-- * Basic binders
 
 ExplicitBinder. BasicBinder ::= "("  [Modality] Name TokElemOf Expr1 ")";
 ImplicitBinder. BasicBinder ::= "{"  [Modality] Name TokElemOf Expr1 "}";
 InstanceBinder. BasicBinder ::= "{{" [Modality] Name TokElemOf Expr1 "}}";
+
+-- * Binders where the user must provide a name but can omit the type
 
 ExplicitNameBinder. NameBinder ::= [Modality] Name;
 ImplicitNameBinder. NameBinder ::= "{" [Modality] Name "}";
@@ -100,12 +102,12 @@ BasicNameBinder.    NameBinder ::= BasicBinder;
 
 separator NameBinder "";
 
+-- * Binders where the user must provide a type but can omit the name
+
 ExplicitTypeBinder. TypeBinder ::= Expr13;
 ImplicitTypeBinder. TypeBinder ::= "{" [Modality] Expr1 "}";
 InstanceTypeBinder. TypeBinder ::= "{{" [Modality] Expr1 "}}";
 BasicTypeBinder.    TypeBinder ::= BasicBinder;
-
--- separator TypeBinder "";
 
 -- * Arguments
 
