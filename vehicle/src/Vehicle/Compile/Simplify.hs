@@ -9,29 +9,29 @@ import Data.Text qualified as Text
 import Vehicle.Data.Builtin.Core
 import Vehicle.Syntax.AST.Arg
 import Vehicle.Syntax.AST.Expr
-import Vehicle.Syntax.AST.Relevance (Relevance (..))
+import Vehicle.Syntax.AST.Relevance (Relevance (..), setRelevance)
 import Vehicle.Syntax.AST.Visibility (Visibility (..), visibilityOf)
 
 -- | Note that these operations can be seen as undoing parts of the type-checking,
 -- and therefore the resulting code is not guaranteed to be well-typed.
 class Simplify a where
-  -- | Removes automatically inserted arguments and binders.
-  uninsert :: a -> a
+  -- | Removes automatically inserted arguments, binders and modalities for display to users.
+  clean :: a -> a
 
   -- | Shortens vectors
   shortenVec :: a -> a
 
 instance Simplify Prog where
-  uninsert = fmap uninsert
+  clean = fmap clean
   shortenVec = fmap shortenVec
 
 instance Simplify Decl where
-  uninsert = fmap uninsert
+  clean = fmap clean
   shortenVec = fmap shortenVec
 
 instance Simplify Expr where
-  uninsert = mapApp $ \fun args -> do
-    let fun' = uninsert fun
+  clean = mapApp $ \fun args -> do
+    let fun' = clean fun
     -- Remove automatically inserted cast functions
     removeInsertedCasts fun' args
 
@@ -62,11 +62,11 @@ instance Simplify Expr where
           go l (_ : ys) = go (l + 1) ys
 
 instance Simplify Binder where
-  uninsert = fmap uninsert
+  clean = fmap clean . setRelevance Relevant
   shortenVec = fmap shortenVec
 
 instance Simplify Arg where
-  uninsert = fmap uninsert
+  clean = fmap clean . setRelevance Relevant
   shortenVec = fmap shortenVec
 
 mapApp :: (Expr -> NonEmpty Arg -> Expr) -> Expr -> Expr
@@ -97,7 +97,7 @@ removeInsertedCasts fun args
       _ -> normAppList fun $ simplifyArgs args
 
 simplifyArgs :: NonEmpty Arg -> [Arg]
-simplifyArgs = fmap uninsert . NonEmpty.filter (not . wasInserted)
+simplifyArgs = fmap clean . NonEmpty.filter (not . wasInserted)
 
 wasInserted :: Arg -> Bool
 wasInserted arg = case visibilityOf arg of
@@ -119,7 +119,7 @@ delabTensorType = \case
 delabList :: Expr -> NonEmpty Arg -> Expr
 delabList fun args = case go (App fun args) of
   Nothing -> normAppList fun $ simplifyArgs args
-  Just xs -> normAppList (Builtin mempty (TypeClassOp VecLiteralTC)) $ fmap uninsert xs
+  Just xs -> normAppList (Builtin mempty (TypeClassOp VecLiteralTC)) $ fmap clean xs
   where
     go :: Expr -> Maybe [Arg]
     go = \case
