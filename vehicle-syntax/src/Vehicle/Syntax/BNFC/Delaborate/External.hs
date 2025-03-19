@@ -122,8 +122,8 @@ delabNameBinder b = case V.binderNamingForm b of
     let modalities = delabModalities b
     let finalName = delabSymbol name
     return $ case (V.visibilityOf b, modalities) of
-      (V.Explicit, []) -> B.ExplicitNameBinder modalities finalName
-      (V.Explicit, _m : _ms) -> B.ExplicitNameBinder modalities finalName -- B.ExplicitNameBinderMods m ms finalName
+      (V.Explicit, []) -> B.ExplicitNameBinder finalName
+      (V.Explicit, _m : _ms) -> B.ExplicitNameBinder finalName -- B.ExplicitNameBinderMods m ms finalName
       (V.Implicit {}, _) -> B.ImplicitNameBinder modalities finalName
       (V.Instance {}, _) -> B.InstanceNameBinder modalities finalName
 

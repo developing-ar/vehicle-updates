@@ -95,7 +95,7 @@ InstanceBinder. BasicBinder ::= "{{" [Modality] Name TokElemOf Expr1 "}}";
 
 -- * Binders where the user must provide a name but can omit the type
 
-ExplicitNameBinder. NameBinder ::= [Modality] Name;
+ExplicitNameBinder. NameBinder ::= Name;
 ImplicitNameBinder. NameBinder ::= "{" [Modality] Name "}";
 InstanceNameBinder. NameBinder ::= "{{" [Modality] Name "}}";
 BasicNameBinder.    NameBinder ::= BasicBinder;

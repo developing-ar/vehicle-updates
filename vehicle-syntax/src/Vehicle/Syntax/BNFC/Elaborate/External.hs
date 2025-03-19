@@ -415,7 +415,7 @@ elabBasicBinder folded = \case
 
 elabNameBinder :: (MonadElab m) => Bool -> B.NameBinder -> m V.Binder
 elabNameBinder folded = \case
-  B.ExplicitNameBinder modalities n -> mkBinder folded modalities V.Explicit (This n)
+  B.ExplicitNameBinder n -> mkBinder folded mempty V.Explicit (This n)
   -- B.ExplicitNameBinderMods m modalities n -> mkBinder folded (m : modalities) V.Explicit (This n)
   B.ImplicitNameBinder modalities n -> mkBinder folded modalities (V.Implicit False) (This n)
   B.InstanceNameBinder modalities n -> mkBinder folded modalities (V.Instance False) (This n)
