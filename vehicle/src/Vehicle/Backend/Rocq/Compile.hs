@@ -93,17 +93,19 @@ logExit e = do
 -- Modules
 
 data Dependency
-  = Import Module
+  = RequireImport Library
+  | Import Module
   | Open Scope
   deriving (Eq, Ord)
 
 instance Pretty Dependency where
   pretty = \case
-    Import m -> "Require Import" <+> pretty m <> "."
+    RequireImport l -> "Require Import" <+> pretty l <> "."
+    Import m -> "Import" <+> pretty m <> "."
     Open s -> "Open Scope" <+> pretty s <> "."
 
-data Module
-  = CoqSsrSsrbool
+data Library
+  = MathcompSsreflectSsrbool
   | MathcompAlgebraSsralg
   | MathcompSsreflectOrder
   | MathcompSsreflectFintype
@@ -117,7 +119,7 @@ data Module
   | VehicleUtils
   deriving (Eq, Ord)
 
-instance Pretty Module where
+instance Pretty Library where
   pretty = \case
     VehicleTensor -> "Vehicle.Tensor"
     VehicleReal -> "Vehicle.Real"
@@ -126,21 +128,31 @@ instance Pretty Module where
     MathcompAlgebraSsralg -> "mathcomp.algebra.ssralg"
     MathcompSsreflectOrder -> "mathcomp.ssreflect.order"
     MathcompSsreflectFintype -> "mathcomp.ssreflect.fintype"
-    CoqSsrSsrbool -> "Coq.ssr.ssrbool"
+    MathcompSsreflectSsrbool -> "mathcomp.ssreflect.ssrbool"
     MathcompSsreflectSeq -> "mathcomp.ssreflect.seq"
     MathcompSsreflectTuple -> "mathcomp.ssreflect.tuple"
     MathcompAlgebraZmodp -> "mathcomp.algebra.zmodp"
     MathcompRealsReals -> "mathcomp.reals.reals"
 
+data Module
+  = DefaultTupleProdOrder
+  deriving (Eq, Ord)
+
+instance Pretty Module where
+  pretty = \case
+    DefaultTupleProdOrder -> "DefaultTupleProdOrder"
+
 data Scope
   = RingScope
   | TensorScope
+  | OrderScope
   deriving (Eq, Ord)
 
 instance Pretty Scope where
   pretty = \case
     RingScope -> "ring_scope"
     TensorScope -> "tensor_scope"
+    OrderScope -> "order_scope"
 
 preamble :: Set Dependency -> Doc a
 preamble deps = vsep $ map pretty (Set.toList deps)
@@ -193,12 +205,13 @@ annotateInfixApp dependencies precedence op fallbackOp args
   where
     fallback = case fallbackOp of
       Just fOp -> annotateApp dependencies (pretty fOp) args
-      Nothing -> developerError $ 
-                  "too many arguments"
-                    <+> pretty op
-                    <+> "with"
-                    <+> pretty (length args)
-                    <+> "arguments"
+      Nothing ->
+        developerError $
+          "too many arguments"
+            <+> pretty op
+            <+> "with"
+            <+> pretty (length args)
+            <+> "arguments"
 
 -- | Inserts infix args into the correct positions
 -- e.g. insertInfixArgs Nothing "if_then_else_" [a, b, c] = Just "if a then b else c"
@@ -364,15 +377,15 @@ compileBuiltin b args = case b of
   StandardBuiltinType t -> case t of
     BoolType -> return $ compileType (UniverseLevel 0)
     -- For the Rocq backend, rationals are promoted to reals
-    RatType -> return $ annotateConstant [Import VehicleReal, Import MathcompRealsReals] "R"
+    RatType -> return $ annotateConstant [RequireImport VehicleReal, RequireImport MathcompRealsReals] "R"
     UnitType -> return "unit"
     NatType -> return "nat"
     ListType -> annotateApp [] "list" args
-    TensorType -> annotateApp [Import VehicleTensor] "tensor" args
-    IndexType -> annotateApp [Import MathcompSsreflectFintype] "ordinal" args
+    TensorType -> annotateApp [RequireImport VehicleTensor] "tensor" args
+    IndexType -> annotateApp [RequireImport MathcompSsreflectFintype] "ordinal" args
   StandardBuiltinConstructor c -> case c of
     Nil -> return "nil"
-    Cons -> annotateInfixApp [Import MathcompSsreflectSeq] 60 "_ :: _" (Just "cons") args
+    Cons -> annotateInfixApp [RequireImport MathcompSsreflectSeq] 60 "_ :: _" (Just "cons") args
     UnitLiteral -> return "tt"
     IndexLiteral n -> return $ compileIndexLiteral n
     NatLiteral n -> return $ compileNatLiteral n
@@ -383,10 +396,10 @@ compileBuiltin b args = case b of
   StandardBuiltinFunction f -> case f of
     And -> annotateInfixApp [] 40 "_ && _" (Just "andb") args -- https://coq.inria.fr/doc/V8.18.0/refman/language/coq-library.html#notations
     Or -> annotateInfixApp [] 50 "_ || _" (Just "orb") args
-    Not -> annotateInfixApp [Import CoqSsrSsrbool] 35 "~~ _" (Just "negb") args
-    Implies -> annotateInfixApp [Import CoqSsrSsrbool] 55 "_ ==> _" (Just "implb") args
-    Add AddNat -> annotateInfixApp [Import MathcompAlgebraSsralg, Open RingScope] 50 "_ + _" (Just "GRing.add") args
-    Mul MulNat -> annotateInfixApp [Import MathcompAlgebraSsralg, Open RingScope] 40 "_ * _" (Just "GRing.mul") args
+    Not -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] 35 "~~ _" (Just "negb") args
+    Implies -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] 55 "_ ==> _" (Just "implb") args
+    Add AddNat -> annotateInfixApp [RequireImport MathcompAlgebraSsralg, Open RingScope] 50 "_ + _" (Just "GRing.add") args
+    Mul MulNat -> annotateInfixApp [RequireImport MathcompAlgebraSsralg, Open RingScope] 40 "_ * _" (Just "GRing.mul") args
     Add AddRatTensor -> annotateInfixApp [] 50 "_ + _" (Just "addt") args
     Sub SubRatTensor -> annotateInfixApp [] 50 "_ - _" (Just "subt") args
     Mul MulRatTensor -> annotateInfixApp [] 40 "_ * _" (Just "mult") args
@@ -397,10 +410,10 @@ compileBuiltin b args = case b of
     Compare CompareIndex op -> compileComparison True op args
     Compare CompareNat op -> compileComparison True op args
     Compare CompareRatTensor op -> compileComparison True op args
-    FoldList -> annotateApp [Import MathcompSsreflectSeq] "foldr" args
-    MapList -> annotateApp [Import MathcompSsreflectSeq] "map" args
-    ReduceAndTensor -> annotateApp [Import VehicleTensor] "reduceAnd" args
-    ReduceOrTensor -> annotateApp [Import VehicleTensor] "reduceOr" args
+    FoldList -> annotateApp [RequireImport MathcompSsreflectSeq] "foldr" args
+    MapList -> annotateApp [RequireImport MathcompSsreflectSeq] "map" args
+    ReduceAndTensor -> annotateApp [RequireImport VehicleTensor] "reduceAnd" args
+    ReduceOrTensor -> annotateApp [RequireImport VehicleTensor] "reduceOr" args
     ReduceAddRatTensor -> annotateApp [] "reduceAdd" args
     ReduceMinRatTensor -> annotateApp [] "reduceMin" args
     ReduceMaxRatTensor -> annotateApp [] "reduceMax" args
@@ -409,9 +422,9 @@ compileBuiltin b args = case b of
     QuantifyRatTensor q -> case reverse args of
       (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
       _ -> unsupportedArgsError
-    At -> annotateApp [Import MathcompSsreflectTuple] "tnth" args
-    If -> annotateInfixApp [Import CoqSsrSsrbool] 200 "if _ then _ else _" (Just "if_expr") args -- TODO : Check precedence
-    Foreach -> annotateApp [Import VehicleTensor] "foreach" args
+    At -> annotateApp [RequireImport MathcompSsreflectTuple] "tnth" args
+    If -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] 200 "if _ then _ else _" (Just "if_expr") args -- TODO : Check precedence
+    Foreach -> annotateApp [RequireImport VehicleTensor] "foreach" args
     StackTensor -> compileStack args
     -- let as = compileArgs maxPrecedence args
     -- annotateApp [Import VehicleTensor] "stack" (compileTensorLiteral id as)
@@ -423,7 +436,7 @@ compileBuiltin b args = case b of
     TypeNot -> annotateInfixApp [] 75 "~ _" (Just "not") args
     TypeAnd -> annotateInfixApp [] 80 "_ /\\ _" (Just "and") args
     TypeOr -> annotateInfixApp [] 85 "_ \\/ _" (Just "or") args
-    TypeImplies -> annotateInfixApp [Import CoqSsrSsrbool] minPrecedence "_ -> _" (Just "implies") args
+    TypeImplies -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] minPrecedence "_ -> _" (Just "implies") args
     TypeCompare CompareIndex op -> compileComparison False op args
     TypeCompare CompareNat op -> compileComparison False op args
     TypeCompare CompareRatTensor op -> compileComparison False op args
@@ -469,7 +482,7 @@ compileStdLibFunction fn args = case fn of
   StdExistsIndex -> unsupported -- annotateApp [VehicleUtils] Nothing "existsIndex" args
   StdForallIndex -> unsupported -- annotateApp [VehicleUtils] Nothing "forallIndex" args
   StdVectorType -> unsupported
-  StdAppendList -> annotateInfixApp [Import MathcompSsreflectSeq] 5 "_++_" (Just "cat") args
+  StdAppendList -> annotateInfixApp [RequireImport MathcompSsreflectSeq] 5 "_++_" (Just "cat") args
   StdForallInList -> unsupported
   StdExistsInList -> unsupported
   StdTypeAnn -> annotateInfixApp [] 0 "(_:_)" Nothing args
@@ -500,9 +513,9 @@ compileArgs precedence = traverse (compileArg precedence)
 compileIndexLiteral :: Int -> Code
 compileIndexLiteral i =
   annotateConstant
-    [ Import MathcompAlgebraSsralg,
-      Import MathcompSsreflectFintype,
-      Import MathcompAlgebraZmodp,
+    [ RequireImport MathcompAlgebraSsralg,
+      RequireImport MathcompSsreflectFintype,
+      RequireImport MathcompAlgebraZmodp,
       Open RingScope
     ]
     (pretty i)
@@ -515,7 +528,7 @@ compileTensorLiteral compileElement =
   foldMapTensor compileElement compileTensorLayer
   where
     compileTensorLayer :: TensorShape -> [Code] -> Code
-    compileTensorLayer _shape xs = annotate ([Import MathcompSsreflectTuple], maxPrecedence) "[tuple" <+> concatWith (surround "; ") xs <> "]"
+    compileTensorLayer _shape xs = annotate ([RequireImport MathcompSsreflectTuple], maxPrecedence) "[tuple" <+> concatWith (surround "; ") xs <> "]"
 
 compileBoolLiteral :: Bool -> Code
 compileBoolLiteral = \case
@@ -523,7 +536,7 @@ compileBoolLiteral = \case
   False -> "false"
 
 compileRatLiteral :: Rational -> Code
-compileRatLiteral r = annotate ([Import MathcompAlgebraSsralg, Open RingScope], minPrecedence) rat
+compileRatLiteral r = annotate ([RequireImport MathcompAlgebraSsralg, Open RingScope], minPrecedence) rat
   where
     num = pretty $ numerator r
     denom = compileNatLiteral (fromInteger $ denominator r)
@@ -538,18 +551,23 @@ compileLam binder expr = do
 compileComparison :: (MonadRocqCompile m) => Bool -> ComparisonOp -> [Arg DecidabilityBuiltin] -> m Code
 compileComparison decidable op = do
   let (opP, opDec) = case op of
-        Le -> ("<=P", "<=")
-        Lt -> ("<P", "<")
-        Ge -> (">=P", ">=")
-        Gt -> (">P", ">")
+        Le -> ("<=", "<=")
+        Lt -> ("<", "<")
+        Ge -> (">=", ">=")
+        Gt -> (">", ">")
         Eq -> ("=", "==")
         Ne -> ("<>", "!=")
   let opDoc = "_ " <> (if decidable then opDec else opP) <> " _"
-  annotateInfixApp [Import VehicleOrderNotations] 70 opDoc Nothing
+  annotateInfixApp
+    [ RequireImport MathcompSsreflectSsrbool,
+      RequireImport MathcompSsreflectOrder,
+      Import DefaultTupleProdOrder,
+      Open OrderScope
+    ] 70 opDoc Nothing
 
 compileStack :: (MonadRocqCompile m) => [Arg DecidabilityBuiltin] -> m Code
 compileStack args = do
   as <- compileArgs minPrecedence args
   let tensor = Tensor [length as] (Values $ Vector.fromList as)
   let argtuple = compileTensorLiteral id tensor
-  return $ annotate ([Import VehicleTensor], 200) $ "stack" <+> argtuple
+  return $ annotate ([RequireImport VehicleTensor], 200) $ "stack" <+> argtuple

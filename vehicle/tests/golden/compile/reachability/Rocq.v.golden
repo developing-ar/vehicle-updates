@@ -4,14 +4,17 @@
 (*  - Rocq version: 0.0.0 *)
 (*  - Vehicle version: 0.16.0+dev *)
 
+Require Import mathcomp.ssreflect.ssrbool.
 Require Import mathcomp.algebra.ssralg.
+Require Import mathcomp.ssreflect.order.
 Require Import mathcomp.ssreflect.seq.
 Require Import mathcomp.ssreflect.tuple.
 Require Import mathcomp.reals.reals.
 Require Import Vehicle.Tensor.
 Require Import Vehicle.Real.
-Require Import Vehicle.OrderNotations.
+Import DefaultTupleProdOrder.
 Open Scope ring_scope.
+Open Scope order_scope.
 
 Parameter f : tensor R (2 :: nil) -> tensor R (1 :: nil).
 
