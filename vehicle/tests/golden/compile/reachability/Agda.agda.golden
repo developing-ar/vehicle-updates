@@ -10,7 +10,6 @@ open import Vehicle
 open import Vehicle.Utils
 open import Vehicle.Data.Tensor
 open import Data.Product
-open import Data.Integer as ℤ using (ℤ)
 open import Data.Rational as ℚ using (ℚ)
 open import Data.List.Base
 
@@ -19,7 +18,7 @@ module Agda where
 postulate f : Tensor ℚ (2 ∷ []) → Tensor ℚ (1 ∷ [])
 
 abstract
-  reachable : ∃ λ x → f x ≈ stack (ℤ.+ 0 / 1)
+  reachable : ∃ λ x → f x ≈ stack 0
   reachable = checkSpecification record
     { cache = "Marabou.queries"
     }

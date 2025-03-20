@@ -2,6 +2,7 @@
 
 module Vehicle.Compile.Type.Constraint.UnificationSolver
   ( runUnificationSolver,
+    solveUnificationConstraint,
     unify,
     UnificationResult (..),
   )
@@ -13,6 +14,7 @@ import Data.IntMap qualified as IntMap
 import Data.IntSet qualified as IntSet
 import Data.List (intersect)
 import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NonEmpty (toList)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Proxy (Proxy (..))
 import Prettyprinter (sep)
@@ -73,7 +75,7 @@ data UnificationResult builtin
   | -- | Always an error
     HardFailure (NonEmpty (UnificationProblem builtin))
   | -- | Only an error when further reduction will never occur.
-    Blocked [ConstraintInfo builtin]
+    Blocked (NonEmpty (ConstraintInfo builtin))
 
 solveUnificationConstraint ::
   forall builtin m.
@@ -86,7 +88,7 @@ solveUnificationConstraint (WithContext (Unify origin e1 e2) ctx) = do
     Success -> return ()
     Blocked blockedProblems -> do
       newConstraints <- forM blockedProblems $ createNewConstraint ctx origin
-      addUnificationConstraints newConstraints
+      addUnificationConstraints $ NonEmpty.toList newConstraints
     HardFailure failedProblems -> do
       finalFailedConstraints <- forM failedProblems $ \problem ->
         createNewConstraint ctx origin (problem, mempty)
@@ -271,12 +273,14 @@ solveFlexFlex info (meta1, spine1) (meta2, spine2) = do
   logDebug MaxDetail $ prettyVerbose extraArgs1
   logDebug MaxDetail $ prettyVerbose extraArgs2
 
-  if not (null extraArgs1) && extraArgs1 == extraArgs2
+  if not (null extraArgs1) && length extraArgs1 == length extraArgs2
     then do
       -- This is a massive hack assuming that the meta is always an injective function.
       -- This is to allow the instance unification to work in the `Decidable` typing
       -- subsystem when inferring if `(Tensor Bool) ds` -> `(\_ds -> Type)` or `Tensor Bool`)
-      subUnify info (VMeta meta1 ctx1Args) (VMeta meta2 ctx2Args)
+      metaResult <- subUnify info (VMeta meta1 ctx1Args) (VMeta meta2 ctx2Args)
+      spineResults <- solveSpine info extraArgs1 extraArgs2
+      return $ metaResult <> spineResults
     else do
       -- It may be that only one of the two spines is invertible
       maybeRenaming <- invert (boundCtxLv (infoBoundCtx info)) (meta1, spine1)

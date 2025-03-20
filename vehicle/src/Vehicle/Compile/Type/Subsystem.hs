@@ -45,8 +45,9 @@ decidabilityTypeCheck prog = do
     Left err -> throwError err
     Right decProg -> return decProg
 
-  instanceFreeProg <- resolveInstanceArgumentsAndCasts decProg
-  monomorphise isUserCode isDeclTypeClassBinder "-" instanceFreeProg
+  monoProg <- monomorphise isUserCode isDeclTypeClassBinder "-" decProg
+  instanceFreeProg <- resolveInstanceArgumentsAndCasts monoProg
+  return instanceFreeProg
   where
     isDeclTypeClassBinder :: Binder DecidabilityBuiltin -> Bool
     isDeclTypeClassBinder binder = case typeOf binder of

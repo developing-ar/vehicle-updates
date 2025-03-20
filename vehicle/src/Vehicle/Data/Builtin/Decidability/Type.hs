@@ -8,6 +8,7 @@ where
 import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Context.Free (getDeclType, getFreeEnv)
 import Vehicle.Compile.Prelude
+import Vehicle.Compile.Type.Bidirectional (createFreshUnificationConstraint)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.System
@@ -61,7 +62,9 @@ typeDecidableTypeClass = \case
   HasAnd -> (tDims ~> type0) ~> tDims ~> type0
   HasOr -> (tDims ~> type0) ~> tDims ~> type0
   HasImplies -> (tDims ~> type0) ~> tDims ~> type0
-  HasCompare {} -> (tDims ~> type0) ~> tDims ~> type0
+  HasCompare CompareNat _ -> type0 ~> type0
+  HasCompare CompareIndex _ -> type0 ~> type0
+  HasCompare CompareRatTensor _ -> (tDims ~> type0) ~> tDims ~> type0
   HasReduceAndTensor -> type0 ~> type0
   HasReduceOrTensor -> type0 ~> type0
 
@@ -72,7 +75,7 @@ typeDecidableTypeClassOp = \case
     forAllExpl "t" type0 $ \t ->
       isTensorType t
         ~~~> tDims
-        ~> type0
+        .~> type0
   NotTC -> tensorOpConstraint HasNot (\t dims -> typeOp1 (t .@@ [dims]))
   AndTC -> tensorOpConstraint HasAnd (\t dims -> typeOp2 (t .@@ [dims]))
   OrTC -> tensorOpConstraint HasOr (\t dims -> typeOp2 (t .@@ [dims]))

@@ -30,7 +30,7 @@ typeOfBuiltinType = \case
   NatType -> type0
   RatType -> type0
   ListType -> type0 ~> type0
-  TensorType -> type0 ~> tList tNat .~> type0
+  TensorType -> type0 ~> tDims .~> type0
   IndexType -> tNat .~> type0
 
 typeOfBuiltinFunction :: (HasStandardBuiltins builtin) => BuiltinFunction -> DSLExpr builtin
