@@ -8,6 +8,7 @@ where
 import Data.Proxy (Proxy (..))
 import Vehicle.Compile.Context.Free (getDeclType, getFreeEnv)
 import Vehicle.Compile.Prelude
+import Vehicle.Compile.Type.Bidirectional (createFreshUnificationConstraint)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.System
@@ -61,7 +62,9 @@ typeDecidableTypeClass = \case
   HasAnd -> (tDims ~> type0) ~> tDims ~> type0
   HasOr -> (tDims ~> type0) ~> tDims ~> type0
   HasImplies -> (tDims ~> type0) ~> tDims ~> type0
-  HasCompare {} -> (tDims ~> type0) ~> tDims ~> type0
+  HasCompare CompareNat _ -> type0 ~> type0
+  HasCompare CompareIndex _ -> type0 ~> type0
+  HasCompare CompareRatTensor _ -> (tDims ~> type0) ~> tDims ~> type0
   HasReduceAndTensor -> type0 ~> type0
   HasReduceOrTensor -> type0 ~> type0
 
@@ -72,7 +75,7 @@ typeDecidableTypeClassOp = \case
     forAllExpl "t" type0 $ \t ->
       isTensorType t
         ~~~> tDims
-        ~> type0
+        .~> type0
   NotTC -> tensorOpConstraint HasNot (\t dims -> typeOp1 (t .@@ [dims]))
   AndTC -> tensorOpConstraint HasAnd (\t dims -> typeOp2 (t .@@ [dims]))
   OrTC -> tensorOpConstraint HasOr (\t dims -> typeOp2 (t .@@ [dims]))
@@ -177,7 +180,9 @@ convertToDecidabilityBuiltins p b args =
         And -> convertTo AndTC
         Or -> convertTo OrTC
         Implies -> convertTo ImpliesTC
-        Compare dom op -> convertTo $ CompareTC dom op
+        Compare dom op -> case dom of
+          CompareIndex -> convertToWith (CompareTC dom op) [implicit (Hole p "_")]
+          _ -> convertTo $ CompareTC dom op
         ReduceAndTensor -> convertTo ReduceAndTensorTC
         ReduceOrTensor -> convertTo ReduceOrTensorTC
         -- Standard conversion
@@ -217,7 +222,8 @@ convertToDecidabilityBuiltins p b args =
   where
     sameFunction f = return $ normAppList (Builtin p (StandardBuiltinFunction f)) args
     sameConstructor c = return $ normAppList (Builtin p (StandardBuiltinConstructor c)) args
-    convertTo t = return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) args
+    convertToWith t extraArgs = return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) (extraArgs <> args)
+    convertTo t = convertToWith t []
 
 restrictDecidabilityDeclType ::
   forall m.

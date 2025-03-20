@@ -20,7 +20,6 @@ module Vehicle.Compile.Type.Monad
     -- Constraints
     runConstraintSolver,
     copyContext,
-    createFreshUnificationConstraint,
     createFreshInstanceConstraint,
     createFreshApplicationConstraint,
     createDerivedInstanceConstraint,
@@ -115,27 +114,6 @@ freshSolutionMeta ::
   BoundCtx (Type builtin) ->
   m (MetaID, Expr builtin)
 freshSolutionMeta = freshMeta
-
--- | Adds an entirely new unification constraint (as opposed to one
--- derived from another constraint).
-createFreshUnificationConstraint ::
-  forall builtin m.
-  (MonadTypeChecker builtin m) =>
-  Provenance ->
-  BoundCtx (Type builtin) ->
-  UnificationConstraintOrigin builtin ->
-  Type builtin ->
-  Type builtin ->
-  m ()
-createFreshUnificationConstraint p ctx origin expectedType actualType = do
-  let env = boundContextToEnv ctx
-  normExpectedType <- normaliseInEnv env expectedType
-  normActualType <- normaliseInEnv env actualType
-  context <- createFreshConstraintCtx p p ctx
-  let unification = Unify origin normExpectedType normActualType
-  let constraint = WithContext unification context
-
-  addUnificationConstraints [constraint]
 
 createFreshApplicationConstraint ::
   forall builtin m.
@@ -346,7 +324,7 @@ logUnsolvedUnknowns _proxy = do
 prettyConstraints :: (PrintableBuiltin builtin) => [WithContext (Constraint builtin)] -> Doc a
 prettyConstraints constraints = do
   let sortedConstraints = sortOn (constraintID . contextOf) constraints
-  let pairs = fmap (\c -> prettyExternal c <> "   " <> pretty (blockedBy $ contextOf c)) sortedConstraints
+  let pairs = fmap prettyExternal sortedConstraints
   prettySetLike pairs
 
 -- | Find the first constraint satisfying `p` appending all the constraints that don't satisfy it to

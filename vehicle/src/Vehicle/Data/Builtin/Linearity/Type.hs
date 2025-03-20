@@ -8,6 +8,7 @@ where
 
 import Vehicle.Compile.Context.Free (getFreeEnv)
 import Vehicle.Compile.Prelude
+import Vehicle.Compile.Type.Bidirectional (createFreshUnificationConstraint)
 import Vehicle.Compile.Type.Core
 import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.System

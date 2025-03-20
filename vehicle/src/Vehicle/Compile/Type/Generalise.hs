@@ -106,14 +106,41 @@ removeInstanceDependencies ::
   WithContext (InstanceConstraint builtin) ->
   m (WithContext (InstanceConstraint builtin))
 removeInstanceDependencies c@(WithContext constraint ctx) =
-  logCompilerSection MaxDetail "Removing dependencies and updating solution:" $ do
+  logCompilerSection MaxDetail "Removing dependencies:" $ do
     logDebug MaxDetail $ "Input: " <+> prettyExternal c
     let newCtx = updateConstraintBoundCtx ctx (const mempty)
     substConstraint <- substMetasAt (boundCtxLv $ boundContextOf ctx) constraint
-    newConstraint <- updateSolutionMeta substConstraint
-    let result = WithContext newConstraint newCtx
+    let result = WithContext substConstraint newCtx
     logDebug MaxDetail $ "Output:" <+> prettyExternal result
     return result
+
+mergeInstanceConstraints ::
+  forall builtin m.
+  (MonadGeneralise builtin m) =>
+  [WithContext (InstanceConstraint builtin)] ->
+  m [WithContext (InstanceConstraint builtin)]
+mergeInstanceConstraints constraints = do
+  substitutedConstraintsByMeta <- forM constraints $ \(WithContext constraint ctx) -> do
+    updatedConstraint <- updateSolutionMeta constraint
+    return (instanceSolution updatedConstraint, WithContext updatedConstraint ctx :| [])
+
+  let constraintsBySolutionMeta = MetaMap.toList $ MetaMap.fromListWith (<>) substitutedConstraintsByMeta
+  mergedConstraints <- forM constraintsBySolutionMeta $ \(_meta, masterConstraint :| otherConstraints) -> do
+    let getGoal = goalExpr . instanceGoal . objectIn
+    let mainGoal = getGoal masterConstraint
+    forM_ otherConstraints $ \otherConstraint -> do
+      let secDoc = "Merging" <+> prettyExternal otherConstraint <+> "into" <> line <> prettyExternal masterConstraint
+      logCompilerSection MaxDetail secDoc $ do
+        result <- unify mempty mainGoal (getGoal otherConstraint)
+        case result of
+          Success -> return ()
+          _ -> developerError "Unable to unify identical goal constraints"
+    return masterConstraint
+
+  let noMerging = all (\(_, cs) -> length cs == 1) constraintsBySolutionMeta
+  if noMerging
+    then return mergedConstraints
+    else mergeInstanceConstraints mergedConstraints
 
 updateSolutionMeta ::
   forall builtin m.
@@ -123,7 +150,7 @@ updateSolutionMeta ::
 updateSolutionMeta constraint = do
   let originalMeta = instanceSolution constraint
   newMeta <- findUnsolvedMeta originalMeta
-  -- This is a hack that should disappear when we get
+  -- This is a hack that should disappear when we get records?
   updateMetaType newMeta (Quote.unnormalise @(Value builtin) @(Expr builtin) 0 $ goalExpr $ instanceGoal constraint)
   return $ constraint {instanceSolution = newMeta}
   where
@@ -152,25 +179,6 @@ updateSolutionMeta constraint = do
       e ->
         developerError $
           "Instance constraint meta solved in terms of a non-meta" <+> prettyVerbose e <+> "This should mean the constraint was either failed or solvable"
-
-mergeInstanceConstraints ::
-  forall builtin m.
-  (MonadGeneralise builtin m) =>
-  [WithContext (InstanceConstraint builtin)] ->
-  m [WithContext (InstanceConstraint builtin)]
-mergeInstanceConstraints constraints = do
-  let solutionMetasAndConstraints = fmap (\c -> (instanceSolution $ objectIn c, c :| [])) constraints
-  let constraintsBySolutionMeta = MetaMap.toList $ MetaMap.fromListWith (<>) solutionMetasAndConstraints
-  forM constraintsBySolutionMeta $ \(_meta, masterConstraint :| otherConstraints) -> do
-    let getGoal = goalExpr . instanceGoal . objectIn
-    let mainGoal = getGoal masterConstraint
-    forM_ otherConstraints $ \otherConstraint -> do
-      logCompilerSection MaxDetail ("Merging" <+> prettyExternal otherConstraint <+> "into" <+> prettyExternal masterConstraint) $ do
-        result <- unify mempty mainGoal (getGoal otherConstraint)
-        case result of
-          Success -> return ()
-          _ -> developerError "Unable to unify identical goal constraints"
-    return masterConstraint
 
 --------------------------------------------------------------------------------
 -- Type-class generalisation

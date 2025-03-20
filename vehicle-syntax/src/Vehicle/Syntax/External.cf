@@ -96,6 +96,7 @@ InstanceBinder. BasicBinder ::= "{{" [Modality] Name TokElemOf Expr1 "}}";
 -- * Binders where the user must provide a name but can omit the type
 
 ExplicitNameBinder. NameBinder ::= Name;
+-- ExplicitNameBinderMods. NameBinder ::= "(" Modality [Modality] Name ")";  -- Causes shift-reduce conflict
 ImplicitNameBinder. NameBinder ::= "{" [Modality] Name "}";
 InstanceNameBinder. NameBinder ::= "{{" [Modality] Name "}}";
 BasicNameBinder.    NameBinder ::= BasicBinder;
@@ -105,6 +106,7 @@ separator NameBinder "";
 -- * Binders where the user must provide a type but can omit the name
 
 ExplicitTypeBinder. TypeBinder ::= Expr13;
+-- ExplicitTypeBinderMods. TypeBinder ::= "(" Modality [Modality] Expr15 ")"; -- Causes a shift/reduce conflict
 ImplicitTypeBinder. TypeBinder ::= "{" [Modality] Expr1 "}";
 InstanceTypeBinder. TypeBinder ::= "{{" [Modality] Expr1 "}}";
 BasicTypeBinder.    TypeBinder ::= BasicBinder;

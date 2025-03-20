@@ -50,12 +50,12 @@ allInstances =
              False
            )
          ]
-      <> decCandidate HasNot Not TypeNot
-      <> decCandidate HasAnd And TypeAnd
-      <> decCandidate HasOr Or TypeOr
-      <> decCandidate HasImplies Implies TypeImplies
-      <> decCandidate HasReduceAndTensor ReduceAndTensor TypeAnd
-      <> decCandidate HasReduceOrTensor ReduceOrTensor TypeOr
+      <> dimsCandidate HasNot Not TypeNot
+      <> dimsCandidate HasAnd And TypeAnd
+      <> dimsCandidate HasOr Or TypeOr
+      <> dimsCandidate HasImplies Implies TypeImplies
+      <> dimsCandidate HasReduceAndTensor ReduceAndTensor TypeAnd
+      <> dimsCandidate HasReduceOrTensor ReduceOrTensor TypeOr
       <> comparisonCandidates Le
       <> comparisonCandidates Lt
       <> comparisonCandidates Ge
@@ -93,12 +93,12 @@ decTypeClass tc args = builtin (DecidabilityBuiltinTypeClass tc) @@ args
 decFunction :: DecidabilityBuiltinFunction -> DSLExpr DecidabilityBuiltin
 decFunction f = builtin (DecidabilityBuiltinFunction f)
 
-decCandidate ::
+dimsCandidate ::
   DecidabilityBuiltinTypeClass ->
   BuiltinFunction ->
   DecidabilityBuiltinFunction ->
   [TempCandidate]
-decCandidate tc standardOp typeOp =
+dimsCandidate tc standardOp typeOp =
   [ ( forAllDims $ \dims ->
         decTypeClass tc [tTensorRaw @@ [tBool], dims],
       lamDims $ \dims ->
@@ -113,8 +113,24 @@ decCandidate tc standardOp typeOp =
     )
   ]
 
+nonDimsCandidate ::
+  DecidabilityBuiltinTypeClass ->
+  BuiltinFunction ->
+  DecidabilityBuiltinFunction ->
+  [TempCandidate]
+nonDimsCandidate tc standardOp typeOp =
+  [ ( decTypeClass tc [tTensor tBool dimNil],
+      builtinFunction standardOp,
+      False
+    ),
+    ( decTypeClass tc [type0],
+      decFunction typeOp,
+      False
+    )
+  ]
+
 comparisonCandidates :: ComparisonOp -> [TempCandidate]
 comparisonCandidates op =
-  decCandidate (HasCompare CompareIndex op) (Compare CompareIndex op) (TypeCompare CompareIndex op)
-    <> decCandidate (HasCompare CompareNat op) (Compare CompareNat op) (TypeCompare CompareNat op)
-    <> decCandidate (HasCompare CompareRatTensor op) (Compare CompareRatTensor op) (TypeCompare CompareRatTensor op)
+  nonDimsCandidate (HasCompare CompareIndex op) (Compare CompareIndex op) (TypeCompare CompareIndex op)
+    <> nonDimsCandidate (HasCompare CompareNat op) (Compare CompareNat op) (TypeCompare CompareNat op)
+    <> dimsCandidate (HasCompare CompareRatTensor op) (Compare CompareRatTensor op) (TypeCompare CompareRatTensor op)

@@ -129,7 +129,7 @@ prettySet xs = prettySetLike (pretty <$> Set.toList xs)
 prettySetLike :: [Doc a] -> Doc a
 prettySetLike xs =
   "{"
-    <+> group (concatWith (\x y -> x <> line <> ";" <+> y) xs)
+    <+> concatWith (\x y -> x <> line <> ";" <+> y) xs
     <> line
     <> "}"
 

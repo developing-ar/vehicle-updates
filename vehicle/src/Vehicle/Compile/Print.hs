@@ -494,9 +494,15 @@ instance
     let uncheckedArgsDoc = prettyUsing @rest (uncheckedArgs problem, ctx)
     parens (checkedExprDoc <+> ":" <+> expectedTypeDoc) <+> "@" <+> uncheckedArgsDoc
 
-prettyConstraintContext :: ConstraintContext builtin -> Doc a
-prettyConstraintContext ctx =
-  pretty (constraintID ctx) <> ". " -- <+> pretty ctx
+prettyConstraint :: ConstraintContext builtin -> Doc a -> Doc a
+prettyConstraint ctx constraint =
+  align $
+    prettyMapEntries
+      [ ("id      ", pretty (constraintID ctx)),
+        ("goal    ", constraint),
+        ("context ", prettyNamedBoundCtx (namedBoundCtxOf ctx)),
+        ("blockers", pretty (blockedBy ctx))
+      ]
 
 instance
   (PrettyUsing rest (Value builtin `In` NamedBoundCtx)) =>
@@ -505,7 +511,7 @@ instance
   prettyUsing (Unify _ e1 e2, ctx) = do
     let e1' = prettyUsing @rest (e1, namedBoundCtxOf ctx)
     let e2' = prettyUsing @rest (e2, namedBoundCtxOf ctx)
-    prettyConstraintContext ctx <+> e1' <+> "~" <+> e2'
+    prettyConstraint ctx (e1' <+> "~" <+> e2')
 
 instance
   ( PrettyUsing rest (Value builtin `In` NamedBoundCtx),
@@ -517,7 +523,7 @@ instance
     let nameCtx = namedBoundCtxOf ctx
     let solution' = pretty solution
     let expr' = prettyUsing @rest (goalExpr goal, nameCtx)
-    prettyConstraintContext ctx <+> solution' <+> "<=" <+> expr' <+> prettyNamedBoundCtx nameCtx
+    prettyConstraint ctx (solution' <+> "<=" <+> expr')
 
 instance
   ( PrettyUsing rest (Expr builtin `In` NamedBoundCtx),
@@ -530,7 +536,7 @@ instance
     let problemDoc = prettyUsing @rest (argInsertionProblem, nameCtx)
     let exprDoc = pretty exprSolution
     let typeDoc = pretty typeSolution
-    prettyConstraintContext ctx <+> parens (exprDoc <+> "=" <+> problemDoc) <+> ":" <+> typeDoc
+    prettyConstraint ctx (parens (exprDoc <+> "=" <+> problemDoc) <+> ":" <+> typeDoc)
 
 instance
   ( PrettyUsing rest (UnificationConstraint builtin `In` ctx),
@@ -555,7 +561,12 @@ instance
     let solutionDoc = case metaSolution of
           Nothing -> "?"
           Just solution -> prettyUsing @rest (unnormalised solution, nameCtx)
-    fill 40 typeDoc <+> "=" <+> solutionDoc <+> ":" <+> prettyNamedBoundCtx nameCtx
+    align $
+      prettyMapEntries
+        [ ("solution", solutionDoc),
+          ("type    ", typeDoc),
+          ("context ", prettyNamedBoundCtx nameCtx)
+        ]
 
 --------------------------------------------------------------------------------
 -- Assertions

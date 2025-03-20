@@ -26,7 +26,7 @@ newtype BlockingStatus = BlockingStatus (Maybe MetaSet)
 instance Pretty BlockingStatus where
   pretty (BlockingStatus status) = case status of
     Nothing -> ""
-    Just v -> "blockedBy:" <+> prettyFlatList (fmap pretty (MetaSet.toList v))
+    Just v -> prettyFlatList (fmap pretty (MetaSet.toList v))
 
 unknownBlockingStatus :: BlockingStatus
 unknownBlockingStatus = BlockingStatus Nothing

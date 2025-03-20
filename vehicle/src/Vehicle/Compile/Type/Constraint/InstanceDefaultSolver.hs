@@ -76,7 +76,7 @@ getDefaultableConstraints proxy possibleConstraints = do
   logDebug MaxDetail $
     "Suitable defaultable constraints:"
       <> line
-      <> indent 2 (prettyVerbose result)
+      <> indent 2 (prettySetLike (fmap prettyVerbose result))
       <> line
 
   return result
