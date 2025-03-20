@@ -321,7 +321,7 @@ compileLetBinder ::
 compileLetBinder (binder, expr) = do
   let binderName = pretty (getBinderName binder)
   cExpr <- compileExpr expr
-  return $ binderName <+> "=" <+> cExpr
+  return $ binderName <+> ":=" <+> cExpr
 
 compileIdentifier :: Identifier -> Code
 compileIdentifier ident = pretty (nameOf ident :: Name)
