@@ -180,7 +180,9 @@ convertToDecidabilityBuiltins p b args =
         And -> convertTo AndTC
         Or -> convertTo OrTC
         Implies -> convertTo ImpliesTC
-        Compare dom op -> convertTo $ CompareTC dom op
+        Compare dom op -> case dom of
+          CompareIndex -> convertToWith (CompareTC dom op) [implicit (Hole p "_")]
+          _ -> convertTo $ CompareTC dom op
         ReduceAndTensor -> convertTo ReduceAndTensorTC
         ReduceOrTensor -> convertTo ReduceOrTensorTC
         -- Standard conversion
@@ -220,7 +222,8 @@ convertToDecidabilityBuiltins p b args =
   where
     sameFunction f = return $ normAppList (Builtin p (StandardBuiltinFunction f)) args
     sameConstructor c = return $ normAppList (Builtin p (StandardBuiltinConstructor c)) args
-    convertTo t = return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) args
+    convertToWith t extraArgs = return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) (extraArgs <> args)
+    convertTo t = convertToWith t []
 
 restrictDecidabilityDeclType ::
   forall m.
