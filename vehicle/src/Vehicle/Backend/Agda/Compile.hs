@@ -519,7 +519,7 @@ compileBuiltin b args = case b of
     monoError :: a
     monoError =
       developerError $
-        "Monomorphisation should have got rid of"
+        "Monomorphisation should have got rid of builtin"
           <+> quotePretty (show b)
 
 compileTypeLevelQuantifier ::

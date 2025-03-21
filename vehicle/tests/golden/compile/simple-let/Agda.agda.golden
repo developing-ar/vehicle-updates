@@ -39,9 +39,9 @@ postulate forallLet : ∀ ((x : Tensor ℚ [])) → let y = x in y ≈ 1
 
 postulate letForall : let y = 1 in ∀ ((x : Tensor ℚ [])) → y ≈ x
 
-postulate forallInLet : ForallInList (1 ∷ []) (λ x → let y = x in y ≈ 1)
+postulate forallInLet : ForallInList (λ x → let y = x in y ≈ 1) (1 ∷ [])
 
-postulate letForallIn : let y = 1 in ForallInList (1 ∷ []) (λ x → y ≈ x)
+postulate letForallIn : let y = 1 in ForallInList (λ x → y ≈ x) (1 ∷ [])
 
 Falsey : Tensor ℚ [] → Set
 Falsey x = x ≤ ℤ.+ 1 / 2

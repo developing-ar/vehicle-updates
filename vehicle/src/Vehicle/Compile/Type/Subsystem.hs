@@ -10,7 +10,7 @@ import Control.Monad.Except (MonadError (..), runExceptT)
 import Data.List.NonEmpty qualified as NonEmpty
 import Vehicle.Backend.Prelude
 import Vehicle.Compile.Error
-import Vehicle.Compile.Monomorphisation (monomorphise)
+import Vehicle.Compile.Monomorphisation (MonomorphisationSettings (..), monomorphise)
 import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin, findInstanceArg)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyExternal)
@@ -33,21 +33,35 @@ import Vehicle.Data.Code.Interface
 import Vehicle.Libraries.StandardLibrary.Definitions (StdLibFunction (..))
 
 polarityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Either CompileError (Prog PolarityBuiltin))
-polarityTypeCheck = typeCheckWithSubsystem PolarityTypes emptyInstanceDatabase simplifyTypes
+polarityTypeCheck prog = do
+  preprocessedProg <- simplifyTypes prog
+  typeCheckWithSubsystem PolarityTypes emptyInstanceDatabase preprocessedProg
 
 linearityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Either CompileError (Prog LinearityBuiltin))
-linearityTypeCheck = typeCheckWithSubsystem LinearityTypes emptyInstanceDatabase simplifyTypes
+linearityTypeCheck prog = do
+  preprocessedProg <- simplifyTypes prog
+  typeCheckWithSubsystem LinearityTypes emptyInstanceDatabase preprocessedProg
 
 decidabilityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Prog DecidabilityBuiltin)
 decidabilityTypeCheck prog = do
-  errorOrDecProg <- typeCheckWithSubsystem DecidabilityTypes decidabilityBuiltinInstances return prog
+  instanceFreeProg <- resolveInstanceArgumentsAndCasts prog
+  monoProg <-
+    monomorphise instanceFreeProg $
+      MonoSettings
+        { isMonomorphisableBinder = not . isExplicit
+        }
+  errorOrDecProg <- typeCheckWithSubsystem DecidabilityTypes decidabilityBuiltinInstances monoProg
   decProg <- case errorOrDecProg of
     Left err -> throwError err
     Right decProg -> return decProg
 
-  monoProg <- monomorphise isUserCode isDeclTypeClassBinder "-" decProg
-  instanceFreeProg <- resolveInstanceArgumentsAndCasts monoProg
-  return instanceFreeProg
+  monoDecProg <-
+    monomorphise decProg $
+      MonoSettings
+        { isMonomorphisableBinder = \binder -> not (isExplicit binder) || isDeclTypeClassBinder binder
+        }
+  instanceFreeDecProg <- resolveInstanceArgumentsAndCasts monoDecProg
+  return instanceFreeDecProg
   where
     isDeclTypeClassBinder :: Binder DecidabilityBuiltin -> Bool
     isDeclTypeClassBinder binder = case typeOf binder of
@@ -59,15 +73,12 @@ typeCheckWithSubsystem ::
   (HasTypeSystem builtin, NormalisableBuiltin builtin, BuiltinHasListLiterals builtin, MonadCompile m) =>
   SecondaryTypeSystem ->
   InstanceDatabase builtin ->
-  (Prog Builtin -> m (Prog Builtin)) ->
   Prog Builtin ->
   m (Either CompileError (Prog builtin))
-typeCheckWithSubsystem typingSystem instanceCandidates preprocess prog = do
+typeCheckWithSubsystem typingSystem instanceCandidates prog = do
   callDepth <- getCallDepth
   logCompilerPass MinDetail ("typing using" <+> quotePretty typingSystem <+> "type subsystem") $ do
-    typeClassFreeProg <- resolveInstanceArgumentsAndCasts prog
-    preprocessedProg <- preprocess typeClassFreeProg
-    result <- runExceptT $ typeCheckProg instanceCandidates mempty preprocessedProg
+    result <- runExceptT $ typeCheckProg instanceCandidates mempty prog
     -- Need to reset the call depth explicitly as type-checking may have errored.
     setCallDepth (callDepth + 1)
     return result
@@ -78,7 +89,11 @@ simplifyTypes ::
   m (Prog Builtin)
 simplifyTypes prog = do
   irrelevantFreeProg <- removeIrrelevantCodeFromProg prog
-  monomorphisedProg <- monomorphise isPropertyDecl (const True) "-" irrelevantFreeProg
+  monomorphisedProg <-
+    monomorphise irrelevantFreeProg $
+      MonoSettings
+        { isMonomorphisableBinder = not . isExplicit
+        }
   implicitFreeProg <- removeImplicitArgs monomorphisedProg
   return implicitFreeProg
 

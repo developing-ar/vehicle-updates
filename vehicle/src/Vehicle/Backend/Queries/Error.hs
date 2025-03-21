@@ -5,6 +5,7 @@ module Vehicle.Backend.Queries.Error
 where
 
 import Control.Monad.Except (MonadError (..))
+import Vehicle.Compile.Dependency (analyseDependenciesAndPrune)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print (prettyVerbose)
@@ -30,7 +31,8 @@ diagnoseNonLinearity queryFormat prog propertyProv@(propertyIdentifier, _) = do
       <+> quotePretty propertyIdentifier
       <> line
 
-  errorOrLinearityProg <- linearityTypeCheck prog
+  prunedProg <- analyseDependenciesAndPrune prog [nameOf propertyIdentifier]
+  errorOrLinearityProg <- linearityTypeCheck prunedProg
   case errorOrLinearityProg of
     Left err -> handleUnexpectedError err
     Right linearityProg -> do
@@ -59,7 +61,8 @@ diagnoseAlternatingQuantifiers queryFormat prog propertyProv@(propertyIdentifier
       <+> quotePretty propertyIdentifier
       <> line
 
-  errorOrPolarityProg <- polarityTypeCheck prog
+  prunedProg <- analyseDependenciesAndPrune prog [nameOf propertyIdentifier]
+  errorOrPolarityProg <- polarityTypeCheck prunedProg
   case errorOrPolarityProg of
     Left err -> handleUnexpectedError err
     Right polarityProg -> do

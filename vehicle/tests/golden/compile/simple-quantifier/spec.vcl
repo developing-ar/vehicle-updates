@@ -2,7 +2,7 @@ unused : Bool
 unused = forall (x : Rat) . True
 
 @network
-f : Vector Rat 1 -> Vector Rat 1
+f : Tensor Rat [1] -> Tensor Rat [1]
 
 @property
 expandedExpr : Bool
