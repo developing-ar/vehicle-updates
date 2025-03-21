@@ -33,11 +33,6 @@ existsInList f xs = fold (\x y -> x or y) False (map f xs)
 -- Tensor
 --------------------------------------------------------------------------------
 
--- TODO can we replace with?
--- type Vector A n = Tensor A [n]
-Vector : forallT A . forallT (@0 n : Nat) . {{IsTensorType A [n]}} -> Type
-Vector A n = Tensor A [n]
-
 {-
 forallInTensor : (A -> Bool) -> Tensor A dims -> Bool
 forallInTensor f xs = reduceAnd (foreach (\x y -> x and y) True (map f xs))
@@ -49,7 +44,7 @@ existsInTensor f xs = reduceOr (map f xs)
 -- Index
 --------------------------------------------------------------------------------
 
-foreachIndex : forallT n . (Index n -> A) -> Vector A n
+foreachIndex : forallT n . (Index n -> A) -> Tensor A [n]
 foreachIndex n f = map f (indices n)
 -}
 existsIndex : forallT {n} . (Index n -> Bool) -> Bool

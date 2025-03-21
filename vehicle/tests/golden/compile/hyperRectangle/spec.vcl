@@ -4,7 +4,7 @@ inputSize = 30
 type InputVector = Tensor Rat [inputSize]
 --------------------------------------------------------------------------------
 -- Outputs
-type OutputVector = Vector Rat 2
+type OutputVector = Tensor Rat [2]
 type Label = Index 2
 pos = 0
 neg = 1
@@ -22,10 +22,10 @@ n : Nat
 @dataset
 inputs : Tensor Rat [n, inputSize]
 
-minList : Vector Rat n -> Rat
+minList : Tensor Rat [n] -> Rat
 minList v = fold min 0 v
 
-maxList : Vector Rat n -> Rat
+maxList : Tensor Rat [n] -> Rat
 maxList v = fold max 1 v
 
 inputTranspose : Tensor Rat [inputSize, n]
