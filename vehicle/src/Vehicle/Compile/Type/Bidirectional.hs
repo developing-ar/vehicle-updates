@@ -221,11 +221,6 @@ inferExpr e = do
       -- Substitute through the type of the bound expression to preserve well-typedness
       let finalType = typeOfBoundExpr `substDBInto` typeOfBody
 
-      logDebug MaxDetail "Hit"
-      logDebug MaxDetail $ prettyVerbose typeOfBody
-      logDebug MaxDetail $ prettyVerbose typeOfBoundExpr
-      logDebug MaxDetail $ prettyVerbose finalType
-
       return (Let p checkedBoundExpr checkedBinder checkedBody, finalType)
     Lam p binder body -> do
       -- Infer the type of the bound variable from the binder

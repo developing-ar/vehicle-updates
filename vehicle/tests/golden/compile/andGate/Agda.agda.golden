@@ -32,7 +32,7 @@ CorrectOutput : Tensor ℚ [] → Tensor ℚ [] → Set
 CorrectOutput x1 x2 = let y = andGate (stack x1 x2) ! # 0 in (Truthy x1 × Truthy x2 → Truthy y) × ((Truthy x1 × Falsey x2 → Falsey y) × ((Falsey x1 × Truthy x2 → Falsey y) × (Falsey x1 × Falsey x2 → Falsey y)))
 
 abstract
-  andGateCorrect : ∀ x1 → ∀ x2 → ValidInput x1 × ValidInput x2 → CorrectOutput x2 x1
+  andGateCorrect : ∀ x1 → ∀ x2 → ValidInput x1 × ValidInput x2 → CorrectOutput x1 x2
   andGateCorrect = checkSpecification record
     { cache = "Marabou.queries"
     }

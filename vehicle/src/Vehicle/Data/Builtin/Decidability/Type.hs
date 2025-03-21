@@ -181,10 +181,10 @@ convertToDecidabilityBuiltins p b args =
         Or -> convertTo OrTC
         Implies -> convertTo ImpliesTC
         Compare dom op -> case dom of
-          CompareIndex -> convertToWith (CompareTC dom op) [implicit (Hole p "_")]
+          CompareIndex -> convertToAndAddHoles (CompareTC dom op) 1
           _ -> convertTo $ CompareTC dom op
-        ReduceAndTensor -> convertTo ReduceAndTensorTC
-        ReduceOrTensor -> convertTo ReduceOrTensorTC
+        ReduceAndTensor -> convertToAndAddHoles ReduceAndTensorTC 1
+        ReduceOrTensor -> convertToAndAddHoles ReduceOrTensorTC 1
         -- Standard conversion
         QuantifyRatTensor q -> sameFunction $ QuantifyRatTensor q
         If -> sameFunction If
@@ -222,8 +222,10 @@ convertToDecidabilityBuiltins p b args =
   where
     sameFunction f = return $ normAppList (Builtin p (StandardBuiltinFunction f)) args
     sameConstructor c = return $ normAppList (Builtin p (StandardBuiltinConstructor c)) args
-    convertToWith t extraArgs = return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) (extraArgs <> args)
-    convertTo t = convertToWith t []
+    convertToAndAddHoles t numberOfHoles = do
+      let holeArgs = replicate numberOfHoles (implicit (Hole p "_"))
+      return $ normAppList (Builtin p (DecidabilityBuiltinTypeClassOp t)) (holeArgs <> args)
+    convertTo t = convertToAndAddHoles t 0
 
 restrictDecidabilityDeclType ::
   forall m.

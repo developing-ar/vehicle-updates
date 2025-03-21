@@ -267,11 +267,6 @@ solveFlexFlex info (meta1, spine1) (meta2, spine2) = do
   c2 <- length <$> getMetaCtx proxy meta2
   let (ctx1Args, extraArgs1) = splitAt c1 spine1
   let (ctx2Args, extraArgs2) = splitAt c2 spine2
-  logDebug MaxDetail "Hit"
-  logDebug MaxDetail $ prettyVerbose ctx1Args
-  logDebug MaxDetail $ prettyVerbose ctx2Args
-  logDebug MaxDetail $ prettyVerbose extraArgs1
-  logDebug MaxDetail $ prettyVerbose extraArgs2
 
   if not (null extraArgs1) && length extraArgs1 == length extraArgs2
     then do

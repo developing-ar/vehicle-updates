@@ -1,6 +1,6 @@
 @network
 f : Tensor Rat [2] -> Tensor Rat [1]
-{-
+
 dataset : List (Tensor Rat [2])
 dataset = [[0.5,1.0]]
 
@@ -19,4 +19,3 @@ forallForallIn = forall x . forall y in dataset . x == y
 @property
 forallInForall : Bool
 forallInForall = forall x in dataset . forall y . f x != y
--}
