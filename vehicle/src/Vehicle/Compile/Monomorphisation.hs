@@ -59,7 +59,7 @@ monomorphise prog settings =
   logCompilerPass MinDetail "monomorphisation" $ do
     (prog2, substitutions) <- runReaderT (evalStateT (runWriterT (monomorphiseProg prog)) mempty) settings
     result <- runReaderT (replacePreviousApplications (isMonomorphisableBinder settings) prog2) substitutions
-    logCompilerPassOutput $ prettyFriendly result
+    logCompilerPassOutput $ prettyExternal result
     return result
 
 --------------------------------------------------------------------------------
@@ -120,8 +120,7 @@ monomorphiseDecl top decl =
                 let fakeArgs = explicit (Hole mempty "fakeArg") : fakeArgs
                 let (argsToMono, _) = obtainArgsToMonomorphise isMonomorphisableBinder typ fakeArgs
                 if not (null argsToMono)
-                  then
-                    throwError $ UnusedMonomorphisableDeclaration p ident
+                  then throwError $ UnusedMonomorphisableDeclaration p ident
                   else do
                     logDebug MaxDetail "Keeping declaration"
                     return [decl]

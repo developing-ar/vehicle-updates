@@ -39,7 +39,7 @@ allInstances =
             False
           )
         ]
-      <> [ ( decTypeClass HasBoolTensorLiterals [tBool],
+      <> [ ( decTypeClass HasBoolTensorLiterals [tTensorRaw @@ [tBool]],
              lamDims $ \ds ->
                explLam "bs" (tBoolTensor ds) $ \bs ->
                  bs,
@@ -102,7 +102,7 @@ dimsCandidate tc standardOp typeOp =
   [ ( forAllDims $ \dims ->
         decTypeClass tc [tTensorRaw @@ [tBool], dims],
       lamDims $ \dims ->
-        builtinFunction standardOp .@@ [dims],
+        builtinFunction standardOp .@@@ [dims],
       False
     ),
     ( forAllDims $ \dims ->
