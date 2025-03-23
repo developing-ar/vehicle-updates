@@ -13,7 +13,7 @@ import Vehicle.Compile.Error
 import Vehicle.Compile.Monomorphisation (MonomorphisationSettings (..), monomorphise)
 import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin, findInstanceArg)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (prettyExternal)
+import Vehicle.Compile.Print (prettyExternal, prettyVerbose)
 import Vehicle.Compile.Type (typeCheckProg)
 import Vehicle.Compile.Type.Core (InstanceDatabase, emptyInstanceDatabase)
 import Vehicle.Compile.Type.Irrelevance (removeIrrelevantCodeFromProg)
@@ -119,7 +119,12 @@ resolveInstanceArgumentsAndCasts prog =
           -- properly for the polarity and linearity types, otherwise the provenance ends
           -- up empty as the candidates are constructed independently.
           let newInst = replaceProvenance p inst
-          return $ substArgs newInst remainingArgs
+          let result = substArgs newInst remainingArgs
+          logDebug MaxDetail $ pretty b
+          logDebug MaxDetail $ prettyVerbose args
+          logDebug MaxDetail $ prettyVerbose remainingArgs
+          logDebug MaxDetail $ prettyVerbose result
+          return result
       | otherwise = return $ normAppList (Builtin p b) args
 
     removeFreeInstances :: FreeVarUpdate m builtin

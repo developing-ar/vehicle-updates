@@ -251,7 +251,6 @@ annotateInfixApp dependencies precedence qualifier op args
   | otherwise = do
       bracketedArgs <- compileArgs precedence args
       doc <- insertInfixArgs qualifier op bracketedArgs
-      logDebug MaxDetail $ "Hi" <+> doc
       return $ annotate (Set.fromList dependencies, precedence) doc
 
 -- | Inserts infix args into the correct positions
@@ -273,10 +272,10 @@ insertInfixArgs qual rawOp as = do
               Just (_underscore, suff) -> suff
               Nothing ->
                 developerError $
-                  "too many arguments"
+                  "the operation"
                     <+> pretty rawOp
-                    <+> "but found the following arguments:"
-                    <+> list args
+                    <+> "has too many arguments"
+                    <+> list as
 
         if Text.null prefix
           then arg : go qualifier suffix args
