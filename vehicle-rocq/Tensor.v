@@ -1,21 +1,15 @@
 Require Import Vehicle.Real.
-From mathcomp Require Import ssralg reals tuple seq fintype order.
+From mathcomp Require Import ssralg ssrfun seq tuple fintype reals order.
 Open Scope form_scope.
-
-Import Coq.ssr.ssrbool.
-Import Coq.ssr.ssrfun.
-From mathcomp Require Import finfun.
-From mathcomp Require Import bigop.
 
 Definition tensor (A : Type) : seq nat -> Type := 
     foldr tuple_of A.
 
 Definition tensor_of {A} : A -> tensor A [::] := id.
 
-Definition stack {n A} : n.-tuple (tensor A [::]) -> tensor A (n :: [::]) := id.
+Definition stack {A d} : d.-tuple (tensor A nil) -> tensor A (d :: nil) := id.
 
-Lemma unstack {A d ds} : tensor A (d :: ds) = d.-tuple (tensor A ds).
-Proof. reflexivity. Qed.
+Definition unstack {A d} : tensor A (d :: nil) -> d.-tuple (tensor A nil) := id.
 
 Definition foreach {A d} (f : 'I_d -> tensor A [::]) : tensor A ([:: d]) := 
     [tuple f i | i < d].
@@ -26,7 +20,7 @@ Fixpoint const {A} (v : A) (ds : list nat) : tensor A ds :=
     | d :: ds => foreach (fun=> const v ds)
     end.
 
-Fixpoint map {A B ds} (f : A -> B) : tensor A ds -> tensor B ds :=
+Local Fixpoint map {A B ds} (f : A -> B) : tensor A ds -> tensor B ds :=
     match ds with
     | [::] => f
     | d :: ds => map_tuple (map f)
@@ -56,6 +50,8 @@ Definition pointwise {A B ds} (f : A -> B -> Prop) (xs : tensor A ds) (ys : tens
 
 Section TensorOperations.
 
+Open Scope ring_scope.
+
 Context {ds : list nat}.
 Notation zipWithR := (@zipWith R R R ds) (only parsing).
 Notation mapR := (@map R R ds) (only parsing).
@@ -66,11 +62,14 @@ Definition mul := zipWithR GRing.mul.
 Definition opp := mapR GRing.opp.
 Definition max := zipWithR Order.max.
 Definition min := zipWithR Order.min.
+Definition inv := mapR GRing.inv.
 
 End TensorOperations.
 
-Infix "+" := add : ring_scope.
-Infix "-" := sub : ring_scope.
-Infix "*" := mul : ring_scope.
-Notation "- t" := (opp t) : ring_scope.
-Notation "x - y" := (add x (opp y)) : ring_scope.
+Infix "+" := add : tensor_scope.
+Infix "-" := sub : tensor_scope.
+Infix "*" := mul : tensor_scope.
+Notation "- t" := (opp t) : tensor_scope.
+Notation "x - y" := (add x (opp y)) : tensor_scope.
+Notation "x ^-1" := (inv x) : tensor_scope.
+Notation "x / y" := (mul x (inv y)) : tensor_scope.

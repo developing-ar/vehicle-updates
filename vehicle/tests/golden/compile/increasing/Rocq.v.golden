@@ -6,6 +6,7 @@
 
 Require Import mathcomp.ssreflect.ssrbool.
 Require Import mathcomp.algebra.ssralg.
+Require Import mathcomp.ssreflect.ssrnat.
 Require Import mathcomp.ssreflect.order.
 Require Import mathcomp.ssreflect.fintype.
 Require Import mathcomp.ssreflect.seq.
@@ -18,6 +19,6 @@ Import DefaultTupleProdOrder.
 Open Scope ring_scope.
 Open Scope order_scope.
 
-Parameter f : tensor R (1 :: nil) -> tensor R (1 :: nil).
+Parameter f : tensor R (1%N :: nil) -> tensor R (1%N :: nil).
 
 Axiom increasing : forall x, x <= tnth (f (stack [tuple x])) 0.

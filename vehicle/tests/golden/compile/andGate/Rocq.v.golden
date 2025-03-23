@@ -6,6 +6,7 @@
 
 Require Import mathcomp.ssreflect.ssrbool.
 Require Import mathcomp.algebra.ssralg.
+Require Import mathcomp.ssreflect.ssrnat.
 Require Import mathcomp.ssreflect.order.
 Require Import mathcomp.ssreflect.fintype.
 Require Import mathcomp.ssreflect.seq.
@@ -18,7 +19,7 @@ Import DefaultTupleProdOrder.
 Open Scope ring_scope.
 Open Scope order_scope.
 
-Parameter andGate : tensor R (2 :: nil) -> tensor R (1 :: nil).
+Parameter andGate : tensor R (2%N :: nil) -> tensor R (1%N :: nil).
 
 Definition truthy (x : tensor R nil) : Prop := x >= (1 / 2 : R).
 
@@ -28,4 +29,4 @@ Definition validInput (x : tensor R nil) : Prop := ((0 : R) <= x) /\ (x <= (1 : 
 
 Definition correctOutput (x1 : tensor R nil) (x2 : tensor R nil) : Prop := let y := tnth (andGate (stack [tuple x1; x2])) 0 in (truthy x1 /\ truthy x2 -> truthy y) /\ ((truthy x1 /\ falsey x2 -> falsey y) /\ ((falsey x1 /\ truthy x2 -> falsey y) /\ (falsey x1 /\ falsey x2 -> falsey y))).
 
-Axiom andGateCorrect : forall x1, forall x2, validInput x1 /\ validInput x2 -> correctOutput x2 x1.
+Axiom andGateCorrect : forall x1, forall x2, validInput x1 /\ validInput x2 -> correctOutput x1 x2.

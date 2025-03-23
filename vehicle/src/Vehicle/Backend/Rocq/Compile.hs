@@ -8,7 +8,6 @@ import Data.Data (Proxy (..))
 import Data.Foldable (fold)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NonEmpty
-import Data.Maybe (catMaybes)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -16,13 +15,11 @@ import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import GHC.Real (denominator, numerator)
 import Prettyprinter hiding (hcat, hsep, vcat, vsep)
-import System.FilePath (takeBaseName)
 import Vehicle.Compile.Context.Bound (getNamedBoundCtx)
-import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, ixToProperName, runFreshNameContextT)
+import Vehicle.Compile.Context.Name (MonadNameContext, runFreshNameContextT, addNameToContext, ixToProperName)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude hiding (Module)
 import Vehicle.Compile.Print
-import Vehicle.Compile.Type.Subsystem (resolveInstanceArgumentsAndCasts)
 import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Builtin.Standard hiding (TensorType)
 import Vehicle.Data.Universe (UniverseLevel (..))
@@ -53,27 +50,28 @@ currentPhase :: Doc ()
 currentPhase = "compilation to Rocq"
 
 compileProgToRocq :: (MonadCompile m) => Prog DecidabilityBuiltin -> RocqOptions -> m (Doc a)
-compileProgToRocq prog options = logCompilerPass MinDetail currentPhase $ do
-  monoProg <- resolveInstanceArgumentsAndCasts prog
-  programDoc <- runFreshNameContextT $ compileProg options monoProg
-  let programStream = layoutPretty defaultLayoutOptions programDoc
+compileProgToRocq prog options =
+  logCompilerPass MinDetail currentPhase $ do
+    logDebug MaxDetail $ prettyExternal prog
+    -- prog2 <- capitaliseTypeNames prog
+    programDoc <- runFreshNameContextT $ compileProg options prog
+    let programStream = layoutPretty defaultLayoutOptions programDoc
+    -- Collects dependencies by first discarding precedence info and then
+    -- folding using Set Monoid
+    let programDependencies = fold (reAnnotateS fst programStream)
 
-  let programDependencies = fold (reAnnotateS fst programStream)
+    let rocqProgram =
+          unAnnotate
+            ( (vsep2 :: [Code] -> Code)
+                [ preamble programDependencies,
+                  -- importStatements progamDependencies,
+                  -- moduleHeader nameOfModule,
+                  programDoc
+                ]
+            )
 
-  let _nameOfModule = Text.pack $ case moduleName options of
-        Just name -> name
-        _ -> maybe "Spec" takeBaseName (output options)
+    return rocqProgram
 
-  let coqProgram =
-        unAnnotate
-          ( (vsep2 :: [Code] -> Code)
-              [ -- optionStatements ["allow-exec"],
-                preamble programDependencies,
-                -- moduleHeader nameOfModule,
-                programDoc
-              ]
-          )
-  return coqProgram
 
 --------------------------------------------------------------------------------
 -- Debug functions
@@ -107,6 +105,8 @@ instance Pretty Dependency where
 data Library
   = MathcompSsreflectSsrbool
   | MathcompAlgebraSsralg
+  | MathcompSsreflectSsrnat
+  | MathcompSsreflectEqtype
   | MathcompSsreflectOrder
   | MathcompSsreflectFintype
   | MathcompSsreflectSeq
@@ -133,6 +133,8 @@ instance Pretty Library where
     MathcompSsreflectTuple -> "mathcomp.ssreflect.tuple"
     MathcompAlgebraZmodp -> "mathcomp.algebra.zmodp"
     MathcompRealsReals -> "mathcomp.reals.reals"
+    MathcompSsreflectSsrnat -> "mathcomp.ssreflect.ssrnat"
+    MathcompSsreflectEqtype -> "mathcomp.ssreflect.eqtype"
 
 data Module
   = DefaultTupleProdOrder
@@ -260,7 +262,7 @@ type MonadRocqCompile m =
 -- Program Compilation
 
 compileProg :: (MonadRocqCompile m) => RocqOptions -> Prog DecidabilityBuiltin -> m Code
-compileProg opts (Main ds) = vsep2 <$> traverse (compileDecl opts) ds
+compileProg opts (Main ds) =  vsep2 <$> traverse (compileDecl opts) ds
 
 compileDecl :: (MonadRocqCompile m) => RocqOptions -> Decl DecidabilityBuiltin -> m Code
 compileDecl _opts = \case
@@ -271,7 +273,7 @@ compileDecl _opts = \case
     if isProperty anns
       then compileProperty (compileIdentifier n) <$> compileExpr e
       else do
-        binders' <- catMaybes <$> mapM compileTopLevelBinder binders
+        binders' <- compileTopLevelBinders binders -- catMaybes <$> mapM compileTopLevelBinder binders
         (_, cbody) <- compileBinders binders (compileExpr body)
         defType <- resolveReturnType binders' t
         return $ compileFunDef (compileIdentifier n) defType binders' cbody
@@ -288,7 +290,7 @@ compileExpr expr = do
     Meta {} -> resolutionError currentPhase "Meta"
     Universe _ l -> return $ compileType l
     FreeVar _ n -> return $ annotateConstant [] (pretty (nameOf n))
-    BoundVar p ix -> do
+    BoundVar p ix -> do -- return $ "<boundvar:" <> pretty ix <> ">" -- do
       n <- ixToProperName p ix
       return $ annotateConstant [] (pretty n)
     Pi _ binder result -> case binderNamingForm binder of
@@ -330,6 +332,16 @@ compileProperty :: Code -> Code -> Code
 compileProperty propertyName propertyBody =
   "Axiom" <+> propertyName <+> ":" <+> propertyBody <> "."
 
+compileTopLevelBinders :: (MonadRocqCompile m) => [Binder DecidabilityBuiltin] -> m [Code]
+compileTopLevelBinders [] = return []
+compileTopLevelBinders (b : bs) = do
+  b' <- compileTopLevelBinder b
+  addNameToContext b $ case b' of
+    Nothing -> compileTopLevelBinders bs
+    Just bc -> do
+      bsc <- compileTopLevelBinders bs
+      return $ bc : bsc
+
 compileTopLevelBinder :: (MonadRocqCompile m) => Binder DecidabilityBuiltin -> m (Maybe Code)
 compileTopLevelBinder binder
   | visibilityOf binder /= Explicit = pure Nothing
@@ -358,7 +370,7 @@ compileBinder binder = do
   return $ binderBrackets noExplicitBrackets (visibilityOf binder) binderDoc
 
 resolveReturnType :: (MonadRocqCompile m) => [Code] -> Expr DecidabilityBuiltin -> m Code
-resolveReturnType (_ : bs) (Pi _ _ r) = resolveReturnType bs r
+resolveReturnType (_ : bs) (Pi _ binder r) = addNameToContext binder $ resolveReturnType bs r
 resolveReturnType _ e = compileExpr e
 
 compileFunDef :: Code -> Code -> [Code] -> Code -> Code
@@ -407,9 +419,7 @@ compileBuiltin b args = case b of
     Neg NegRatTensor -> annotateApp [] "negt" args
     Min MinRatTensor -> annotateApp [] "mint" args
     Max MaxRatTensor -> annotateApp [] "maxt" args
-    Compare CompareIndex op -> compileComparison True op args
-    Compare CompareNat op -> compileComparison True op args
-    Compare CompareRatTensor op -> compileComparison True op args
+    Compare domain op -> compileComparison domain op args
     FoldList -> annotateApp [RequireImport MathcompSsreflectSeq] "foldr" args
     MapList -> annotateApp [RequireImport MathcompSsreflectSeq] "map" args
     ReduceAndTensor -> annotateApp [RequireImport VehicleTensor] "reduceAnd" args
@@ -423,11 +433,9 @@ compileBuiltin b args = case b of
       (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
       _ -> unsupportedArgsError
     At -> annotateApp [RequireImport MathcompSsreflectTuple] "tnth" args
-    If -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] 200 "if _ then _ else _" (Just "if_expr") args -- TODO : Check precedence
+    If -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] minPrecedence "if _ then _ else _" (Just "if_expr") args -- TODO : Check precedence
     Foreach -> annotateApp [RequireImport VehicleTensor] "foreach" args
     StackTensor -> compileStack args
-    -- let as = compileArgs maxPrecedence args
-    -- annotateApp [Import VehicleTensor] "stack" (compileTensorLiteral id as)
     Iterate -> unsupportedError
     PowRat -> unsupportedError
   DecidabilityBuiltinFunction f -> case f of
@@ -437,9 +445,7 @@ compileBuiltin b args = case b of
     TypeAnd -> annotateInfixApp [] 80 "_ /\\ _" (Just "and") args
     TypeOr -> annotateInfixApp [] 85 "_ \\/ _" (Just "or") args
     TypeImplies -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] minPrecedence "_ -> _" (Just "implies") args
-    TypeCompare CompareIndex op -> compileComparison False op args
-    TypeCompare CompareNat op -> compileComparison False op args
-    TypeCompare CompareRatTensor op -> compileComparison False op args
+    TypeCompare domain op -> compileComparison domain op args
     BoolTensorToType -> monoError
   DecidabilityBuiltinTypeClass {} -> monoError
   DecidabilityBuiltinTypeClassOp {} -> monoError
@@ -479,13 +485,13 @@ compileApp fun args = do
 compileStdLibFunction :: (MonadRocqCompile m) => StdLibFunction -> [Arg DecidabilityBuiltin] -> m Code
 compileStdLibFunction fn args = case fn of
   StdId -> annotateApp [] "id" args
-  StdExistsIndex -> unsupported -- annotateApp [VehicleUtils] Nothing "existsIndex" args
-  StdForallIndex -> unsupported -- annotateApp [VehicleUtils] Nothing "forallIndex" args
+  StdExistsIndex -> return "<std-exists-index>" -- unsupported -- annotateApp [VehicleUtils] Nothing "existsIndex" args
+  StdForallIndex -> return "<std-forall-index>" -- unsupported -- annotateApp [VehicleUtils] Nothing "forallIndex" args
   StdVectorType -> unsupported
   StdAppendList -> annotateInfixApp [RequireImport MathcompSsreflectSeq] 5 "_++_" (Just "cat") args
-  StdForallInList -> unsupported
+  StdForallInList -> annotateApp [] "forallInList" args
   StdExistsInList -> unsupported
-  StdTypeAnn -> annotateInfixApp [] 0 "(_:_)" Nothing args
+  StdTypeAnn -> annotateInfixApp [] minPrecedence "_ : _" Nothing (reverse args)
   where
     unsupported = developerError $ "Compilation of stdlib function" <+> quotePretty fn <+> "not implemented"
 
@@ -521,7 +527,7 @@ compileIndexLiteral i =
     (pretty i)
 
 compileNatLiteral :: Int -> Code
-compileNatLiteral = pretty
+compileNatLiteral i = annotate ([RequireImport MathcompSsreflectSsrnat], maxPrecedence) $ pretty i <> "%N"
 
 compileTensorLiteral :: (a -> Code) -> Tensor a -> Code
 compileTensorLiteral compileElement =
@@ -539,7 +545,7 @@ compileRatLiteral :: Rational -> Code
 compileRatLiteral r = annotate ([RequireImport MathcompAlgebraSsralg, Open RingScope], minPrecedence) rat
   where
     num = pretty $ numerator r
-    denom = compileNatLiteral (fromInteger $ denominator r)
+    denom = pretty $ denominator r
     rat = (if denominator r == 1 then num else num <+> "/" <+> denom) <+> ":" <+> "R"
 
 compileLam :: (MonadRocqCompile m) => Binder DecidabilityBuiltin -> Expr DecidabilityBuiltin -> m Code
@@ -548,22 +554,28 @@ compileLam binder expr = do
   (cBinders, cBody) <- compileBinders (binder : binders) (compileExpr body)
   return $ annotate (mempty, minPrecedence) ("fun" <+> hsep cBinders <+> "=>" <+> cBody)
 
-compileComparison :: (MonadRocqCompile m) => Bool -> ComparisonOp -> [Arg DecidabilityBuiltin] -> m Code
-compileComparison decidable op = do
-  let (opP, opDec) = case op of
-        Le -> ("<=", "<=")
-        Lt -> ("<", "<")
-        Ge -> (">=", ">=")
-        Gt -> (">", ">")
-        Eq -> ("=", "==")
-        Ne -> ("<>", "!=")
-  let opDoc = "_ " <> (if decidable then opDec else opP) <> " _"
-  annotateInfixApp
-    [ RequireImport MathcompSsreflectSsrbool,
-      RequireImport MathcompSsreflectOrder,
-      Import DefaultTupleProdOrder,
-      Open OrderScope
-    ] 70 opDoc Nothing
+compileComparison :: (MonadRocqCompile m) => ComparisonDomain -> ComparisonOp -> [Arg DecidabilityBuiltin] -> m Code
+compileComparison domain op = do
+  let (opDoc, dependencies) = case op of
+        Le -> ("<=", orderDeps)
+        Lt -> ("<", orderDeps)
+        Ge -> (">=", orderDeps)
+        Gt -> (">", orderDeps)
+        Eq -> ("==", eqDeps)
+        Ne -> ("!=", eqDeps)
+  let typeDeps = case (domain, op) of
+        (CompareIndex, _) -> [RequireImport MathcompSsreflectSsrnat]
+        (CompareNat, _) -> [RequireImport MathcompSsreflectSsrnat]
+        (CompareRatTensor, Eq) -> [RequireImport VehicleTensor]
+        (CompareRatTensor, Ne) -> [RequireImport VehicleTensor]
+        (CompareRatTensor, _) -> [RequireImport VehicleTensor, Import DefaultTupleProdOrder]
+  let (opDoc', dependencies') = if domain == CompareIndex
+      then ("_ " <> opDoc <> " _ :> nat", dependencies ++ [RequireImport MathcompSsreflectSsrnat])
+      else ("_ " <> opDoc <> " _", dependencies)
+  annotateInfixApp (dependencies' <> typeDeps) 70 opDoc' Nothing
+  where
+    orderDeps = [RequireImport MathcompSsreflectSsrbool, RequireImport MathcompSsreflectOrder, Open OrderScope]
+    eqDeps = [RequireImport MathcompSsreflectSsrbool, RequireImport MathcompSsreflectEqtype]
 
 compileStack :: (MonadRocqCompile m) => [Arg DecidabilityBuiltin] -> m Code
 compileStack args = do

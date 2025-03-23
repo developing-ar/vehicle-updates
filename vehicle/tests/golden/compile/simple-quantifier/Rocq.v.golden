@@ -19,6 +19,12 @@ Import DefaultTupleProdOrder.
 Open Scope ring_scope.
 Open Scope order_scope.
 
-Parameter f : tensor R (2%N :: nil) -> tensor R (1%N :: nil).
+Definition unused : Prop := forall (x : tensor R nil), True.
 
-Axiom spec : forall x, tnth (f (stack [tuple x; (0 : R)])) 0 >= (0 : R).
+Parameter f : tensor R (1%N :: nil) -> tensor R (1%N :: nil).
+
+Axiom expandedExpr : forall x, tnth x 0 >= tnth (f x) 0.
+
+Axiom sequential : forall x, forall y, tnth (f x) 0 >= tnth (f y) 0.
+
+Axiom parallel : forall x, tnth (f x) 0 >= (0 : R) /\ exists x, tnth (f x) 0 >= (5 : R).

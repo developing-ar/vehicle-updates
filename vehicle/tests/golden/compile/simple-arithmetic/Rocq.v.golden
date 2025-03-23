@@ -19,6 +19,10 @@ Import DefaultTupleProdOrder.
 Open Scope ring_scope.
 Open Scope order_scope.
 
-Parameter f : tensor R (2%N :: nil) -> tensor R (1%N :: nil).
+Definition precedence (x : tensor R nil) (y : tensor R nil) (z : tensor R nil) : tensor R nil := (x + ((2 : R) * y)) - (z / y).
 
-Axiom spec : forall x, tnth (f (stack [tuple x; (0 : R)])) 0 >= (0 : R).
+Definition natLitNatLitDiv : tensor R nil := (1 : R) / (2 : R).
+
+Parameter f : tensor R (1%N :: nil) -> tensor R (1%N :: nil).
+
+Axiom property : tnth (f (stack [tuple natLitNatLitDiv])) 0 >= (0 : R).

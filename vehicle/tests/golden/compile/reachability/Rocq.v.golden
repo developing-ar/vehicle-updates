@@ -6,16 +6,15 @@
 
 Require Import mathcomp.ssreflect.ssrbool.
 Require Import mathcomp.algebra.ssralg.
-Require Import mathcomp.ssreflect.order.
+Require Import mathcomp.ssreflect.ssrnat.
+Require Import mathcomp.ssreflect.eqtype.
 Require Import mathcomp.ssreflect.seq.
 Require Import mathcomp.ssreflect.tuple.
 Require Import mathcomp.reals.reals.
 Require Import Vehicle.Tensor.
 Require Import Vehicle.Real.
-Import DefaultTupleProdOrder.
 Open Scope ring_scope.
-Open Scope order_scope.
 
-Parameter f : tensor R (2 :: nil) -> tensor R (1 :: nil).
+Parameter f : tensor R (2%N :: nil) -> tensor R (1%N :: nil).
 
-Axiom reachable : exists x, f x = stack [tuple (0 : R)].
+Axiom reachable : exists x, f x == stack [tuple (0 : R)].
