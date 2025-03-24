@@ -131,7 +131,8 @@ instance Pretty Quantifier where
 data ComparisonDomain
   = CompareIndex
   | CompareNat
-  | CompareRatTensor
+  | -- This is pointwise comparison
+    CompareRatTensor
   deriving (Eq, Ord, Show, Generic)
 
 instance NFData ComparisonDomain

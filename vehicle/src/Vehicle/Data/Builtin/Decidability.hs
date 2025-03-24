@@ -11,13 +11,14 @@ import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise (BlockingArgs (..), EvalScheme (..), MonadNormBuiltin, NormalisableBuiltin (..), evalFoldList, evalIterate, forceEvalSimpleBuiltin)
 import Vehicle.Data.Builtin.Interface.Print
-import Vehicle.Data.Builtin.Standard (Builtin, BuiltinConstructor (..), BuiltinFunction (..), BuiltinType)
+import Vehicle.Data.Builtin.Standard (Builtin, BuiltinConstructor (..), BuiltinFunction (..), BuiltinType, DerivedFunction)
 import Vehicle.Data.Code.DSL (tDims)
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.DSL
 import Vehicle.Data.Tensor (BoolTensor, anyTensor)
 import Vehicle.Prelude (Pretty (..), Relevance (..), Visibility (..), developerError, (<+>))
 import Vehicle.Syntax.Builtin.BasicOperations
+import Vehicle.Syntax.Builtin.Derived (DerivedFunction (..))
 import Vehicle.Syntax.Sugar (BinderType (..))
 
 --------------------------------------------------------------------------------
@@ -56,16 +57,18 @@ instance Hashable DecidabilityBuiltinTypeClassOp
 -- | Constructors for types in the language. The types and type-classes
 -- are viewed as constructors for `Type`.
 data DecidabilityBuiltinFunction
-  = TypeTrue
+  = BoolTensorToType
+  | TypeTrue
   | TypeFalse
   | TypeNot
   | TypeAnd
   | TypeOr
   | TypeImplies
   | TypeCompare ComparisonDomain ComparisonOp
-  | -- | TypeReduceAndTensor
-    -- | TypeReduceOrTensor
-    BoolTensorToType
+  | -- Taken from DerivedFunctions
+    TypeQuantifyIndex Quantifier
+  | TypeQuantifyInList Quantifier
+  | TypeCompareRatTensorReduced ComparisonOp
   deriving (Eq, Ord, Show, Generic)
 
 instance Hashable DecidabilityBuiltinFunction
@@ -82,6 +85,7 @@ data DecidabilityBuiltin
   = StandardBuiltinType BuiltinType
   | StandardBuiltinFunction BuiltinFunction
   | StandardBuiltinConstructor BuiltinConstructor
+  | StandardBuiltinDerivedFunction DerivedFunction
   | DecidabilityBuiltinTypeClass DecidabilityBuiltinTypeClass
   | DecidabilityBuiltinTypeClassOp DecidabilityBuiltinTypeClassOp
   | DecidabilityBuiltinFunction DecidabilityBuiltinFunction
@@ -201,9 +205,10 @@ instance Pretty DecidabilityBuiltinFunction where
     TypeOr -> pretty Or <> symbol
     TypeImplies -> pretty Implies <> symbol
     TypeCompare dom op -> pretty (Compare dom op) <> symbol
-    -- TypeReduceAndTensor -> pretty ReduceAndTensor <> symbol
-    -- TypeReduceOrTensor -> pretty ReduceOrTensor <> symbol
     BoolTensorToType -> "boolTensorToType"
+    TypeQuantifyIndex q -> pretty (QuantifyIndex q) <> symbol
+    TypeQuantifyInList q -> pretty (QuantifyInList q) <> symbol
+    TypeCompareRatTensorReduced op -> pretty (CompareRatTensorReduced op) <> symbol
     where
       symbol = "ᵗ"
 
@@ -229,6 +234,7 @@ instance Pretty DecidabilityBuiltin where
     StandardBuiltinType t -> pretty t
     StandardBuiltinFunction f -> pretty f
     StandardBuiltinConstructor c -> pretty c
+    StandardBuiltinDerivedFunction f -> pretty f
     DecidabilityBuiltinTypeClass t -> pretty t
     DecidabilityBuiltinTypeClassOp t -> pretty t
     DecidabilityBuiltinFunction f -> pretty f
@@ -238,6 +244,7 @@ instance ConvertableBuiltin DecidabilityBuiltin Builtin where
     StandardBuiltinType t -> convertBuiltin p t
     StandardBuiltinFunction f -> convertBuiltin p f
     StandardBuiltinConstructor c -> convertBuiltin p c
+    StandardBuiltinDerivedFunction f -> convertBuiltin p f
     DecidabilityBuiltinTypeClass t -> cheatConvertBuiltin p (pretty t)
     DecidabilityBuiltinTypeClassOp t -> cheatConvertBuiltin p (pretty t)
     DecidabilityBuiltinFunction f -> cheatConvertBuiltin p (pretty f)

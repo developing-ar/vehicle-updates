@@ -7,6 +7,7 @@ module Vehicle.Data.Builtin.Standard.Core
     accessFromNatToRat,
     accessFromVectorToList,
     isTensorType,
+    builtinDerivedFunction,
   )
 where
 
@@ -251,3 +252,6 @@ accessFromVectorToList = accessArgs (castAccessor FromVectorToList)
 
 isTensorType :: DSLExpr Builtin -> DSLExpr Builtin -> DSLExpr Builtin
 isTensorType tElem ds = builtinTypeClass IsTensorType @@ [tElem] .@@ [ds]
+
+builtinDerivedFunction :: DerivedFunction -> DSLExpr Builtin
+builtinDerivedFunction = builtin . DerivedFunction

@@ -45,6 +45,12 @@ position token TokLe        {"<="};
 position token TokLt        {"<"};
 position token TokGe        {">="};
 position token TokGt        {">"};
+position token TokEqPoint   {"==."};
+position token TokNePoint   {"!=."};
+position token TokLePoint   {"<=."};
+position token TokLtPoint   {"<."};
+position token TokGePoint   {">=."};
+position token TokGtPoint   {">."};
 position token TokMul       {"*"};
 position token TokDiv       {"/"};
 position token TokAdd       {"+"};
@@ -131,7 +137,6 @@ NatLiteral.   Lit ::= Natural;
 RatLiteral.   Lit ::= Rational;
 BoolLiteral.  Lit ::= Boolean;
 
-
 -- * Expressions
 
 -- NOTE:
@@ -176,6 +181,12 @@ Le.      Expr8  ::= Expr8 TokLe Expr9;
 Lt.      Expr8  ::= Expr8 TokLt Expr9;
 Ge.      Expr8  ::= Expr8 TokGe Expr9;
 Gt.      Expr8  ::= Expr8 TokGt Expr9;
+EqPoint. Expr8  ::= Expr8 TokEqPoint Expr9;
+NePoint. Expr8  ::= Expr8 TokNePoint Expr9;
+LePoint. Expr8  ::= Expr8 TokLePoint Expr9;
+LtPoint. Expr8  ::= Expr8 TokLtPoint Expr9;
+GePoint. Expr8  ::= Expr8 TokGePoint Expr9;
+GtPoint. Expr8  ::= Expr8 TokGtPoint Expr9;
 
 -- Numeric expressions.
 Add.     Expr9  ::= Expr9  TokAdd Expr10;

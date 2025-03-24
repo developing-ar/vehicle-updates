@@ -14,7 +14,6 @@ import Vehicle.Compile.Type.Core (InstanceCandidate (..), InstanceDatabase (..),
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.DSL
 import Vehicle.Data.DSL
-import Vehicle.Libraries.StandardLibrary.Definitions
 import Vehicle.Prelude
 
 standardBuiltinInstances :: InstanceDatabase Builtin
@@ -229,7 +228,7 @@ allInstances =
             lamDims $ \ds1 ->
               lamDims $ \ds2 ->
                 implLam "t" type0 $ \t ->
-                  tTensor t (free StdAppendList @@@ [tNat] @@ [ds2, ds1]),
+                  tTensor t (builtinDerivedFunction AppendList @@@ [tNat] @@ [ds2, ds1]),
             False
           ),
           ------------
@@ -296,8 +295,8 @@ allInstances =
       <> comparisonCandidates Gt
       <> comparisonCandidates Eq
       <> comparisonCandidates Ne
-      <> quantifierCandidates Forall StdForallIndex
-      <> quantifierCandidates Exists StdExistsIndex
+      <> quantifierCandidates Forall
+      <> quantifierCandidates Exists
   where
     comparisonCandidates :: ComparisonOp -> [(DSLExpr Builtin, DSLExpr Builtin, Bool)]
     comparisonCandidates op =
@@ -323,13 +322,12 @@ allInstances =
 
     quantifierCandidates ::
       Quantifier ->
-      StdLibFunction ->
       [(DSLExpr Builtin, DSLExpr Builtin, Bool)]
-    quantifierCandidates q indexOp =
+    quantifierCandidates q =
       [ ( forAllNat $ \n ->
             hasQuantifier q (tIndex n),
           lamDim $ \n ->
-            free indexOp @@@ [n],
+            builtinDerivedFunction (QuantifyIndex q) @@@ [n],
           False
         ),
         ( forAllDims $ \ds ->

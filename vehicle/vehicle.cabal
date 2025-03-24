@@ -164,7 +164,6 @@ library
     Vehicle.Libraries
     Vehicle.Libraries.Core
     Vehicle.Libraries.StandardLibrary
-    Vehicle.Libraries.StandardLibrary.Definitions
     Vehicle.Prelude
     Vehicle.Prelude.Logging
     Vehicle.Prelude.Warning

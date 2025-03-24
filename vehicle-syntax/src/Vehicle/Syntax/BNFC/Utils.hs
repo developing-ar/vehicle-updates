@@ -101,6 +101,18 @@ tokGe = mkToken B.TokGe ">="
 
 tokGt = mkToken B.TokGt ">"
 
+tokEqPoint = mkToken B.TokEqPoint "==."
+
+tokNePoint = mkToken B.TokNePoint "=!."
+
+tokLePoint = mkToken B.TokLePoint "<=."
+
+tokLtPoint = mkToken B.TokLtPoint "<."
+
+tokGePoint = mkToken B.TokGePoint ">=."
+
+tokGtPoint = mkToken B.TokGtPoint ">."
+
 tokAdd = mkToken B.TokAdd "+"
 
 tokSub = mkToken B.TokSub "-"

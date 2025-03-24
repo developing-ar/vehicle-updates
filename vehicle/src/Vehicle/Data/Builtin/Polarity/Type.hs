@@ -27,7 +27,7 @@ import Prelude hiding (iterate, pi)
 --------------------------------------------------------------------------------
 
 instance TypableBuiltin PolarityBuiltin where
-  typeBuiltin = typePolarityBuiltin
+  typeBuiltin p b = return (fromDSL p $ typePolarityBuiltin b)
   useDependentMetas _ = False
   isConstructor = isPolarityBuiltinConstructor
   isCastConstraint _ = False
@@ -217,6 +217,7 @@ convertToPolarityTypes p b args = case b of
     NatType -> return $ PolarityExpr p Unquantified
     ListType -> return $ extractElementType b args
     TensorType -> return $ extractElementType b args
+  DerivedFunction f -> return $ FreeVar p (identifierOf f)
   TypeClass {} -> monomorphisationError b args
   BuiltinCast {} -> monomorphisationError b args
   TypeClassOp {} -> monomorphisationError b args

@@ -174,13 +174,14 @@ delabApp fun allArgs = go fun <$> traverse delabM (reverse allArgs)
 
 delabBuiltin :: (MonadDelab m) => V.Builtin -> [V.Arg] -> m B.Expr
 delabBuiltin fun args = case fun of
-  V.TypeClassOp tc -> delabTypeClassOp tc args
-  V.TypeClass t -> delabTypeClass t args
   V.BuiltinFunction f -> delabBuiltinFunction f args
   V.BuiltinType t -> delabBuiltinType t args
   V.BuiltinConstructor c -> delabConstructor c args
   V.BuiltinCast c -> delabCast c args
+  V.TypeClassOp tc -> delabTypeClassOp tc args
+  V.TypeClass t -> delabTypeClass t args
   V.NatInDomainConstraint -> delabApp (cheatDelab $ layoutAsText $ pretty fun) args
+  V.DerivedFunction f -> delabDerivedFunction f args
 
 delabCast :: (MonadDelab m) => V.BuiltinCast -> [V.Arg] -> m B.Expr
 delabCast fun args = case fun of
@@ -189,6 +190,15 @@ delabCast fun args = case fun of
   V.FromVectorToList {} -> rawDelab
   where
     rawDelab = delabApp (cheatDelab $ layoutAsText $ pretty fun) args
+
+delabDerivedFunction :: (MonadDelab m) => V.DerivedFunction -> [V.Arg] -> m B.Expr
+delabDerivedFunction fun args = case fun of
+  -- Reverse the arguments to make it un-well typed again
+  V.TypeAnn -> delabInfixOp2 B.Ann tokElemOf (reverse args)
+  V.QuantifyIndex q -> delabTypeClassOp (V.QuantifierTC q) args
+  V.QuantifyInList q -> delabQuantifierIn q args
+  V.AppendList -> developerError "appendList not yet delaboratable"
+  V.CompareRatTensorReduced op -> delabTypeClassOp (V.CompareTC op) args
 
 delabBuiltinFunction :: (MonadDelab m) => V.BuiltinFunction -> [V.Arg] -> m B.Expr
 delabBuiltinFunction fun args = case fun of
@@ -205,6 +215,12 @@ delabBuiltinFunction fun args = case fun of
   V.Min _dom -> delabApp (B.Min tokMin) args
   V.Max _dom -> delabApp (B.Max tokMax) args
   V.QuantifyRatTensor q -> delabTypeClassOp (V.QuantifierTC q) args
+  V.Compare V.CompareRatTensor V.Eq -> delabInfixOp2 B.EqPoint tokEqPoint args
+  V.Compare V.CompareRatTensor V.Ne -> delabInfixOp2 B.NePoint tokNePoint args
+  V.Compare V.CompareRatTensor V.Le -> delabInfixOp2 B.LePoint tokLePoint args
+  V.Compare V.CompareRatTensor V.Lt -> delabInfixOp2 B.LtPoint tokLtPoint args
+  V.Compare V.CompareRatTensor V.Ge -> delabInfixOp2 B.GePoint tokGePoint args
+  V.Compare V.CompareRatTensor V.Gt -> delabInfixOp2 B.GtPoint tokGtPoint args
   V.Compare _ op -> delabTypeClassOp (V.CompareTC op) args
   V.FoldList -> delabTypeClassOp V.FoldTC args
   V.MapList -> delabTypeClassOp V.MapTC args
@@ -212,7 +228,7 @@ delabBuiltinFunction fun args = case fun of
   V.Foreach -> delabForeach args
   V.ReduceAndTensor -> delabApp (B.ReduceAnd tokReduceAnd) args
   V.ReduceOrTensor -> delabApp (B.ReduceOr tokReduceOr) args
-  -- Builtins not in the surface syntax.
+  -- Builtins not yet in the surface syntax.
   V.PowRat -> rawDelab
   V.ReduceAddRatTensor -> rawDelab
   V.ReduceMulRatTensor -> rawDelab
@@ -358,6 +374,18 @@ delabQuantifier q args = case reverse args of
           V.Forall -> B.Forall tokForall
           V.Exists -> B.Exists tokExists
     return $ mkTk binders' tokDot body'
+  _ -> return $ cheatDelab (layoutAsText $ pretty q)
+
+delabQuantifierIn :: (MonadDelab m) => V.Quantifier -> [V.Arg] -> m B.Expr
+delabQuantifierIn q args = case reverse args of
+  V.RelevantExplicitArg _ (V.Lam _ binder body) : V.RelevantExplicitArg _ container : _ -> do
+    binder' <- delabNameBinder binder
+    body' <- delabM body
+    container' <- delabM container
+    let mkTk = case q of
+          V.Forall -> B.ForallIn tokForall
+          V.Exists -> B.ExistsIn tokExists
+    return $ mkTk binder' container' tokDot body'
   _ -> return $ cheatDelab (layoutAsText $ pretty q)
 
 delabForeach :: (MonadDelab m) => [V.Arg] -> m B.Expr

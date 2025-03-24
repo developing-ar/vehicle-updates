@@ -25,7 +25,7 @@ import Prelude hiding (iterate, pi)
 --------------------------------------------------------------------------------
 
 instance TypableBuiltin DecidabilityBuiltin where
-  typeBuiltin = typeDecidabilityBuiltin
+  typeBuiltin p b = return $ fromDSL p $ typeDecidabilityBuiltin b
   useDependentMetas _ = True
   isConstructor = isDecidabilityConstructor
 
@@ -38,6 +38,7 @@ isDecidabilityConstructor = \case
   StandardBuiltinType {} -> False
   StandardBuiltinFunction {} -> False
   StandardBuiltinConstructor {} -> True
+  StandardBuiltinDerivedFunction {} -> True
   DecidabilityBuiltinTypeClass {} -> False
   DecidabilityBuiltinTypeClassOp {} -> False
   DecidabilityBuiltinFunction {} -> False
@@ -49,6 +50,7 @@ typeDecidabilityBuiltin = \case
   StandardBuiltinFunction f -> case f of
     QuantifyRatTensor {} -> forAllDims $ \_dims -> forAllTypes $ \t -> (t ~> type0) ~> type0
     _ -> typeOfBuiltinFunction f
+  StandardBuiltinDerivedFunction f -> typeOfDerivedFunction f
   DecidabilityBuiltinTypeClass t -> typeDecidableTypeClass t
   DecidabilityBuiltinTypeClassOp t -> typeDecidableTypeClassOp t
   DecidabilityBuiltinFunction f -> typeDecidableFunction f
@@ -102,6 +104,7 @@ tensorOpConstraint c f =
 
 typeDecidableFunction :: DecidabilityBuiltinFunction -> DSLExpr DecidabilityBuiltin
 typeDecidableFunction = \case
+  BoolTensorToType -> typeOfCast type0
   TypeTrue -> type0
   TypeFalse -> type0
   TypeNot -> typeOp1 type0
@@ -111,9 +114,9 @@ typeDecidableFunction = \case
   TypeCompare CompareIndex _op -> typeOfCompareIndex type0
   TypeCompare CompareNat _op -> typeOfCompareNat type0
   TypeCompare CompareRatTensor _op -> typeOfCompareRatTensor type0IgnoreDims type0
-  -- TypeReduceAndTensor -> typeOfTensorReduceOp tDecBool
-  -- TypeReduceOrTensor -> typeOfTensorReduceOp tDecBool
-  BoolTensorToType -> typeOfCast type0
+  TypeQuantifyIndex _q -> forAllDim Relevant $ \d -> (tIndex d ~> type0) ~> type0
+  TypeQuantifyInList _q -> forAllTypes $ \t -> (t ~> type0) ~> tList t ~> type0
+  TypeCompareRatTensorReduced _op -> typeOfCompareRatTensor type0IgnoreDims type0
 
 typeOfCompareIndex :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
 typeOfCompareIndex tRes =

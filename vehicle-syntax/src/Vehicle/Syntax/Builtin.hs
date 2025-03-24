@@ -15,6 +15,7 @@ import GHC.Generics (Generic)
 import Prettyprinter (Pretty (..), defaultLayoutOptions, layoutPretty)
 import Prettyprinter.Render.Text (renderStrict)
 import Vehicle.Syntax.Builtin.BasicOperations as X
+import Vehicle.Syntax.Builtin.Derived as X
 import Vehicle.Syntax.Builtin.TypeClass as X
 import Vehicle.Syntax.Tensor
 
@@ -189,6 +190,7 @@ data Builtin
   | BuiltinFunction BuiltinFunction
   | BuiltinType BuiltinType
   | BuiltinCast BuiltinCast
+  | DerivedFunction DerivedFunction
   | TypeClass TypeClass
   | TypeClassOp TypeClassOp
   | NatInDomainConstraint
@@ -208,6 +210,7 @@ instance Pretty Builtin where
     BuiltinType t -> pretty t
     BuiltinConstructor c -> pretty c
     BuiltinCast c -> pretty c
+    DerivedFunction f -> pretty f
     TypeClass tc -> pretty tc
     TypeClassOp o -> pretty o
     NatInDomainConstraint {} -> "NatInDomainConstraint"

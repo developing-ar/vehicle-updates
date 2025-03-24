@@ -371,6 +371,12 @@ elabExpr expr = case expr of
   B.Lt e1 tk e2 -> elabComparison V.Lt tk e1 e2
   B.Ge e1 tk e2 -> elabComparison V.Ge tk e1 e2
   B.Gt e1 tk e2 -> elabComparison V.Gt tk e1 e2
+  B.EqPoint e1 tk e2 -> builtinFunction (V.Compare V.CompareRatTensor V.Eq) tk [e1, e2]
+  B.NePoint e1 tk e2 -> builtinFunction (V.Compare V.CompareRatTensor V.Eq) tk [e1, e2]
+  B.LePoint e1 tk e2 -> builtinFunction (V.Compare V.CompareRatTensor V.Eq) tk [e1, e2]
+  B.LtPoint e1 tk e2 -> builtinFunction (V.Compare V.CompareRatTensor V.Eq) tk [e1, e2]
+  B.GePoint e1 tk e2 -> builtinFunction (V.Compare V.CompareRatTensor V.Eq) tk [e1, e2]
+  B.GtPoint e1 tk e2 -> builtinFunction (V.Compare V.CompareRatTensor V.Eq) tk [e1, e2]
   B.Add e1 tk e2 -> builtinTypeClassOp V.AddTC tk [e1, e2]
   B.Sub e1 tk e2 -> builtinTypeClassOp V.SubTC tk [e1, e2]
   B.Mul e1 tk e2 -> builtinTypeClassOp V.MulTC tk [e1, e2]
@@ -620,10 +626,7 @@ elabQuantifierIn ::
   m V.Expr
 elabQuantifierIn tk q binder container body = do
   p <- mkProvenance tk
-  let quantBuiltin = V.Var p $ case q of
-        V.Forall -> "forallInList"
-        V.Exists -> "existsInList"
-
+  let quantBuiltin = V.DerivedFunction $ V.QuantifyInList q
   binder' <- elabNameBinder False binder
   container' <- elabExpr container
   body' <- elabExpr body
@@ -631,7 +634,7 @@ elabQuantifierIn tk q binder container body = do
   let p' = V.provenanceOf binder'
   return $
     V.normAppList
-      quantBuiltin
+      (V.Builtin p quantBuiltin)
       [ mkArg mempty V.Explicit (V.Lam p' binder' body'),
         mkArg mempty V.Explicit container'
       ]

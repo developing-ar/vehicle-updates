@@ -27,7 +27,7 @@ import Prelude hiding (iterate)
 --------------------------------------------------------------------------------
 
 instance TypableBuiltin LinearityBuiltin where
-  typeBuiltin = typeLinearityBuiltin
+  typeBuiltin p b = return (fromDSL p $ typeLinearityBuiltin b)
   useDependentMetas _ = False
   isConstructor = isLinearityBuiltinConstructor
   isCastConstraint _ = False
@@ -205,6 +205,7 @@ convertToLinearityTypes p b args = case b of
     NatType -> freshLinearityMeta p
     ListType -> return $ extractElementType b args
     TensorType -> return $ extractElementType b args
+  DerivedFunction f -> return $ FreeVar p (identifierOf f)
   TypeClass {} -> monomorphisationError b args
   TypeClassOp {} -> monomorphisationError b args
   NatInDomainConstraint -> monomorphisationError b args

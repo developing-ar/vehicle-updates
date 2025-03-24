@@ -2,8 +2,8 @@
 
 module Vehicle.Data.Builtin.Standard.Type () where
 
-import Data.Proxy (Proxy)
-import Vehicle.Compile.Context.Free (getFreeEnv)
+import Data.Proxy (Proxy (..))
+import Vehicle.Compile.Context.Free (MonadFreeContext, getDeclType, getFreeEnv)
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Type.Constraint.InstanceDefaultSolver
 import Vehicle.Compile.Type.Core
@@ -43,17 +43,20 @@ isStandardConstructor = \case
   TypeClass {} -> True
   BuiltinType {} -> True
   NatInDomainConstraint {} -> True
+  DerivedFunction {} -> False
 
 -- | Return the type of the provided builtin.
-typeStandardBuiltin :: Builtin -> DSLExpr Builtin
-typeStandardBuiltin = \case
-  BuiltinType s -> typeOfBuiltinType s
-  BuiltinConstructor c -> typeOfBuiltinConstructor c
-  BuiltinFunction f -> typeOfBuiltinFunction f
-  BuiltinCast c -> typeOfBuiltinCast c
-  TypeClassOp tcOp -> typeOfTypeClassOp tcOp
-  TypeClass tc -> typeOfTypeClass tc
-  NatInDomainConstraint {} -> typeOfNatInDomainConstraint
+typeStandardBuiltin :: (MonadFreeContext Builtin m) => Provenance -> Builtin -> m (Type Builtin)
+typeStandardBuiltin p = \case
+  DerivedFunction f -> getDeclType (Proxy @Builtin) (identifierOf f)
+  b -> return $ fromDSL p $ case b of
+    BuiltinType s -> typeOfBuiltinType s
+    BuiltinConstructor c -> typeOfBuiltinConstructor c
+    BuiltinFunction f -> typeOfBuiltinFunction f
+    BuiltinCast c -> typeOfBuiltinCast c
+    TypeClassOp tcOp -> typeOfTypeClassOp tcOp
+    TypeClass tc -> typeOfTypeClass tc
+    NatInDomainConstraint {} -> typeOfNatInDomainConstraint
 
 typeOfTypeClass :: TypeClass -> DSLExpr Builtin
 typeOfTypeClass tc = case tc of
