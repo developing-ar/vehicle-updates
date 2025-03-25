@@ -128,25 +128,6 @@ instance Pretty Quantifier where
 --------------------------------------------------------------------------------
 -- Domains
 
-data ComparisonDomain
-  = CompareIndex
-  | CompareNat
-  | -- This is pointwise comparison
-    CompareRatTensor
-  deriving (Eq, Ord, Show, Generic)
-
-instance NFData ComparisonDomain
-
-instance Hashable ComparisonDomain
-
-instance Serialize ComparisonDomain
-
-instance Pretty ComparisonDomain where
-  pretty = \case
-    CompareIndex -> "Index"
-    CompareNat -> "Nat"
-    CompareRatTensor -> "RatTensor"
-
 data NegDomain
   = NegRatTensor
   deriving (Eq, Ord, Show, Generic)

@@ -32,7 +32,9 @@ data DecidabilityBuiltinTypeClass
   | HasAnd
   | HasOr
   | HasImplies
-  | HasCompare ComparisonDomain ComparisonOp
+  | HasCompareNat ComparisonOp
+  | HasCompareIndex ComparisonOp
+  | HasCompareRatTensorPointwise ComparisonOp
   | HasReduceAndTensor
   | HasReduceOrTensor
   deriving (Eq, Ord, Show, Generic)
@@ -47,7 +49,9 @@ data DecidabilityBuiltinTypeClassOp
   | AndTC
   | OrTC
   | ImpliesTC
-  | CompareTC ComparisonDomain ComparisonOp
+  | CompareNatTC ComparisonOp
+  | CompareIndexTC ComparisonOp
+  | CompareRatTensorPointwiseTC ComparisonOp
   | ReduceAndTensorTC
   | ReduceOrTensorTC
   deriving (Eq, Ord, Show, Generic)
@@ -64,7 +68,9 @@ data DecidabilityBuiltinFunction
   | TypeAnd
   | TypeOr
   | TypeImplies
-  | TypeCompare ComparisonDomain ComparisonOp
+  | TypeCompareNat ComparisonOp
+  | TypeCompareIndex ComparisonOp
+  | TypeCompareRatTensorPointwise ComparisonOp
   | -- Taken from DerivedFunctions
     TypeQuantifyIndex Quantifier
   | TypeQuantifyInList Quantifier
@@ -185,7 +191,9 @@ instance BuiltinHasIterate DecidabilityBuiltin where
 
 instance Pretty DecidabilityBuiltinTypeClass where
   pretty t = case t of
-    HasCompare dom op -> "Has" <> pretty dom <> pretty op
+    HasCompareNat op -> "HasNat" <> pretty op
+    HasCompareIndex op -> "HasIndex" <> pretty op
+    HasCompareRatTensorPointwise op -> "HasRatTensorPointwise" <> pretty op
     HasBoolTensorLiterals -> pretty $ show t
     IsBoolType -> pretty $ show t
     IsTensorType -> pretty $ show t
@@ -204,7 +212,9 @@ instance Pretty DecidabilityBuiltinFunction where
     TypeAnd -> pretty And <> symbol
     TypeOr -> pretty Or <> symbol
     TypeImplies -> pretty Implies <> symbol
-    TypeCompare dom op -> pretty (Compare dom op) <> symbol
+    TypeCompareNat op -> pretty (CompareNat op) <> symbol
+    TypeCompareIndex op -> pretty (CompareIndex op) <> symbol
+    TypeCompareRatTensorPointwise op -> pretty (CompareRatTensorPointwise op) <> symbol
     BoolTensorToType -> "boolTensorToType"
     TypeQuantifyIndex q -> pretty (QuantifyIndex q) <> symbol
     TypeQuantifyInList q -> pretty (QuantifyInList q) <> symbol
@@ -227,7 +237,9 @@ instance Pretty DecidabilityBuiltinTypeClassOp where
     ImpliesTC -> pretty $ show t
     ReduceAndTensorTC -> pretty $ show t
     ReduceOrTensorTC -> pretty $ show t
-    CompareTC dom op -> "CompareTC" <> brackets (pretty dom) <> brackets (pretty op)
+    CompareNatTC op -> "CompareNatTC" <> brackets (pretty op)
+    CompareIndexTC op -> "CompareIndexTC" <> brackets (pretty op)
+    CompareRatTensorPointwiseTC op -> "CompareRatTensorPointwiseTC" <> brackets (pretty op)
 
 instance Pretty DecidabilityBuiltin where
   pretty = \case

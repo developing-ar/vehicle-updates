@@ -64,9 +64,9 @@ typeDecidableTypeClass = \case
   HasAnd -> (tDims ~> type0) ~> tDims ~> type0
   HasOr -> (tDims ~> type0) ~> tDims ~> type0
   HasImplies -> (tDims ~> type0) ~> tDims ~> type0
-  HasCompare CompareNat _ -> type0 ~> type0
-  HasCompare CompareIndex _ -> type0 ~> type0
-  HasCompare CompareRatTensor _ -> (tDims ~> type0) ~> tDims ~> type0
+  HasCompareNat _ -> type0 ~> type0
+  HasCompareIndex _ -> type0 ~> type0
+  HasCompareRatTensorPointwise _ -> (tDims ~> type0) ~> tDims ~> type0
   HasReduceAndTensor -> type0 ~> type0
   HasReduceOrTensor -> type0 ~> type0
 
@@ -85,9 +85,9 @@ typeDecidableTypeClassOp = \case
   FromBoolTensorLitTC ->
     forAll "t" (tDims ~> type0) $ \t ->
       builtin (DecidabilityBuiltinTypeClass HasBoolTensorLiterals) @@ [t] ~~~> typeOfCast t
-  CompareTC CompareIndex op -> constraint (HasCompare CompareIndex op) typeOfCompareIndex
-  CompareTC CompareNat op -> constraint (HasCompare CompareNat op) typeOfCompareNat
-  CompareTC CompareRatTensor op -> tensorOpConstraint (HasCompare CompareRatTensor op) typeOfCompareRatTensor
+  CompareIndexTC op -> constraint (HasCompareIndex op) typeOfCompareIndex
+  CompareNatTC op -> constraint (HasCompareNat op) typeOfCompareNat
+  CompareRatTensorPointwiseTC op -> tensorOpConstraint (HasCompareRatTensorPointwise op) typeOfCompareRatTensor
   ReduceAndTensorTC -> constraint HasReduceAndTensor typeOfTensorReduceOp
   ReduceOrTensorTC -> constraint HasReduceAndTensor typeOfTensorReduceOp
 
@@ -111,9 +111,9 @@ typeDecidableFunction = \case
   TypeAnd -> typeOp2 type0
   TypeOr -> typeOp2 type0
   TypeImplies -> typeOp2 type0
-  TypeCompare CompareIndex _op -> typeOfCompareIndex type0
-  TypeCompare CompareNat _op -> typeOfCompareNat type0
-  TypeCompare CompareRatTensor _op -> typeOfCompareRatTensor type0IgnoreDims type0
+  TypeCompareIndex _op -> typeOfCompareIndex type0
+  TypeCompareNat _op -> typeOfCompareNat type0
+  TypeCompareRatTensorPointwise _op -> typeOfCompareRatTensor type0IgnoreDims type0
   TypeQuantifyIndex _q -> forAllDim Relevant $ \d -> (tIndex d ~> type0) ~> type0
   TypeQuantifyInList _q -> forAllTypes $ \t -> (t ~> type0) ~> tList t ~> type0
   TypeCompareRatTensorReduced _op -> typeOfCompareRatTensor type0IgnoreDims type0
@@ -183,9 +183,9 @@ convertToDecidabilityBuiltins p b args =
         And -> convertTo AndTC
         Or -> convertTo OrTC
         Implies -> convertTo ImpliesTC
-        Compare dom op -> case dom of
-          CompareIndex -> convertToAndAddHoles (CompareTC dom op) 1
-          _ -> convertTo $ CompareTC dom op
+        CompareIndex op -> convertToAndAddHoles (CompareIndexTC op) 1
+        CompareNat op -> convertTo $ CompareNatTC op
+        CompareRatTensorPointwise op -> convertTo $ CompareRatTensorPointwiseTC op
         ReduceAndTensor -> convertToAndAddHoles ReduceAndTensorTC 1
         ReduceOrTensor -> convertToAndAddHoles ReduceOrTensorTC 1
         -- Standard conversion

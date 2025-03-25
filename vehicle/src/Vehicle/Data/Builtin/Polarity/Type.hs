@@ -59,7 +59,9 @@ typeOfBuiltinFunction = \case
   QuantifyRatTensor q -> typeOfQuantifier q
   If -> typeOfIf
   -- Comparisons
-  Compare {} -> typeOfOp2 maxPolarity
+  CompareNat {} -> typeOfOp2 maxPolarity
+  CompareIndex {} -> typeOfOp2 maxPolarity
+  CompareRatTensorPointwise {} -> typeOfOp2 maxPolarity
   -- Arithmetic operations
   Add {} -> typeOfUnquantifiedOp2
   Mul {} -> typeOfUnquantifiedOp2

@@ -39,9 +39,9 @@ instance HasPrimitives Builtin where
 instance NormalisableBuiltin Builtin where
   evalScheme = \case
     BuiltinFunction f -> case f of
-      Compare CompareNat op -> Simple (evalCompareNat op)
-      Compare CompareIndex op -> Simple (evalCompareIndex op)
-      Compare CompareRatTensor op -> Simple (evalCompareRatTensor op)
+      CompareIndex op -> Simple (evalCompareIndex op)
+      CompareNat op -> Simple (evalCompareNat op)
+      CompareRatTensorPointwise op -> Simple (evalCompareRatTensor op)
       Not -> Simple evalNot
       And -> Simple evalAnd
       Or -> Simple evalOr

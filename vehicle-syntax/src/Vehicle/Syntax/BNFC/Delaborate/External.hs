@@ -215,13 +215,14 @@ delabBuiltinFunction fun args = case fun of
   V.Min _dom -> delabApp (B.Min tokMin) args
   V.Max _dom -> delabApp (B.Max tokMax) args
   V.QuantifyRatTensor q -> delabTypeClassOp (V.QuantifierTC q) args
-  V.Compare V.CompareRatTensor V.Eq -> delabInfixOp2 B.EqPoint tokEqPoint args
-  V.Compare V.CompareRatTensor V.Ne -> delabInfixOp2 B.NePoint tokNePoint args
-  V.Compare V.CompareRatTensor V.Le -> delabInfixOp2 B.LePoint tokLePoint args
-  V.Compare V.CompareRatTensor V.Lt -> delabInfixOp2 B.LtPoint tokLtPoint args
-  V.Compare V.CompareRatTensor V.Ge -> delabInfixOp2 B.GePoint tokGePoint args
-  V.Compare V.CompareRatTensor V.Gt -> delabInfixOp2 B.GtPoint tokGtPoint args
-  V.Compare _ op -> delabTypeClassOp (V.CompareTC op) args
+  V.CompareRatTensorPointwise V.Eq -> delabInfixOp2 B.EqPoint tokEqPoint args
+  V.CompareRatTensorPointwise V.Ne -> delabInfixOp2 B.NePoint tokNePoint args
+  V.CompareRatTensorPointwise V.Le -> delabInfixOp2 B.LePoint tokLePoint args
+  V.CompareRatTensorPointwise V.Lt -> delabInfixOp2 B.LtPoint tokLtPoint args
+  V.CompareRatTensorPointwise V.Ge -> delabInfixOp2 B.GePoint tokGePoint args
+  V.CompareRatTensorPointwise V.Gt -> delabInfixOp2 B.GtPoint tokGtPoint args
+  V.CompareIndex op -> delabTypeClassOp (V.CompareTC op) args
+  V.CompareNat op -> delabTypeClassOp (V.CompareTC op) args
   V.FoldList -> delabTypeClassOp V.FoldTC args
   V.MapList -> delabTypeClassOp V.MapTC args
   V.At -> delabInfixOp2 B.At tokAt args

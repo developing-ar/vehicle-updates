@@ -68,7 +68,15 @@ typeOfBuiltinFunction = \case
   ReduceMulRatTensor -> typeOfTensorRatReduceOp
   ReduceMinRatTensor -> typeOfTensorRatReduceOp
   ReduceMaxRatTensor -> typeOfTensorRatReduceOp
-  Compare dom _op -> typeOfComparisonOp dom
+  CompareIndex {} ->
+    forAllIrrelevantNat "n1" $ \n1 ->
+      forAllIrrelevantNat "n2" $ \n2 ->
+        tIndex n1 ~> tIndex n2 ~> tBoolTensor dimNil
+  CompareNat {} ->
+    tNat ~> tNat ~> tBoolTensor dimNil
+  CompareRatTensorPointwise {} ->
+    forAllDims $ \dims ->
+      tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
   -- Container functions
   FoldList -> typeOfFold tListRaw
   MapList -> typeOfMap tListRaw
@@ -89,18 +97,6 @@ typeOfBuiltinConstructor = \case
   BoolTensorLiteral t -> tBoolTensor (shapeOf t)
   IndexTensorLiteral t -> forAllIrrelevantNat "n" $ \n -> tTensor (tIndex n) (shapeOf t)
   RatTensorLiteral t -> tRatTensor (shapeOf t)
-
-typeOfComparisonOp :: (HasStandardBuiltins builtin) => ComparisonDomain -> DSLExpr builtin
-typeOfComparisonOp dom = case dom of
-  CompareIndex {} ->
-    forAllIrrelevantNat "n1" $ \n1 ->
-      forAllIrrelevantNat "n2" $ \n2 ->
-        tIndex n1 ~> tIndex n2 ~> tBoolTensor dimNil
-  CompareNat {} ->
-    tNat ~> tNat ~> tBoolTensor dimNil
-  CompareRatTensor {} ->
-    forAllDims $ \dims ->
-      tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
 
 typeOfTCOp1 :: (DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin) -> DSLExpr builtin
 typeOfTCOp1 constraint =

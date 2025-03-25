@@ -305,17 +305,17 @@ allInstances =
               hasCompare op (tIndex n1) (tIndex n2) (tBoolTensor dimNil),
           implLam "n1" tNat $ \n1 ->
             implLam "n2" tNat $ \n2 ->
-              builtinFunction (Compare CompareIndex op) @@@ [n1, n2],
+              builtinFunction (CompareIndex op) @@@ [n1, n2],
           False
         ),
         ( hasCompare op tNat tNat (tBoolTensor dimNil),
-          builtinFunction (Compare CompareNat op),
+          builtinFunction (CompareNat op),
           True
         ),
         ( forAllDims $ \dims ->
             hasCompare op (tRatTensor dims) (tRatTensor dims) (tBoolTensor dimNil),
           lamDims $ \dims ->
-            builtinFunction (Compare CompareRatTensor op) .@@@ [dims],
+            builtinFunction (CompareRatTensorPointwise op) .@@@ [dims],
           False
         )
       ]

@@ -603,12 +603,6 @@ blockingArgsMax :: MaxDomain -> BlockingArgs
 blockingArgsMax = \case
   MaxRatTensor -> Known [1, 2]
 
-blockingArgsCompare :: ComparisonDomain -> BlockingArgs
-blockingArgsCompare = \case
-  CompareIndex -> Known [2, 3]
-  CompareNat -> Known [0, 1]
-  CompareRatTensor -> Known [1, 2]
-
 functionBlockingArgs :: BuiltinFunction -> BlockingArgs
 functionBlockingArgs = \case
   QuantifyRatTensor {} -> noBlockingArgs
@@ -623,7 +617,9 @@ functionBlockingArgs = \case
   Min dom -> blockingArgsMin dom
   Max dom -> blockingArgsMax dom
   PowRat -> Known [0, 1]
-  Compare dom _op -> blockingArgsCompare dom
+  CompareIndex _op -> Known [2, 3]
+  CompareNat _op -> Known [0, 1]
+  CompareRatTensorPointwise _op -> Known [1, 2]
   If -> Known [1]
   At -> Known [3, 4]
   FoldList -> Known [4]

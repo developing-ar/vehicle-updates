@@ -146,12 +146,12 @@ convertBuiltinToLoss b spine = case b of
     S.Not -> changedBuiltin L.PointwiseNegation
     S.And -> changedBuiltin L.PointwiseConjunction
     S.Or -> changedBuiltin L.PointwiseDisjunction
-    S.Compare CompareRatTensor Eq -> changedBuiltin L.PointwiseEq
-    S.Compare CompareRatTensor Ne -> changedBuiltin L.PointwiseNe
-    S.Compare CompareRatTensor Lt -> changedBuiltin L.PointwiseLt
-    S.Compare CompareRatTensor Le -> changedBuiltin L.PointwiseLe
-    S.Compare CompareRatTensor Gt -> changedBuiltin L.PointwiseGt
-    S.Compare CompareRatTensor Ge -> changedBuiltin L.PointwiseGe
+    S.CompareRatTensorPointwise Eq -> changedBuiltin L.PointwiseEq
+    S.CompareRatTensorPointwise Ne -> changedBuiltin L.PointwiseNe
+    S.CompareRatTensorPointwise Lt -> changedBuiltin L.PointwiseLt
+    S.CompareRatTensorPointwise Le -> changedBuiltin L.PointwiseLe
+    S.CompareRatTensorPointwise Gt -> changedBuiltin L.PointwiseGt
+    S.CompareRatTensorPointwise Ge -> changedBuiltin L.PointwiseGe
     S.ReduceAndTensor -> changedBuiltin L.ReduceConjunction
     S.ReduceOrTensor -> changedBuiltin L.ReduceDisjunction
     S.QuantifyRatTensor q -> translateQuantifier q spine
@@ -182,11 +182,13 @@ convertBuiltinToLoss b spine = case b of
     -----------------
     -- Unsupported --
     -----------------
-    S.Compare {} -> unsupportedBuiltin
+    S.CompareNat {} -> unsupportedBuiltin
+    S.CompareIndex {} -> unsupportedBuiltin
     S.FoldList -> unsupportedBuiltin
     S.MapList -> unsupportedBuiltin
     S.Iterate -> unsupportedBuiltin
   S.BuiltinCast {} -> unsupportedBuiltin
+  S.DerivedFunction {} -> unsupportedBuiltin
   ----------------------
   -- Other operations --
   ----------------------

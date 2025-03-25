@@ -99,7 +99,9 @@ data BuiltinFunction
   | Implies
   | QuantifyRatTensor Quantifier
   | If
-  | Compare ComparisonDomain ComparisonOp
+  | CompareIndex ComparisonOp
+  | CompareNat ComparisonOp
+  | CompareRatTensorPointwise ComparisonOp
   | ReduceAndTensor
   | ReduceOrTensor
   | -- Rat operations
@@ -156,7 +158,9 @@ instance Pretty BuiltinFunction where
     ReduceMulRatTensor -> "reduceMulRatTensor"
     ReduceMinRatTensor -> "reduceMinRatTensor"
     ReduceMaxRatTensor -> "reduceMaxRatTensor"
-    Compare dom op -> comparisonOpName op <> pretty dom
+    CompareIndex op -> comparisonOpName op <> "Index"
+    CompareNat op -> comparisonOpName op <> "Nat"
+    CompareRatTensorPointwise op -> comparisonOpName op <> "RatTensorPointwise"
     FoldList -> "foldList"
     MapList -> "mapList"
     Foreach -> "foreach"

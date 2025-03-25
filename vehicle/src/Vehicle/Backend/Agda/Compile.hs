@@ -494,9 +494,9 @@ compileBuiltinFunction f args = case f of
   Neg NegRatTensor -> annotateInfixApp [DataTensor] 8 (Just tensorQualifier) "-_" args
   Min MinRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊓_" args
   Max MaxRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_⊔_" args
-  Compare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator True op) args
-  Compare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator True op) args
-  Compare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator True op) args
+  CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator True op) args
+  CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator True op) args
+  CompareRatTensorPointwise op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator True op) args
   FoldList -> annotateApp [DataList] (Just listQualifier) "foldr" args
   MapList -> annotateApp [DataList] (Just listQualifier) "map" args
   ReduceAndTensor -> annotateApp [DataTensor] Nothing "reduceAnd" args
@@ -543,9 +543,9 @@ compileDecidabilityBuiltinFunction f args = case f of
   TypeAnd -> annotateInfixApp [DataProduct] 2 Nothing "_×_" args
   TypeOr -> annotateInfixApp [DataSum] 1 Nothing "_⊎_" args
   TypeImplies -> annotateInfixApp [] minPrecedence Nothing "_→_" args
-  TypeCompare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator False op) args
-  TypeCompare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator False op) args
-  TypeCompare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator False op) args
+  TypeCompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator False op) args
+  TypeCompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator False op) args
+  TypeCompareRatTensorPointwise op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator False op) args
   TypeQuantifyIndex q -> case q of
     Forall -> annotateApp [DataFinAll] (Just finQualifier) "All" args
     Exists -> annotateApp [DataFinAny] (Just finQualifier) "All" args
@@ -599,15 +599,18 @@ compileBoolLiteral = \case
   True -> annotateConstant [DataBool] "true"
   False -> annotateConstant [DataBool] "false"
 
+comparisonOperatorBase :: Bool -> ComparisonOp -> Text
+comparisonOperatorBase decidable order = case order of
+  Le -> if decidable then "≤ᵇ" else "≤"
+  Lt -> if decidable then "<ᵇ" else "<"
+  Ge -> if decidable then "≥ᵇ" else "≥"
+  Gt -> if decidable then ">ᵇ" else ">"
+  Eq -> if decidable then "≡ᵇ" else "≈"
+  Ne -> if decidable then "≢ᵇ" else "≉"
+
 comparisonOperator :: Bool -> ComparisonOp -> Text
 comparisonOperator decidable order = do
-  let orderDoc = case order of
-        Le -> if decidable then "≤ᵇ" else "≤"
-        Lt -> if decidable then "<ᵇ" else "<"
-        Ge -> if decidable then "≥ᵇ" else "≥"
-        Gt -> if decidable then ">ᵇ" else ">"
-        Eq -> if decidable then "≡ᵇ" else "≈"
-        Ne -> if decidable then "≢ᵇ" else "≉"
+  let orderDoc = comparisonOperatorBase decidable order
   "_" <> orderDoc <> "_"
 
 compileFunDef :: Code -> Code -> [Code] -> Code -> Code

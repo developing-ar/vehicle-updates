@@ -75,7 +75,9 @@ typeOfBuiltinFunction = \case
   ReduceMinRatTensor -> typeOfOp2 maxLinearity
   ReduceMaxRatTensor -> typeOfOp2 maxLinearity
   -- Comparisons
-  Compare {} -> typeOfOp2 maxLinearity
+  CompareNat {} -> typeOfOp2 maxLinearity
+  CompareIndex {} -> typeOfOp2 maxLinearity
+  CompareRatTensorPointwise {} -> typeOfOp2 maxLinearity
   -- Container functions
   FoldList -> typeOfFold
   MapList -> typeOfMap
