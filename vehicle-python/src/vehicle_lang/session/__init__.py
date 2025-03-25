@@ -1,5 +1,6 @@
 import atexit
 import io
+import os
 import sys
 from contextlib import AbstractContextManager, redirect_stderr, redirect_stdout
 from types import TracebackType
@@ -73,26 +74,31 @@ class Session(SessionContextManager):
             return _unsafe_vehicle_main(args)
         else:
             raise VehicleSessionClosed()
+                
+    def check_output(self, args: Sequence[str]):
+        stdout_fd = sys.stdout.fileno()
+        read_fd, write_fd = os.pipe()
 
-    def check_output(
-        self,
-        args: Sequence[str],
-    ) -> Tuple[int, Optional[str], Optional[str], Optional[str]]:
-        with redirect_stdout(io.StringIO()) as out:
-            with redirect_stderr(io.StringIO()) as err:
-                with temporary_files("log", prefix="vehicle") as (log,):
-                    exitCode = self.check_call(
-                        [
-                            f"--redirect-logs={log}",
-                            *args,
-                        ]
-                    )
-                    return (
-                        exitCode,
-                        out.getvalue() or None,
-                        err.getvalue() or None,
-                        log.read_text(),
-                    )
+        saved_stdout_fd = os.dup(stdout_fd)       # Save stdout file description
+        os.dup2(write_fd, stdout_fd)              # Redirect stdout to pipe
+
+        try:
+            with temporary_files("log", prefix="vehicle") as (log,):
+                exitCode = self.check_call(
+                    [f"--redirect-logs={log}", *args]
+                )
+            sys.stdout.flush()
+        finally:
+            os.close(stdout_fd)             # Close stdout file descriptor (to send EOF)
+            os.close(write_fd)              # Close write end of pipe
+
+        with os.fdopen(read_fd) as f:
+            output = f.read()
+
+        os.dup2(saved_stdout_fd, stdout_fd)       # Restore the original stdout file descriptor
+        os.close(saved_stdout_fd)                
+
+        return exitCode, output
 
     def close(self) -> None:
         if not self.closed:
