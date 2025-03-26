@@ -49,15 +49,22 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml.version }}
 
-      - name: Setup Rocq
+      - name: Install Rocq
         run: opam install coq.${{ matrix.rocq.version }}
+
+      - name: Install libraries
+        run: |
+          opam repo add coq-released https://coq.inria.fr/opam/released
+          opam install ./vehicle-rocq
+          opam install coq-mathcomp-ssreflect coq-mathcomp-algebra coq-mathcomp-reals
 
       - name: Test Vehicle-Rocq interaction
         run: |
-          cabal test                           \
-            vehicle:test:golden-tests          \
-            --test-show-details=always         \
-            --test-option=--color=always       \
-            --test-option=--num-threads=1      \
-            --test-option=--external=coqc
+          eval $(opam env)
+          cabal test                                 \
+            vehicle:test:golden-tests                \
+            --test-show-details=always               \
+            --test-option=--color=always             \
+            --test-option=--num-threads=1            \
+            --test-option=--allowlist-externals=coqc
 

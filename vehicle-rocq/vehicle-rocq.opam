@@ -1,0 +1,26 @@
+opam-version: "2.0"
+version: "0.1.0"
+maintainer: "Joshua Smart <josh@thesmarts.co.uk>"
+
+homepage: "https://github.com/vehicle-lang/vehicle"
+bug-reports: "https://github.com/vehicle-lang/vehicle/issues"
+dev-repo: "https://github.com/vehicle-lang/vehicle.git"
+license: "BSD-3-Clause"
+
+synopsis: "Companion library for vehicle to Rocq compilation"
+description: """
+This library contains definitions used by the Vehicle to Rocq compiler,
+users should include this library when working with Vehicle-generated Rocq files.
+"""
+
+build: [ make "-j" "%{jobs}%" ]
+install: [ make "install" ]
+depends: [
+  ("coq" {>= "8.19" & < "8.21~"}
+  | "rocq-core" {>= "9.0" | = "dev"})
+  "coq-mathcomp-ssreflect" { >= "2.3.0" }
+  "coq-mathcomp-algebra" { >= "2.3.0" }
+  "coq-mathcomp-reals" { >= "1.7.0" }
+]
+
+authors: [ "Joshua Smart" ]
