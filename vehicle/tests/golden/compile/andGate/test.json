@@ -12,6 +12,12 @@
   },
   {
     "name": "Rocq",
+    "run": "vehicle compile -s spec.vcl -t Rocq -o Rocq.v -c Marabou.queries",
+    "needs": ["spec.vcl"],
+    "produces": ["Rocq.v"]
+  },
+  {
+    "name": "RocqVerify",
     "run": "vehicle compile -s spec.vcl -t Rocq -o Rocq.v -c Marabou.queries && coqc -vok Rocq.v -w none",
     "needs": ["spec.vcl"],
     "produces": ["Rocq.v"],
