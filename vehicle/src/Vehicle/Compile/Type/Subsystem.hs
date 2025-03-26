@@ -29,6 +29,7 @@ import Vehicle.Data.Builtin.Linearity.Type ()
 import Vehicle.Data.Builtin.Polarity (PolarityBuiltin)
 import Vehicle.Data.Builtin.Polarity.Type ()
 import Vehicle.Data.Builtin.Standard
+import Vehicle.Data.Code.Interface
 
 polarityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Either CompileError (Prog PolarityBuiltin))
 polarityTypeCheck prog = do
@@ -43,8 +44,10 @@ linearityTypeCheck prog = do
 decidabilityTypeCheck :: (MonadCompile m) => Prog Builtin -> m (Prog DecidabilityBuiltin)
 decidabilityTypeCheck prog = do
   instanceFreeProg <- resolveInstanceArgumentsAndCasts prog
+  -- For aesthetic reasons evaluate all `appendLists` that result from the `HasTensorTC` type-class resolution mechanism
+  appendListFreeProg <- resolveAppendLists instanceFreeProg
   monoProg <-
-    monomorphise instanceFreeProg $
+    monomorphise appendListFreeProg $
       MonoSettings
         { isMonomorphisableBinder = not . isExplicit
         }
@@ -141,23 +144,28 @@ resolveInstanceArgumentsAndCasts prog =
           Let _ e1 binder e2 -> Let p (go e1) (fmap go binder) (go e2)
           Lam _ binder e -> Lam p (fmap go binder) (go e)
 
-{-
-
-    removeFreeInstances :: FreeVarUpdate m builtin
-    removeFreeInstances recGo p ident args = do
-      args' <- traverse (traverse recGo) args
-      if ident == identifierOf StdAppendList
-        then return $ evalAppendList args'
-        else return $ normAppList (FreeVar p ident) args'
-
-    evalAppendList :: [Arg builtin] -> Expr builtin
-    evalAppendList = \case
+resolveAppendLists :: forall m. (MonadCompile m) => Prog Builtin -> m (Prog Builtin)
+resolveAppendLists = traverse (traverseBuiltinsM evalAppend)
+  where
+    evalAppend :: Provenance -> Builtin -> [Arg Builtin] -> m (Expr Builtin)
+    evalAppend p b args = case b of
+      DerivedFunction AppendList -> return $ evalAppendList p args
+      _ -> return $ normAppList (Builtin p b) args
+    {-
+        removeFreeInstances :: FreeVarUpdate m builtin
+        removeFreeInstances recGo p ident args = do
+          args' <- traverse (traverse recGo) args
+          if ident == identifierOf StdAppendList
+            then return $ evalAppendList args'
+            else return $ normAppList (FreeVar p ident) args'
+    -}
+    evalAppendList :: Provenance -> [Arg Builtin] -> Expr Builtin
+    evalAppendList p = \case
       args@[t, xs, ys] -> case argExpr xs of
         INil _ -> argExpr ys
-        ICons _ v vs -> ICons t v (evalAppendList [t, explicit vs, ys])
-        _ -> normAppList (FreeVar mempty $ identifierOf StdAppendList) args
+        ICons _ v vs -> ICons t v (evalAppendList p [t, explicit vs, ys])
+        _ -> normAppList (Builtin p (DerivedFunction AppendList)) args
       _ -> developerError "malformed append list!"
--}
 
 removeImplicitArgs ::
   forall m builtin.

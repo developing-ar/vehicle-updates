@@ -315,7 +315,7 @@ allInstances =
         ( forAllDims $ \dims ->
             hasCompare op (tRatTensor dims) (tRatTensor dims) (tBoolTensor dimNil),
           lamDims $ \dims ->
-            builtinFunction (CompareRatTensorPointwise op) .@@@ [dims],
+            builtinDerivedFunction (CompareRatTensorReduced op) .@@@ [dims],
           False
         )
       ]

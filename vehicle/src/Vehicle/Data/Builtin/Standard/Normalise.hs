@@ -7,7 +7,7 @@ import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise
 import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.Code.Interface
-import Vehicle.Prelude (GenericArg (..))
+import Vehicle.Prelude (GenericArg (..), HasIdentifier (identifierOf))
 
 ---------------------------------------------------------------------------------
 --- Normalisation
@@ -77,6 +77,7 @@ instance NormalisableBuiltin Builtin where
       FromNat FromNatToRat -> Simple evalFromNatToRat
       FromRat FromRatToRat -> Simple evalFromRatToRat
       FromVectorToList -> Simple evalVectorToList
+    DerivedFunction f -> Derived (identifierOf f)
     _ -> None
 
   blockingArgs = \case

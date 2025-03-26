@@ -133,6 +133,8 @@ reduceAnd = reduce _∧_ true
 reduceOr : Tensor Bool ds → Tensor Bool []
 reduceOr = reduce _∨_ false
 
+-- Type operations
+
 _≋_ : Tensor ℚ ds → Tensor ℚ ds → Set 0ℓ
 xs ≋ ys = Pointwise {A = ℚ} _≡_ xs ys
 
@@ -148,17 +150,33 @@ xs ≥ ys = Pointwise ℚ._≥_ xs ys
 _>_ : Tensor ℚ ds → Tensor ℚ ds → Set 0ℓ
 xs > ys = Pointwise ℚ._>_ xs ys
 
+-- Boolean pointwise operations
+
+_≤ᵇ∙_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool ds
+xs ≤ᵇ∙ ys = zipWith ℚ._≤ᵇ_ xs ys
+
+_<ᵇ∙_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool ds
+xs <ᵇ∙ ys = zipWith _ℚ<ᵇ_ xs ys
+
+_≥ᵇ∙_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool ds
+xs ≥ᵇ∙ ys = zipWith (flip ℚ._≤ᵇ_) xs ys
+
+_>ᵇ∙_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool ds
+xs >ᵇ∙ ys = zipWith (flip _ℚ<ᵇ_) xs ys
+
+-- Boolean whole tensor operations
+
 _≤ᵇ_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool []
-xs ≤ᵇ ys = reduceAnd (zipWith ℚ._≤ᵇ_ xs ys)
+xs ≤ᵇ ys = reduceAnd (xs ≤ᵇ∙ ys)
 
 _<ᵇ_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool []
-xs <ᵇ ys = reduceAnd (zipWith _ℚ<ᵇ_ xs ys)
+xs <ᵇ ys = reduceAnd (xs <ᵇ∙ ys)
 
 _≥ᵇ_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool []
-xs ≥ᵇ ys = reduceAnd (zipWith (flip ℚ._≤ᵇ_) xs ys)
+xs ≥ᵇ ys = reduceAnd (xs ≥ᵇ∙ ys)
 
 _>ᵇ_ : Tensor ℚ ds → Tensor ℚ ds → Tensor Bool []
-xs >ᵇ ys = reduceAnd (zipWith (flip _ℚ<ᵇ_) xs ys)
+xs >ᵇ ys = reduceAnd (xs >ᵇ∙ ys)
 
 --------------------------------------------------------------------------------
 -- Instances

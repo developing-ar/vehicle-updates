@@ -552,7 +552,6 @@ compileDecidabilityBuiltinFunction f args = case f of
   TypeQuantifyInList q -> case q of
     Forall -> annotateApp [DataListAll] (Just listQualifier) "All" args
     Exists -> annotateApp [DataListAny] (Just listQualifier) "Any" args
-  TypeCompareRatTensorReduced op -> _
 
 compileTypeLevelQuantifier ::
   (MonadAgdaCompile m) =>

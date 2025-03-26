@@ -25,11 +25,13 @@ import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, getBind
 import Vehicle.Compile.Normalise.Quote (Quote (..))
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print
+import Vehicle.Data.Builtin.Interface (Accessor (..))
 import Vehicle.Data.Builtin.Interface.Normalise
-  ( NormalisableBuiltin (..),
-    evaluateBuiltin,
+  ( EvalScheme (..),
+    NormalisableBuiltin (..),
   )
 import Vehicle.Data.Builtin.Interface.Print
+import Vehicle.Data.Code.Interface (IsArgs (..))
 import Vehicle.Data.Code.Value
 
 -- NOTE: there is no evaluatation to NF in this file. To do it
@@ -185,12 +187,24 @@ evalBuiltin freeEnv b args
   | not (isTypeClassOp b) = do
       -- logDebug MaxDetail $ pretty b
       -- logDebug MaxDetail $ prettyVerbose args
-      result <- evaluateBuiltin (evalApp freeEnv) b args
+      result <- evaluateBuiltin freeEnv b args
       -- logDebug MaxDetail $ prettyVerbose result
       return result
   | otherwise = do
       (inst, remainingArgs) <- findInstanceArg b args
       evalApp freeEnv inst remainingArgs
+
+evaluateBuiltin ::
+  (MonadLogger m, NormalisableBuiltin builtin) =>
+  FreeEnv builtin ->
+  builtin ->
+  Spine builtin ->
+  m (Value builtin)
+evaluateBuiltin freeEnv b spine = case evalScheme b of
+  Simple evalFn -> maybe (return $ VBuiltin b spine) evalFn (getExpr accessSpine spine)
+  NonSimple evalFn -> maybe (return $ VBuiltin b spine) (evalFn (evalApp freeEnv)) (getExpr accessSpine spine)
+  Derived ident -> evalApp freeEnv (lookupIdentValueInEnv freeEnv ident) spine
+  None -> return $ VBuiltin b spine
 
 findInstanceArg :: (MonadLogger m, Show op) => op -> [GenericArg a] -> m (a, [GenericArg a])
 findInstanceArg op = \case

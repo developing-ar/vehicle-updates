@@ -3,11 +3,11 @@ module Vehicle.Syntax.Builtin.Derived where
 import Control.DeepSeq (NFData)
 import Data.Hashable (Hashable)
 import Data.Serialize (Serialize)
-import Data.Text (pack)
 import GHC.Generics (Generic)
 import Prettyprinter (Pretty (..))
 import Vehicle.Syntax.AST.Name
 import Vehicle.Syntax.Builtin.BasicOperations
+import Vehicle.Syntax.Prelude (layoutAsText)
 
 data DerivedFunction
   = TypeAnn
@@ -26,7 +26,7 @@ instance Pretty DerivedFunction where
     CompareRatTensorReduced op -> comparisonOpName op <> "RatTensorReduced"
 
 instance HasIdentifier DerivedFunction where
-  identifierOf f = stdlibIdentifier $ pack $ show f
+  identifierOf f = stdlibIdentifier $ layoutAsText $ pretty f
 
 instance HasName DerivedFunction Name where
   nameOf = nameOf . identifierOf
