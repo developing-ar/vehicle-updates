@@ -55,7 +55,7 @@ pip install vehicle-lang --upgrade
 
 ### Getting the source
 
-The main repository is [vehicle-lang/vehicle]. This contains the Vehicle compiler, the the standard library, the Python bindings, the Agda bindings, and a bunch of examples and tools.
+The main repository is [vehicle-lang/vehicle]. This contains the Vehicle compiler, the the standard library, bindings for Python, Agda and Rocq, and a bunch of examples and tools.
 
 The very first step to work on Vehicle is to clone the repository:
 
@@ -294,6 +294,20 @@ These tests are specified in `test.json` files in [tests/golden](./vehicle/tests
     "run": "vehicle compile -s spec.vcl -t Agda -o Agda.agda",
     "needs": ["spec.vcl"],
     "produces": ["Agda.agda"]
+  },
+  {
+    "name": "Rocq",
+    "run": "vehicle compile -s spec.vcl -t Rocq -o Rocq.v",
+    "needs": ["spec.vcl"],
+    "produces": ["Rocq.v"]
+  },
+  {
+    "name": "RocqVerify",
+    "run": "vehicle compile -s spec.vcl -t Rocq -o Rocq.v && coqc -vok Rocq.v -w none",
+    "needs": ["spec.vcl"],
+    "produces": ["Rocq.v"],
+    "externals": ["coqc"],
+    "ignore": {"files": [".Rocq.aux", "Rocq.glob", "Rocq.vok"]}
   },
   {
     "name": "DL2Loss",
@@ -829,6 +843,7 @@ We recommend using [VSCode] with the following extensions, based on what parts o
 | _any_ | Cabal | [cabal-fmt](https://marketplace.visualstudio.com/items?itemName=berberman.vscode-cabal-fmt) |
 | _any_ | Markdown | [MyST-Markdown](https://marketplace.visualstudio.com/items?itemName=ExecutableBookProject.myst-highlight) |
 | vehicle-agda | Agda | [agda-mode](https://marketplace.visualstudio.com/items?itemName=banacorn.agda-mode) |
+| vehicle-rocq | Rocq | [VsCoq](https://marketplace.visualstudio.com/items?itemName=maximedenes.vscoq) |
 | vehicle-python | Python | [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python), [Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance), [Black Formatter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter), [isort](https://marketplace.visualstudio.com/items?itemName=ms-python.isort) |
 | vehicle-python | TOML | [Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) |
 

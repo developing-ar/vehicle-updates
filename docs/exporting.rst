@@ -35,7 +35,7 @@ for the :code:`export` command.
 .. option:: --target, -t
 
     Set which ITP to export the specification to.
-    At the moment the only supported option is :code:`Agda`.
+    Options are :code:`Agda` or :code:`Rocq`.
 
 .. option:: --cache, -c
 
@@ -51,12 +51,12 @@ for the :code:`export` command.
 
     Set the prefix for the generated module. For example, setting  to
     ``Baz.agda`` with a prefix of ``Foo.Bar`` will result in the Agda module
-    with the name `Foo.Bar.Baz`."
+    with the name `Foo.Bar.Baz`." This has no effect on the Rocq compilation.
 
 Supported backends
 ------------------
 
-Currently only the Agda interactive theorem prover is supported, but adding
+Currently the Agda and Rocq interactive theorem provers is supported, but adding
 support for new ones should be relatively simple, assuming that they have
 the ability to call out to external solvers. Please get in touch if you are
 interested in adding support for a new ITP.
@@ -102,3 +102,40 @@ automatically detect changes to the backing network within a single
 Agda session. See `issues #73 <https://github.com/vehicle-lang/vehicle/issues/73>`_
 for an upstream link to the proposed fix on Agda's end to guarantee
 the macro gets called every time the generated module is type-checked.
+
+Rocq
+~~~~
+
+The Rocq backend produces a new specification with the specification's functions
+lifted to Rocq's :code:`Prop` type. The network properties are given as
+axiomatic assumptions within.
+
+The generated spec is closely linked to the popular mathcomp libraries,
+this allows for a more capable and expressive language for wider proofs.
+See the car example project for a demonstration of its usage.
+
+Limitations
+***********
+
+Postulated resources
+####################
+
+Similarly to Agda, networks and datasets are expressed as opaque :code:`Parameter`
+declarations within Rocq. Hence it is not possible to evaluate a network within Rocq.
+
+No integration with verification cache
+######################################
+
+Currently Rocq does not integrate with Vehicle's verification cache,
+meaning that it is up to the user to garuntee that the compiled specification
+does not become out of date with the Vehicle spec.
+
+Poor tensor integration with mathcomp
+#####################################
+
+Currently, tensors are implemented using nested mathcomp tuple types and does not
+directly interface with mathcomp's structure hierarchy. This can lead to issues
+when considering properties with tensor arithmetic.
+
+If mathcomp gains a native tensor data structure, then this limitation could be
+lifted and even negate the requirement of the :code:`vehicle-rocq` companion library.
