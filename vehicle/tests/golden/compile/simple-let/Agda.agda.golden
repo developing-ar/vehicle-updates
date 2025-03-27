@@ -16,11 +16,9 @@ open import Data.Nat as ℕ using (ℕ)
 open import Data.Integer as ℤ using (ℤ)
 open import Data.Rational as ℚ using (ℚ)
 open import Data.List.Base
+open import Data.List.Relation.Unary.All as List
 
 module Agda where
-
-ForallInList : ℕ → Set → List ℕ → Set
-ForallInList f xs = List.foldr (λ x → λ y → x × y) ⊤ (List.map f xs)
 
 postulate e1 : let x = ⊤ in let y = ⊥ in x × y
 
@@ -39,9 +37,9 @@ postulate forallLet : ∀ ((x : Tensor ℚ [])) → let y = x in y ≈ 1
 
 postulate letForall : let y = 1 in ∀ ((x : Tensor ℚ [])) → y ≈ x
 
-postulate forallInLet : ForallInList (λ x → let y = x in y ≈ 1) (1 ∷ [])
+postulate forallInLet : List.All (λ x → let y = x in y ≈ 1) (1 ∷ [])
 
-postulate letForallIn : let y = 1 in ForallInList (λ x → y ≈ x) (1 ∷ [])
+postulate letForallIn : let y = 1 in List.All (λ x → y ≈ x) (1 ∷ [])
 
 Falsey : Tensor ℚ [] → Set
 Falsey x = x ≤ ℤ.+ 1 / 2

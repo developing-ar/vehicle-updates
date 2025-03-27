@@ -30,23 +30,23 @@ existsInList f xs = fold (\x y -> x or y) False (map f xs)
 -- Tensor
 --------------------------------------------------------------------------------
 
-eqRatTensor : Tensor Rat dims -> Tensor Rat dims -> Bool
-eqRatTensor xs ys = reduceAnd (xs ==. ys)
+eqRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+eqRatTensorReduced xs ys = reduceAnd True (xs ==. ys)
 
-neRatTensor : Tensor Rat dims -> Tensor Rat dims -> Bool
-neRatTensor xs ys = reduceAnd (xs !=. ys)
+neRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+neRatTensorReduced xs ys = not (eqRatTensorReduced xs ys)
 
-leRatTensor : Tensor Rat dims -> Tensor Rat dims -> Bool
-leRatTensor xs ys = reduceAnd (xs <=. ys)
+leRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+leRatTensorReduced xs ys = reduceAnd True (xs <=. ys)
 
-ltRatTensor : Tensor Rat dims -> Tensor Rat dims -> Bool
-ltRatTensor xs ys = reduceAnd (xs <. ys)
+ltRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+ltRatTensorReduced xs ys = reduceAnd True (xs <. ys)
 
-geRatTensor : Tensor Rat dims -> Tensor Rat dims -> Bool
-geRatTensor xs ys = reduceAnd (xs >=. ys)
+geRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+geRatTensorReduced xs ys = reduceAnd True (xs >=. ys)
 
-gtRatTensor : Tensor Rat dims -> Tensor Rat dims -> Bool
-gtRatTensor xs ys = reduceAnd (xs >. ys)
+gtRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+gtRatTensorReduced xs ys = reduceAnd True (xs >. ys)
 
 --------------------------------------------------------------------------------
 -- Index

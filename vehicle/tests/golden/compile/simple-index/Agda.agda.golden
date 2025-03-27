@@ -13,9 +13,6 @@ open import Function.Base
 
 module Agda where
 
-typeAnn : ∀ ((t : Set)) → t → t
-typeAnn t a = a
-
 postulate eqIndex : (Fin 1 ∋ # 0) ≈ (Fin 2 ∋ # 1)
 
 postulate neqIndex : (Fin 1 ∋ # 0) ≉ (Fin 2 ∋ # 1)

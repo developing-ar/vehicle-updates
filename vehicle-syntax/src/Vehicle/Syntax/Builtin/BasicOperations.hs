@@ -67,12 +67,12 @@ comparisonOp Ne = (/=)
 
 comparisonOpName :: ComparisonOp -> Doc a
 comparisonOpName = \case
-  Le -> "leq"
+  Le -> "le"
   Lt -> "lt"
-  Ge -> "geq"
+  Ge -> "ge"
   Gt -> "gt"
-  Eq -> "equals"
-  Ne -> "notEquals"
+  Eq -> "eq"
+  Ne -> "ne"
 
 isStrict :: ComparisonOp -> Bool
 isStrict order = order == Lt || order == Gt

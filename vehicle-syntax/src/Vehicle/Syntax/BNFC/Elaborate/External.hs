@@ -399,7 +399,7 @@ elabExpr expr = case expr of
   B.HasFold tk -> builtinTypeClass V.HasFold tk []
   B.IsTensorType tk -> builtinTypeClass V.IsTensorType tk []
   -- NOTE: we reverse the arguments to make it well-typed.
-  B.Ann e tk t -> elabExpr (B.App (B.App (B.Var (B.Name (tkLocation tk, "typeAnn"))) (B.ExplicitArg t)) (B.ExplicitArg e))
+  B.Ann e tk t -> derivedFunction V.TypeAnn tk [t, e]
 
 elabArg :: (MonadElab m) => B.Arg -> m V.Arg
 elabArg = \case
@@ -525,6 +525,9 @@ builtinTypeClassOp b = builtin (V.TypeClassOp b)
 
 builtinFunction :: (MonadElab m, IsToken token) => V.BuiltinFunction -> token -> [B.Expr] -> m V.Expr
 builtinFunction b = builtin (V.BuiltinFunction b)
+
+derivedFunction :: (MonadElab m, IsToken token) => V.DerivedFunction -> token -> [B.Expr] -> m V.Expr
+derivedFunction b = builtin (V.DerivedFunction b)
 
 castToTensorType :: (MonadElab m, IsToken token) => V.BuiltinType -> token -> m V.Expr
 castToTensorType tElem tk = do
