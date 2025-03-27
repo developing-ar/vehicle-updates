@@ -350,11 +350,11 @@ pruneMetaDependencies ctx (solvingMetaID, solvingMetaSpine) attemptedSolution = 
               Just solution -> do
                 go =<< normaliseApp (normalised solution) spine
               Nothing -> do
-                let (deps, _) = getNormMetaDependencies solvingMetaSpine
-                let (jDeps, _) = getNormMetaDependencies spine
+                (deps, _) <- getNormMetaDependencies solvingMetaID solvingMetaSpine
+                (jDeps, remainingSpine) <- getNormMetaDependencies m spine
                 let sharedDependencies = deps `intersect` jDeps
                 if sharedDependencies /= jDeps
-                  then createMetaWithRestrictedDependencies ctx m sharedDependencies
+                  then createMetaWithRestrictedDependencies ctx m sharedDependencies remainingSpine
                   else return $ VMeta m spine
       VUniverse {} -> return expr
       VBuiltin b spine -> VBuiltin b <$> traverse (traverse go) spine
@@ -366,14 +366,24 @@ pruneMetaDependencies ctx (solvingMetaID, solvingMetaSpine) attemptedSolution = 
       VPi {} -> return expr -- VPi <$> traverse go binder <*> go result
       VLam {} -> return expr
 
+    getNormMetaDependencies :: MetaID -> Spine builtin -> m ([Lv], Spine builtin)
+    getNormMetaDependencies meta spine = do
+      metaCtx <- getMetaCtx (Proxy @builtin) meta
+      let (deps, remainingArgs) = splitAt (length metaCtx) spine
+      let getLv arg = case arg of
+            ExplicitArg _ _ (VBoundVar i []) -> i
+            _ -> developerError $ "Meta variable" <+> pretty meta <+> "has none index arg"
+      return (fmap getLv deps, remainingArgs)
+
 createMetaWithRestrictedDependencies ::
   forall builtin m.
   (MonadUnify builtin m) =>
   BoundCtx (Type builtin) ->
   MetaID ->
   [Lv] ->
+  Spine builtin ->
   m (Value builtin)
-createMetaWithRestrictedDependencies ctx meta newDependencies = do
+createMetaWithRestrictedDependencies ctx meta newDependencies spine = do
   p <- getMetaProvenance (Proxy @builtin) meta
   metaType <- getMetaType meta
 
@@ -392,7 +402,8 @@ createMetaWithRestrictedDependencies ctx meta newDependencies = do
     let substMetaExpr = substDBAll 0 (\v -> unIx v `IntMap.lookup` substitution) newMetaExpr
     solveMeta meta substMetaExpr ctx
 
-    normaliseInEnv (boundContextToEnv restrictedContext) newMetaExpr
+    normMetaExpr <- normaliseInEnv (boundContextToEnv restrictedContext) newMetaExpr
+    normaliseApp normMetaExpr spine
 
 updateInfoUnderBinder ::
   ConstraintInfo builtin ->

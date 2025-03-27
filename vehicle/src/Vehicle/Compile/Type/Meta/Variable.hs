@@ -3,7 +3,6 @@ module Vehicle.Compile.Type.Meta.Variable
     extendMetaCtx,
     makeMetaType,
     getMetaDependencies,
-    getNormMetaDependencies,
     HasMetas (..),
     MetaVariableContext,
     findMetaInfo,
@@ -12,7 +11,6 @@ module Vehicle.Compile.Type.Meta.Variable
 where
 
 import Control.Monad.Writer (MonadWriter (..), execWriter)
-import Data.Bifunctor (Bifunctor (..))
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
 import Vehicle.Compile.Prelude
@@ -71,11 +69,6 @@ getMetaDependencies :: [Arg builtin] -> [Ix]
 getMetaDependencies = \case
   (ExplicitArg _ _ (BoundVar _ i)) : args -> i : getMetaDependencies args
   _ -> []
-
-getNormMetaDependencies :: [VArg builtin] -> ([Lv], Spine builtin)
-getNormMetaDependencies = \case
-  (ExplicitArg _ _ (VBoundVar i [])) : args -> first (i :) $ getNormMetaDependencies args
-  spine -> ([], spine)
 
 --------------------------------------------------------------------------------
 -- Objects which have meta variables in.
