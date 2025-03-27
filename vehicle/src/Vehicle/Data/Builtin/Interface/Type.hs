@@ -1,17 +1,19 @@
 module Vehicle.Data.Builtin.Interface.Type where
 
 import Data.Proxy (Proxy)
+import Vehicle.Compile.Context.Free (MonadFreeContext)
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.Code.DSL
+import Vehicle.Data.Code.Expr (Type)
 import Vehicle.Data.DSL
-import Vehicle.Prelude (Relevance (..))
+import Vehicle.Prelude (Provenance, Relevance (..))
 import Prelude hiding (iterate)
 
 class (PrintableBuiltin builtin) => TypableBuiltin builtin where
   -- | Construct a type for the builtin
-  typeBuiltin :: builtin -> DSLExpr builtin
+  typeBuiltin :: (MonadFreeContext builtin m) => Provenance -> builtin -> m (Type builtin)
 
   -- | Can meta variables depend on other values in the scope?
   -- Efficiency hack for polarity/linearity subsystems.
@@ -66,7 +68,15 @@ typeOfBuiltinFunction = \case
   ReduceMulRatTensor -> typeOfTensorRatReduceOp
   ReduceMinRatTensor -> typeOfTensorRatReduceOp
   ReduceMaxRatTensor -> typeOfTensorRatReduceOp
-  Compare dom _op -> typeOfComparisonOp dom tBool
+  CompareIndex {} ->
+    forAllIrrelevantNat "n1" $ \n1 ->
+      forAllIrrelevantNat "n2" $ \n2 ->
+        tIndex n1 ~> tIndex n2 ~> tBoolTensor dimNil
+  CompareNat {} ->
+    tNat ~> tNat ~> tBoolTensor dimNil
+  CompareRatTensorPointwise {} ->
+    forAllDims $ \dims ->
+      tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dims
   -- Container functions
   FoldList -> typeOfFold tListRaw
   MapList -> typeOfMap tListRaw
@@ -87,16 +97,6 @@ typeOfBuiltinConstructor = \case
   BoolTensorLiteral t -> tBoolTensor (shapeOf t)
   IndexTensorLiteral t -> forAllIrrelevantNat "n" $ \n -> tTensor (tIndex n) (shapeOf t)
   RatTensorLiteral t -> tRatTensor (shapeOf t)
-
-typeOfComparisonOp :: (HasStandardBuiltins builtin) => ComparisonDomain -> DSLExpr builtin -> DSLExpr builtin
-typeOfComparisonOp dom boolType = case dom of
-  CompareIndex {} ->
-    forAllIrrelevantNat "n1" $ \n1 ->
-      forAllIrrelevantNat "n2" $ \n2 ->
-        tIndex n1 ~> tIndex n2 ~> tTensor boolType dimNil
-  CompareNat {} ->
-    tNat ~> tNat ~> tTensor boolType dimNil
-  CompareRatTensor {} -> typeOfTensorComparisonOp tRat boolType
 
 typeOfTCOp1 :: (DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin) -> DSLExpr builtin
 typeOfTCOp1 constraint =
@@ -134,11 +134,6 @@ typeOfTensorRatReduceOp = typeOfTensorReduceOp tRat
 
 typeOfTensorBoolReduceOp :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) => DSLExpr builtin
 typeOfTensorBoolReduceOp = typeOfTensorReduceOp tBool
-
-typeOfTensorComparisonOp :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) => DSLExpr builtin -> DSLExpr builtin -> DSLExpr builtin
-typeOfTensorComparisonOp tComp tRes =
-  forAllDims $ \dims ->
-    tTensor tComp dims ~> tTensor tComp dims ~> tTensor tRes dimNil
 
 typeOfIf :: (BuiltinHasStandardTypes builtin, BuiltinHasStandardData builtin) => DSLExpr builtin
 typeOfIf =

@@ -6,7 +6,6 @@ module Vehicle.Compile.Type.Meta
     HasMetas (..),
     makeMetaType,
     getMetaDependencies,
-    getNormMetaDependencies,
     findMetaInfo,
   )
 where

@@ -15,6 +15,7 @@ import GHC.Generics (Generic)
 import Prettyprinter (Pretty (..), defaultLayoutOptions, layoutPretty)
 import Prettyprinter.Render.Text (renderStrict)
 import Vehicle.Syntax.Builtin.BasicOperations as X
+import Vehicle.Syntax.Builtin.Derived as X
 import Vehicle.Syntax.Builtin.TypeClass as X
 import Vehicle.Syntax.Tensor
 
@@ -98,7 +99,9 @@ data BuiltinFunction
   | Implies
   | QuantifyRatTensor Quantifier
   | If
-  | Compare ComparisonDomain ComparisonOp
+  | CompareIndex ComparisonOp
+  | CompareNat ComparisonOp
+  | CompareRatTensorPointwise ComparisonOp
   | ReduceAndTensor
   | ReduceOrTensor
   | -- Rat operations
@@ -155,7 +158,9 @@ instance Pretty BuiltinFunction where
     ReduceMulRatTensor -> "reduceMulRatTensor"
     ReduceMinRatTensor -> "reduceMinRatTensor"
     ReduceMaxRatTensor -> "reduceMaxRatTensor"
-    Compare dom op -> comparisonOpName op <> pretty dom
+    CompareIndex op -> comparisonOpName op <> "Index"
+    CompareNat op -> comparisonOpName op <> "Nat"
+    CompareRatTensorPointwise op -> comparisonOpName op <> "RatTensorPointwise"
     FoldList -> "foldList"
     MapList -> "mapList"
     Foreach -> "foreach"
@@ -189,6 +194,7 @@ data Builtin
   | BuiltinFunction BuiltinFunction
   | BuiltinType BuiltinType
   | BuiltinCast BuiltinCast
+  | DerivedFunction DerivedFunction
   | TypeClass TypeClass
   | TypeClassOp TypeClassOp
   | NatInDomainConstraint
@@ -208,6 +214,7 @@ instance Pretty Builtin where
     BuiltinType t -> pretty t
     BuiltinConstructor c -> pretty c
     BuiltinCast c -> pretty c
+    DerivedFunction f -> pretty f
     TypeClass tc -> pretty tc
     TypeClassOp o -> pretty o
     NatInDomainConstraint {} -> "NatInDomainConstraint"

@@ -11,13 +11,14 @@ import Vehicle.Compile.Normalise.NBE (NormalisableBuiltin)
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise (BlockingArgs (..), EvalScheme (..), MonadNormBuiltin, NormalisableBuiltin (..), evalFoldList, evalIterate, forceEvalSimpleBuiltin)
 import Vehicle.Data.Builtin.Interface.Print
-import Vehicle.Data.Builtin.Standard (Builtin, BuiltinConstructor (..), BuiltinFunction (..), BuiltinType)
+import Vehicle.Data.Builtin.Standard (Builtin, BuiltinConstructor (..), BuiltinFunction (..), BuiltinType, DerivedFunction)
 import Vehicle.Data.Code.DSL (tDims)
 import Vehicle.Data.Code.Interface
 import Vehicle.Data.DSL
 import Vehicle.Data.Tensor (BoolTensor, anyTensor)
-import Vehicle.Prelude (Pretty (..), Relevance (..), Visibility (..), developerError, (<+>))
+import Vehicle.Prelude (Pretty (..), Relevance (..), Visibility (..), braces, developerError, (<+>))
 import Vehicle.Syntax.Builtin.BasicOperations
+import Vehicle.Syntax.Builtin.Derived (DerivedFunction (..))
 import Vehicle.Syntax.Sugar (BinderType (..))
 
 --------------------------------------------------------------------------------
@@ -31,9 +32,14 @@ data DecidabilityBuiltinTypeClass
   | HasAnd
   | HasOr
   | HasImplies
-  | HasCompare ComparisonDomain ComparisonOp
+  | HasCompareNat ComparisonOp
+  | HasCompareIndex ComparisonOp
+  | HasCompareRatTensorPointwise ComparisonOp
   | HasReduceAndTensor
   | HasReduceOrTensor
+  | HasQuantifyIndex Quantifier
+  | HasQuantifyInList Quantifier
+  | HasCompareRatTensorReduced ComparisonOp
   deriving (Eq, Ord, Show, Generic)
 
 instance Hashable DecidabilityBuiltinTypeClass
@@ -46,9 +52,14 @@ data DecidabilityBuiltinTypeClassOp
   | AndTC
   | OrTC
   | ImpliesTC
-  | CompareTC ComparisonDomain ComparisonOp
+  | CompareNatTC ComparisonOp
+  | CompareIndexTC ComparisonOp
+  | CompareRatTensorPointwiseTC ComparisonOp
   | ReduceAndTensorTC
   | ReduceOrTensorTC
+  | QuantifyIndexTC Quantifier
+  | QuantifyInListTC Quantifier
+  | CompareRatTensorReducedTC ComparisonOp
   deriving (Eq, Ord, Show, Generic)
 
 instance Hashable DecidabilityBuiltinTypeClassOp
@@ -56,16 +67,19 @@ instance Hashable DecidabilityBuiltinTypeClassOp
 -- | Constructors for types in the language. The types and type-classes
 -- are viewed as constructors for `Type`.
 data DecidabilityBuiltinFunction
-  = TypeTrue
+  = BoolTensorToType
+  | TypeTrue
   | TypeFalse
   | TypeNot
   | TypeAnd
   | TypeOr
   | TypeImplies
-  | TypeCompare ComparisonDomain ComparisonOp
-  | -- | TypeReduceAndTensor
-    -- | TypeReduceOrTensor
-    BoolTensorToType
+  | TypeCompareNat ComparisonOp
+  | TypeCompareIndex ComparisonOp
+  | TypeCompareRatTensorPointwise ComparisonOp
+  | -- Taken from DerivedFunctions
+    TypeQuantifyIndex Quantifier
+  | TypeQuantifyInList Quantifier
   deriving (Eq, Ord, Show, Generic)
 
 instance Hashable DecidabilityBuiltinFunction
@@ -82,6 +96,7 @@ data DecidabilityBuiltin
   = StandardBuiltinType BuiltinType
   | StandardBuiltinFunction BuiltinFunction
   | StandardBuiltinConstructor BuiltinConstructor
+  | StandardBuiltinDerivedFunction DerivedFunction
   | DecidabilityBuiltinTypeClass DecidabilityBuiltinTypeClass
   | DecidabilityBuiltinTypeClassOp DecidabilityBuiltinTypeClassOp
   | DecidabilityBuiltinFunction DecidabilityBuiltinFunction
@@ -181,7 +196,9 @@ instance BuiltinHasIterate DecidabilityBuiltin where
 
 instance Pretty DecidabilityBuiltinTypeClass where
   pretty t = case t of
-    HasCompare dom op -> "Has" <> pretty dom <> pretty op
+    HasCompareNat op -> "HasNat" <> pretty op
+    HasCompareIndex op -> "HasIndex" <> pretty op
+    HasCompareRatTensorPointwise op -> "HasRatTensorPointwise" <> pretty op
     HasBoolTensorLiterals -> pretty $ show t
     IsBoolType -> pretty $ show t
     IsTensorType -> pretty $ show t
@@ -191,6 +208,9 @@ instance Pretty DecidabilityBuiltinTypeClass where
     HasImplies -> pretty $ show t
     HasReduceAndTensor -> pretty $ show t
     HasReduceOrTensor -> pretty $ show t
+    HasQuantifyIndex q -> "HasQuantifyIndex" <> braces (pretty q)
+    HasQuantifyInList q -> "HasQuantifyInList" <> braces (pretty q)
+    HasCompareRatTensorReduced op -> "HasCompareRatTensorReduced" <> pretty op
 
 instance Pretty DecidabilityBuiltinFunction where
   pretty = \case
@@ -200,10 +220,12 @@ instance Pretty DecidabilityBuiltinFunction where
     TypeAnd -> pretty And <> symbol
     TypeOr -> pretty Or <> symbol
     TypeImplies -> pretty Implies <> symbol
-    TypeCompare dom op -> pretty (Compare dom op) <> symbol
-    -- TypeReduceAndTensor -> pretty ReduceAndTensor <> symbol
-    -- TypeReduceOrTensor -> pretty ReduceOrTensor <> symbol
+    TypeCompareNat op -> pretty (CompareNat op) <> symbol
+    TypeCompareIndex op -> pretty (CompareIndex op) <> symbol
+    TypeCompareRatTensorPointwise op -> pretty (CompareRatTensorPointwise op) <> symbol
     BoolTensorToType -> "boolTensorToType"
+    TypeQuantifyIndex q -> pretty (QuantifyIndex q) <> symbol
+    TypeQuantifyInList q -> pretty (QuantifyInList q) <> symbol
     where
       symbol = "ᵗ"
 
@@ -222,13 +244,19 @@ instance Pretty DecidabilityBuiltinTypeClassOp where
     ImpliesTC -> pretty $ show t
     ReduceAndTensorTC -> pretty $ show t
     ReduceOrTensorTC -> pretty $ show t
-    CompareTC dom op -> "CompareTC" <> brackets (pretty dom) <> brackets (pretty op)
+    CompareNatTC op -> "CompareNatTC" <> brackets (pretty op)
+    CompareIndexTC op -> "CompareIndexTC" <> brackets (pretty op)
+    CompareRatTensorPointwiseTC op -> "CompareRatTensorPointwiseTC" <> brackets (pretty op)
+    QuantifyIndexTC q -> pretty q <> "IndexTC"
+    QuantifyInListTC q -> pretty q <> "InListTC"
+    CompareRatTensorReducedTC op -> "CompareRatTensorReducedTC" <> brackets (pretty op)
 
 instance Pretty DecidabilityBuiltin where
   pretty = \case
     StandardBuiltinType t -> pretty t
     StandardBuiltinFunction f -> pretty f
     StandardBuiltinConstructor c -> pretty c
+    StandardBuiltinDerivedFunction f -> pretty f
     DecidabilityBuiltinTypeClass t -> pretty t
     DecidabilityBuiltinTypeClassOp t -> pretty t
     DecidabilityBuiltinFunction f -> pretty f
@@ -238,6 +266,7 @@ instance ConvertableBuiltin DecidabilityBuiltin Builtin where
     StandardBuiltinType t -> convertBuiltin p t
     StandardBuiltinFunction f -> convertBuiltin p f
     StandardBuiltinConstructor c -> convertBuiltin p c
+    StandardBuiltinDerivedFunction f -> convertBuiltin p f
     DecidabilityBuiltinTypeClass t -> cheatConvertBuiltin p (pretty t)
     DecidabilityBuiltinTypeClassOp t -> cheatConvertBuiltin p (pretty t)
     DecidabilityBuiltinFunction f -> cheatConvertBuiltin p (pretty f)
@@ -284,3 +313,6 @@ isTensorType tElem = builtin (DecidabilityBuiltinTypeClass IsTensorType) @@ [tEl
 
 type0IgnoreDims :: DSLExpr DecidabilityBuiltin
 type0IgnoreDims = lam "ds" Explicit Irrelevant tDims $ const type0
+
+builtinDerivedFunction :: DerivedFunction -> DSLExpr DecidabilityBuiltin
+builtinDerivedFunction = builtin . StandardBuiltinDerivedFunction

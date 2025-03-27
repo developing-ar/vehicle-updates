@@ -28,7 +28,6 @@ import Vehicle.Data.Builtin.Standard (BuiltinType (..))
 import Vehicle.Data.Builtin.Standard hiding (TensorType)
 import Vehicle.Data.Code.Expr ()
 import Vehicle.Data.Universe (UniverseLevel (..))
-import Vehicle.Libraries.StandardLibrary.Definitions
 import Vehicle.Syntax.Sugar
 import Vehicle.Syntax.Tensor (Tensor, TensorShape, foldMapTensor)
 
@@ -115,6 +114,8 @@ data Dependency
   | DataBool
   | DataBoolInstances
   | DataFin
+  | DataFinAll
+  | DataFinAny
   | DataList
   | DataListInstances
   | DataListAll
@@ -150,6 +151,8 @@ instance Pretty Dependency where
     DataBool -> "Data.Bool as" <+> boolQualifier <+> "using" <+> parens "Bool; true; false; if_then_else_"
     DataBoolInstances -> "Data.Bool.Instances"
     DataFin -> "Data.Fin as" <+> finQualifier <+> "using" <+> parens "Fin; #_"
+    DataFinAll -> "Data.Vec.Functional.Relation.Unary.All as" <+> finQualifier
+    DataFinAny -> "Data.Vec.Functional.Relation.Unary.Any as" <+> finQualifier
     DataList -> "Data.List.Base"
     DataListInstances -> "Data.List.Instances"
     DataListAll -> "Data.List.Relation.Unary.All as" <+> listQualifier
@@ -301,7 +304,7 @@ binderBrackets topLevel = \case
   Instance {} -> braces . braces
 
 --------------------------------------------------------------------------------
--- Program Compilation
+-- Compilation of program structure
 
 compileProg :: (MonadAgdaCompile m) => AgdaOptions -> Prog DecidabilityBuiltin -> m Code
 compileProg opts (Main ds) = vsep2 <$> traverse (compileDecl opts) ds
@@ -413,113 +416,142 @@ compileApp fun args = do
   case fun of
     Builtin _p b ->
       compileBuiltin b userArgs
-    FreeVar _ (findStdLibFunction -> Just stdlibFn) ->
-      compileStdLibFunction stdlibFn userArgs
     _ -> do
       cFun <- compileExpr fun
       annotateApp [] Nothing cFun userArgs
 
-compileStdLibFunction :: (MonadAgdaCompile m) => StdLibFunction -> [Arg DecidabilityBuiltin] -> m Code
-compileStdLibFunction fn args = case fn of
-  StdId -> annotateApp [FunctionBase] Nothing "id" args
-  StdExistsIndex -> annotateApp [VehicleUtils] Nothing "existsIndex" args
-  StdForallIndex -> annotateApp [VehicleUtils] Nothing "forallIndex" args
-  StdVectorType -> unsupported
-  StdAppendList -> annotateInfixApp [DataList] 5 Nothing "_++_" args
-  StdForallInList -> unsupported
-  StdExistsInList -> unsupported
-  StdTypeAnn -> annotateInfixApp [FunctionBase] 0 Nothing "_∋_" args
+compileDerivedFunction :: (MonadAgdaCompile m) => DerivedFunction -> [Arg DecidabilityBuiltin] -> m Code
+compileDerivedFunction fn args = case fn of
+  QuantifyIndex q -> case q of
+    Exists -> annotateApp [VehicleUtils] Nothing "existsIndex" args
+    Forall -> annotateApp [VehicleUtils] Nothing "forallIndex" args
+  AppendList -> annotateInfixApp [DataList] 5 Nothing "_++_" args
+  QuantifyInList {} -> unsupported
+  TypeAnn -> annotateInfixApp [FunctionBase] 0 Nothing "_∋_" args
+  CompareRatTensorReduced {} -> unsupported
   where
     unsupported = developerError $ "Compilation of stdlib function" <+> quotePretty fn <+> "not implemented"
 
+--------------------------------------------------------------------------------
+-- Compilation of builtins
+
 compileBuiltin :: (MonadAgdaCompile m) => DecidabilityBuiltin -> [Arg DecidabilityBuiltin] -> m Code
 compileBuiltin b args = case b of
-  StandardBuiltinType t -> case t of
-    BoolType -> return $ compileType (UniverseLevel 0)
-    RatType -> return $ annotateConstant [DataRat] ratQualifier
-    UnitType -> return $ annotateConstant [DataUnit] "⊤"
-    NatType -> return $ annotateConstant [DataNat] natQualifier
-    ListType -> annotateApp [DataList] Nothing "List" args
-    TensorType -> annotateApp [DataTensor] Nothing "Tensor" args
-    IndexType -> annotateApp [DataFin] Nothing "Fin" args
-  StandardBuiltinConstructor c -> case c of
-    Nil -> return $ annotateConstant [DataList] "[]"
-    Cons -> annotateInfixApp [DataList] 5 Nothing "_∷_" args
-    UnitLiteral -> return $ annotateConstant [DataUnit] "tt"
-    IndexLiteral n -> return $ compileIndexLiteral n
-    NatLiteral n -> return $ compileNatLiteral n
-    NatTensorLiteral t -> return $ compileTensorLiteral compileNatLiteral t
-    BoolTensorLiteral t -> return $ compileTensorLiteral compileBoolLiteral t
-    RatTensorLiteral t -> return $ compileTensorLiteral compileRatLiteral t
-    IndexTensorLiteral t -> return $ compileTensorLiteral compileIndexLiteral t
-  StandardBuiltinFunction f -> case f of
-    And -> annotateInfixApp [DataBool] 6 Nothing "_∧_" args
-    Or -> annotateInfixApp [DataBool] 5 Nothing "_∨_" args
-    Not -> annotateApp [DataBool] Nothing "not" args
-    Implies -> annotateInfixApp [VehicleUtils] 4 Nothing "_⇒_" args
-    Add AddNat -> annotateInfixApp [DataNat] 6 (Just natQualifier) "_⊕_" args
-    Mul MulNat -> annotateInfixApp [DataNat] 7 (Just natQualifier) "_*_" args
-    Add AddRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊕_" args
-    Sub SubRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊖_" args
-    Mul MulRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_*_" args
-    Div DivRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_÷_" args
-    Neg NegRatTensor -> annotateInfixApp [DataTensor] 8 (Just tensorQualifier) "-_" args
-    Min MinRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊓_" args
-    Max MaxRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_⊔_" args
-    Compare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator True op) args
-    Compare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator True op) args
-    Compare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator True op) args
-    FoldList -> annotateApp [DataList] (Just listQualifier) "foldr" args
-    MapList -> annotateApp [DataList] (Just listQualifier) "map" args
-    ReduceAndTensor -> annotateApp [DataTensor] Nothing "reduceAnd" args
-    ReduceOrTensor -> annotateApp [DataTensor] Nothing "reduceOr" args
-    ReduceAddRatTensor -> annotateApp [DataTensor] Nothing "reduceAdd" args
-    ReduceMinRatTensor -> annotateApp [DataTensor] Nothing "reduceMin" args
-    ReduceMaxRatTensor -> annotateApp [DataTensor] Nothing "reduceMax" args
-    ReduceMulRatTensor -> annotateApp [DataTensor] Nothing "reduceMul" args
-    ConstTensor -> annotateApp [DataTensor] Nothing "constTensor" args
-    QuantifyRatTensor q -> case reverse args of
-      (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
-      _ -> unsupportedArgsError
-    At -> annotateInfixApp [DataTensor] (-1) Nothing "_!_" args
-    If -> annotateInfixApp [DataBool] 0 Nothing "if_then_else_" args
-    Foreach -> annotateApp [DataTensor] Nothing "foreach" args
-    StackTensor {} -> annotateApp [DataTensor] Nothing "stack" args
-    Iterate -> unsupportedError
-    PowRat -> unsupportedError
-  DecidabilityBuiltinFunction f -> case f of
-    TypeTrue -> return $ annotateConstant [DataUnit] "⊤"
-    TypeFalse -> return $ annotateConstant [DataEmpty] "⊥"
-    TypeNot -> annotateInfixApp [RelNullary] 3 Nothing "¬_" args
-    TypeAnd -> annotateInfixApp [DataProduct] 2 Nothing "_×_" args
-    TypeOr -> annotateInfixApp [DataSum] 1 Nothing "_⊎_" args
-    TypeImplies -> annotateInfixApp [] minPrecedence Nothing "_→_" args
-    TypeCompare CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator False op) args
-    TypeCompare CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator False op) args
-    TypeCompare CompareRatTensor op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator False op) args
-    BoolTensorToType -> monoError
-  DecidabilityBuiltinTypeClass {} -> monoError
-  DecidabilityBuiltinTypeClassOp {} -> monoError
+  StandardBuiltinType t -> compileBuiltinType t args
+  StandardBuiltinConstructor c -> compileBuiltinConstructor c args
+  StandardBuiltinFunction f -> compileBuiltinFunction f args
+  StandardBuiltinDerivedFunction f -> compileDerivedFunction f args
+  DecidabilityBuiltinFunction f -> compileDecidabilityBuiltinFunction f args
+  DecidabilityBuiltinTypeClass {} -> monoError b
+  DecidabilityBuiltinTypeClassOp {} -> monoError b
+
+compileBuiltinType ::
+  (MonadAgdaCompile m) =>
+  BuiltinType ->
+  [Arg DecidabilityBuiltin] ->
+  m Code
+compileBuiltinType t args = case t of
+  BoolType -> return $ compileType (UniverseLevel 0)
+  RatType -> return $ annotateConstant [DataRat] ratQualifier
+  UnitType -> return $ annotateConstant [DataUnit] "⊤"
+  NatType -> return $ annotateConstant [DataNat] natQualifier
+  ListType -> annotateApp [DataList] Nothing "List" args
+  TensorType -> annotateApp [DataTensor] Nothing "Tensor" args
+  IndexType -> annotateApp [DataFin] Nothing "Fin" args
+
+compileBuiltinConstructor ::
+  (MonadAgdaCompile m) =>
+  BuiltinConstructor ->
+  [Arg DecidabilityBuiltin] ->
+  m Code
+compileBuiltinConstructor c args = case c of
+  Nil -> return $ annotateConstant [DataList] "[]"
+  Cons -> annotateInfixApp [DataList] 5 Nothing "_∷_" args
+  UnitLiteral -> return $ annotateConstant [DataUnit] "tt"
+  IndexLiteral n -> return $ compileIndexLiteral n
+  NatLiteral n -> return $ compileNatLiteral n
+  NatTensorLiteral t -> return $ compileTensorLiteral compileNatLiteral t
+  BoolTensorLiteral t -> return $ compileTensorLiteral compileBoolLiteral t
+  RatTensorLiteral t -> return $ compileTensorLiteral compileRatLiteral t
+  IndexTensorLiteral t -> return $ compileTensorLiteral compileIndexLiteral t
+
+compileBuiltinFunction ::
+  (MonadAgdaCompile m) =>
+  BuiltinFunction ->
+  [Arg DecidabilityBuiltin] ->
+  m Code
+compileBuiltinFunction f args = case f of
+  And -> annotateInfixApp [DataBool] 6 Nothing "_∧_" args
+  Or -> annotateInfixApp [DataBool] 5 Nothing "_∨_" args
+  Not -> annotateApp [DataBool] Nothing "not" args
+  Implies -> annotateInfixApp [VehicleUtils] 4 Nothing "_⇒_" args
+  Add AddNat -> annotateInfixApp [DataNat] 6 (Just natQualifier) "_⊕_" args
+  Mul MulNat -> annotateInfixApp [DataNat] 7 (Just natQualifier) "_*_" args
+  Add AddRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊕_" args
+  Sub SubRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊖_" args
+  Mul MulRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_*_" args
+  Div DivRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_÷_" args
+  Neg NegRatTensor -> annotateInfixApp [DataTensor] 8 (Just tensorQualifier) "-_" args
+  Min MinRatTensor -> annotateInfixApp [DataTensor] 6 (Just tensorQualifier) "_⊓_" args
+  Max MaxRatTensor -> annotateInfixApp [DataTensor] 7 (Just tensorQualifier) "_⊔_" args
+  CompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator True op) args
+  CompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator True op) args
+  CompareRatTensorPointwise op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator True op) args
+  FoldList -> annotateApp [DataList] (Just listQualifier) "foldr" args
+  MapList -> annotateApp [DataList] (Just listQualifier) "map" args
+  ReduceAndTensor -> annotateApp [DataTensor] Nothing "reduceAnd" args
+  ReduceOrTensor -> annotateApp [DataTensor] Nothing "reduceOr" args
+  ReduceAddRatTensor -> annotateApp [DataTensor] Nothing "reduceAdd" args
+  ReduceMinRatTensor -> annotateApp [DataTensor] Nothing "reduceMin" args
+  ReduceMaxRatTensor -> annotateApp [DataTensor] Nothing "reduceMax" args
+  ReduceMulRatTensor -> annotateApp [DataTensor] Nothing "reduceMul" args
+  ConstTensor -> annotateApp [DataTensor] Nothing "constTensor" args
+  QuantifyRatTensor q -> case reverse args of
+    (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
+    _ -> unsupportedArgsError
+  At -> annotateInfixApp [DataTensor] (-1) Nothing "_!_" args
+  If -> annotateInfixApp [DataBool] 0 Nothing "if_then_else_" args
+  Foreach -> annotateApp [DataTensor] Nothing "foreach" args
+  StackTensor {} -> annotateApp [DataTensor] Nothing "stack" args
+  Iterate -> unsupportedError
+  PowRat -> unsupportedError
   where
     unsupportedError :: a
     unsupportedError =
       developerError $
-        "compilation of builtin" <+> quotePretty b <+> "to Agda unsupported"
+        "compilation of builtin" <+> quotePretty f <+> "to Agda unsupported"
 
     unsupportedArgsError :: a
     unsupportedArgsError = do
       developerError $
         "compilation of"
-          <+> quotePretty b
+          <+> quotePretty f
           <+> "with args"
           <+> prettyVerbose args
           <+> "to Agda unsupported"
 
-    monoError :: a
-    monoError =
-      developerError $
-        "Monomorphisation should have got rid of builtin"
-          <+> quotePretty (show b)
+compileDecidabilityBuiltinFunction ::
+  (MonadAgdaCompile m) =>
+  DecidabilityBuiltinFunction ->
+  [Arg DecidabilityBuiltin] ->
+  m Code
+compileDecidabilityBuiltinFunction f args = case f of
+  BoolTensorToType -> monoError f
+  TypeTrue -> return $ annotateConstant [DataUnit] "⊤"
+  TypeFalse -> return $ annotateConstant [DataEmpty] "⊥"
+  TypeNot -> annotateInfixApp [RelNullary] 3 Nothing "¬_" args
+  TypeAnd -> annotateInfixApp [DataProduct] 2 Nothing "_×_" args
+  TypeOr -> annotateInfixApp [DataSum] 1 Nothing "_⊎_" args
+  TypeImplies -> annotateInfixApp [] minPrecedence Nothing "_→_" args
+  TypeCompareIndex op -> annotateInfixApp [VehicleUtils, DataFin] 4 Nothing (comparisonOperator False op) args
+  TypeCompareNat op -> annotateInfixApp [VehicleUtils, DataNat] 4 Nothing (comparisonOperator False op) args
+  TypeCompareRatTensorPointwise op -> annotateInfixApp [VehicleUtils, DataTensor] 4 Nothing (comparisonOperator False op) args
+  TypeQuantifyIndex q -> case q of
+    Forall -> annotateApp [DataFinAll] (Just finQualifier) "All" args
+    Exists -> annotateApp [DataFinAny] (Just finQualifier) "All" args
+  TypeQuantifyInList q -> case q of
+    Forall -> annotateApp [DataListAll] (Just listQualifier) "All" args
+    Exists -> annotateApp [DataListAny] (Just listQualifier) "Any" args
 
 compileTypeLevelQuantifier ::
   (MonadAgdaCompile m) =>
@@ -566,15 +598,18 @@ compileBoolLiteral = \case
   True -> annotateConstant [DataBool] "true"
   False -> annotateConstant [DataBool] "false"
 
+comparisonOperatorBase :: Bool -> ComparisonOp -> Text
+comparisonOperatorBase decidable order = case order of
+  Le -> if decidable then "≤ᵇ" else "≤"
+  Lt -> if decidable then "<ᵇ" else "<"
+  Ge -> if decidable then "≥ᵇ" else "≥"
+  Gt -> if decidable then ">ᵇ" else ">"
+  Eq -> if decidable then "≡ᵇ" else "≈"
+  Ne -> if decidable then "≢ᵇ" else "≉"
+
 comparisonOperator :: Bool -> ComparisonOp -> Text
 comparisonOperator decidable order = do
-  let orderDoc = case order of
-        Le -> if decidable then "≤ᵇ" else "≤"
-        Lt -> if decidable then "<ᵇ" else "<"
-        Ge -> if decidable then "≥ᵇ" else "≥"
-        Gt -> if decidable then ">ᵇ" else ">"
-        Eq -> if decidable then "≡ᵇ" else "≈"
-        Ne -> if decidable then "≢ᵇ" else "≉"
+  let orderDoc = comparisonOperatorBase decidable order
   "_" <> orderDoc <> "_"
 
 compileFunDef :: Code -> Code -> [Code] -> Code -> Code
@@ -617,3 +652,9 @@ compileProperty options propertyName propertyBody = do
 
 currentPhase :: Doc ()
 currentPhase = "compilation to Agda"
+
+monoError :: (Pretty b) => b -> a
+monoError f =
+  developerError $
+    "Monomorphisation should have got rid of builtin"
+      <+> quotePretty f

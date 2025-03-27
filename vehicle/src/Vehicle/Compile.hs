@@ -55,16 +55,18 @@ compile loggingSettings options@CompileOptions {..} = runCompileMonad loggingSet
           secondaryTypeSystem = Nothing
         }
 
-  let mergedProg = mergeImports imports prog
-  prunedProg <- analyseDependenciesAndPrune mergedProg declarationsToCompile
-
-  let resources = Resources specification networkLocations datasetLocations parameterValues
   case target of
-    VerifierQueries queryFormatID ->
+    VerifierQueries queryFormatID -> do
+      let mergedProg = mergeImports imports prog
+      prunedProg <- analyseDependenciesAndPrune mergedProg declarationsToCompile
+      let resources = Resources specification networkLocations datasetLocations parameterValues
       compileToQueryFormat prunedProg resources queryFormatID output
-    LossFunction differentiableLogic ->
+    LossFunction differentiableLogic -> do
+      let mergedProg = mergeImports imports prog
+      prunedProg <- analyseDependenciesAndPrune mergedProg declarationsToCompile
       compileToLossFunction differentiableLogic prunedProg output outputAsJSON
-    ITP itp ->
+    ITP itp -> do
+      prunedProg <- analyseDependenciesAndPrune prog declarationsToCompile
       compileToITP itp options prunedProg
 
 --------------------------------------------------------------------------------

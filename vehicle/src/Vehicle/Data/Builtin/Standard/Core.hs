@@ -7,6 +7,7 @@ module Vehicle.Data.Builtin.Standard.Core
     accessFromNatToRat,
     accessFromVectorToList,
     isTensorType,
+    builtinDerivedFunction,
   )
 where
 
@@ -50,13 +51,31 @@ castAccessor c =
       mkExpr = \() -> BuiltinCast c
     }
 
-compareAccessor :: ComparisonDomain -> Accessor Builtin ComparisonOp
-compareAccessor dom =
+compareIndexAccessor :: Accessor Builtin ComparisonOp
+compareIndexAccessor =
   Access
     { getExpr = \case
-        BuiltinFunction (Compare d op) | d == dom -> Just op
+        BuiltinFunction (CompareIndex op) -> Just op
         _ -> Nothing,
-      mkExpr = \op -> BuiltinFunction (Compare dom op)
+      mkExpr = \op -> BuiltinFunction (CompareIndex op)
+    }
+
+compareNatAccessor :: Accessor Builtin ComparisonOp
+compareNatAccessor =
+  Access
+    { getExpr = \case
+        BuiltinFunction (CompareNat op) -> Just op
+        _ -> Nothing,
+      mkExpr = \op -> BuiltinFunction (CompareNat op)
+    }
+
+compareRatTensorPointwiseAccessor :: Accessor Builtin ComparisonOp
+compareRatTensorPointwiseAccessor =
+  Access
+    { getExpr = \case
+        BuiltinFunction (CompareRatTensorPointwise op) -> Just op
+        _ -> Nothing,
+      mkExpr = \op -> BuiltinFunction (CompareRatTensorPointwise op)
     }
 
 instance BuiltinHasBoolLiterals Builtin where
@@ -76,9 +95,9 @@ instance BuiltinHasBoolLiterals Builtin where
   accessReduceOrBuiltin = functionAccessor ReduceOrTensor
   accessIfBuiltin = functionAccessor If
 
-  accessCompareIndexBuiltin = compareAccessor CompareIndex
-  accessCompareNatBuiltin = compareAccessor CompareNat
-  accessCompareRatTensorBuiltin = compareAccessor CompareRatTensor
+  accessCompareIndexBuiltin = compareIndexAccessor
+  accessCompareNatBuiltin = compareNatAccessor
+  accessCompareRatTensorBuiltin = compareRatTensorPointwiseAccessor
 
   accessQuantifyRatTensorBuiltin =
     Access
@@ -251,3 +270,6 @@ accessFromVectorToList = accessArgs (castAccessor FromVectorToList)
 
 isTensorType :: DSLExpr Builtin -> DSLExpr Builtin -> DSLExpr Builtin
 isTensorType tElem ds = builtinTypeClass IsTensorType @@ [tElem] .@@ [ds]
+
+builtinDerivedFunction :: DerivedFunction -> DSLExpr Builtin
+builtinDerivedFunction = builtin . DerivedFunction

@@ -107,6 +107,9 @@ instance Delaborate V.Annotation B.Decl where
 cheatDelab :: Text -> B.Expr
 cheatDelab n = B.Var (delabSymbol n)
 
+cheatDelabPretty :: (MonadDelab m, Pretty a) => a -> [V.Arg] -> m B.Expr
+cheatDelabPretty x = delabApp (cheatDelab (layoutAsText $ pretty x))
+
 delabRelevance :: (V.HasRelevance a) => a -> [B.Modality]
 delabRelevance x = case V.relevanceOf x of
   V.Relevant -> []
@@ -174,13 +177,14 @@ delabApp fun allArgs = go fun <$> traverse delabM (reverse allArgs)
 
 delabBuiltin :: (MonadDelab m) => V.Builtin -> [V.Arg] -> m B.Expr
 delabBuiltin fun args = case fun of
-  V.TypeClassOp tc -> delabTypeClassOp tc args
-  V.TypeClass t -> delabTypeClass t args
   V.BuiltinFunction f -> delabBuiltinFunction f args
   V.BuiltinType t -> delabBuiltinType t args
   V.BuiltinConstructor c -> delabConstructor c args
   V.BuiltinCast c -> delabCast c args
-  V.NatInDomainConstraint -> delabApp (cheatDelab $ layoutAsText $ pretty fun) args
+  V.TypeClassOp tc -> delabTypeClassOp tc args
+  V.TypeClass t -> delabTypeClass t args
+  V.NatInDomainConstraint -> cheatDelabPretty fun args
+  V.DerivedFunction f -> delabDerivedFunction f args
 
 delabCast :: (MonadDelab m) => V.BuiltinCast -> [V.Arg] -> m B.Expr
 delabCast fun args = case fun of
@@ -188,7 +192,16 @@ delabCast fun args = case fun of
   V.FromRat {} -> rawDelab
   V.FromVectorToList {} -> rawDelab
   where
-    rawDelab = delabApp (cheatDelab $ layoutAsText $ pretty fun) args
+    rawDelab = cheatDelabPretty fun args
+
+delabDerivedFunction :: (MonadDelab m) => V.DerivedFunction -> [V.Arg] -> m B.Expr
+delabDerivedFunction fun args = case fun of
+  -- Reverse the arguments to make it un-well typed again
+  V.TypeAnn -> delabInfixOp2 B.Ann tokElemOf (reverse args)
+  V.QuantifyIndex q -> delabTypeClassOp (V.QuantifierTC q) args
+  V.QuantifyInList q -> delabQuantifierIn q args
+  V.AppendList -> cheatDelabPretty fun args
+  V.CompareRatTensorReduced op -> delabTypeClassOp (V.CompareTC op) args
 
 delabBuiltinFunction :: (MonadDelab m) => V.BuiltinFunction -> [V.Arg] -> m B.Expr
 delabBuiltinFunction fun args = case fun of
@@ -205,14 +218,21 @@ delabBuiltinFunction fun args = case fun of
   V.Min _dom -> delabApp (B.Min tokMin) args
   V.Max _dom -> delabApp (B.Max tokMax) args
   V.QuantifyRatTensor q -> delabTypeClassOp (V.QuantifierTC q) args
-  V.Compare _ op -> delabTypeClassOp (V.CompareTC op) args
+  V.CompareRatTensorPointwise V.Eq -> delabInfixOp2 B.EqPoint tokEqPoint args
+  V.CompareRatTensorPointwise V.Ne -> delabInfixOp2 B.NePoint tokNePoint args
+  V.CompareRatTensorPointwise V.Le -> delabInfixOp2 B.LePoint tokLePoint args
+  V.CompareRatTensorPointwise V.Lt -> delabInfixOp2 B.LtPoint tokLtPoint args
+  V.CompareRatTensorPointwise V.Ge -> delabInfixOp2 B.GePoint tokGePoint args
+  V.CompareRatTensorPointwise V.Gt -> delabInfixOp2 B.GtPoint tokGtPoint args
+  V.CompareIndex op -> delabTypeClassOp (V.CompareTC op) args
+  V.CompareNat op -> delabTypeClassOp (V.CompareTC op) args
   V.FoldList -> delabTypeClassOp V.FoldTC args
   V.MapList -> delabTypeClassOp V.MapTC args
   V.At -> delabInfixOp2 B.At tokAt args
   V.Foreach -> delabForeach args
   V.ReduceAndTensor -> delabApp (B.ReduceAnd tokReduceAnd) args
   V.ReduceOrTensor -> delabApp (B.ReduceOr tokReduceOr) args
-  -- Builtins not in the surface syntax.
+  -- Builtins not yet in the surface syntax.
   V.PowRat -> rawDelab
   V.ReduceAddRatTensor -> rawDelab
   V.ReduceMulRatTensor -> rawDelab
@@ -222,7 +242,7 @@ delabBuiltinFunction fun args = case fun of
   V.ConstTensor -> rawDelab
   V.Iterate -> rawDelab
   where
-    rawDelab = delabApp (cheatDelab $ layoutAsText $ pretty fun) args
+    rawDelab = cheatDelabPretty fun args
 
 delabBuiltinType :: (MonadDelab m) => V.BuiltinType -> [V.Arg] -> m B.Expr
 delabBuiltinType fun args = case fun of
@@ -256,16 +276,16 @@ delabConstructor fun args = case fun of
   V.Nil -> delabApp (B.Nil tokNil) args
   V.UnitLiteral -> return $ B.Literal B.UnitLiteral
   V.NatLiteral x -> return $ B.Literal $ B.NatLiteral $ delabNatLit x
-  V.NatTensorLiteral t -> return $ cheatDelab $ layoutAsText $ pretty t
+  V.NatTensorLiteral t -> cheatDelabPretty t []
   V.IndexLiteral x -> return $ B.Literal $ B.NatLiteral $ delabNatLit x
-  V.IndexTensorLiteral t -> return $ cheatDelab $ layoutAsText $ pretty t
-  V.RatTensorLiteral t -> return $ cheatDelab $ layoutAsText $ pretty t
-  V.BoolTensorLiteral t -> return $ cheatDelab $ layoutAsText $ pretty t
+  V.IndexTensorLiteral t -> cheatDelabPretty t []
+  V.RatTensorLiteral t -> cheatDelabPretty t []
+  V.BoolTensorLiteral t -> cheatDelabPretty t []
 
 delabTypeClassOp :: (MonadDelab m) => V.TypeClassOp -> [V.Arg] -> m B.Expr
 delabTypeClassOp op args = case op of
-  V.FromNatTC {} -> delabApp (cheatDelab $ layoutAsText $ pretty op) args
-  V.FromRatTC {} -> delabApp (cheatDelab $ layoutAsText $ pretty op) args
+  V.FromNatTC {} -> cheatDelabPretty op args
+  V.FromRatTC {} -> cheatDelabPretty op args
   V.VecLiteralTC {} -> delabVecLiteral args
   V.NegTC -> delabOp1 B.Neg tokSub args
   V.AddTC -> delabInfixOp2 B.Add tokAdd args
@@ -282,7 +302,7 @@ delabTypeClassOp op args = case op of
   V.MapTC -> delabApp (B.Map tokMap) args
   V.FoldTC -> delabApp (B.Fold tokFold) args
   V.QuantifierTC q -> delabQuantifier q args
-  V.TensorTypeTC -> delabApp (cheatDelab "TensorTypeTC") args
+  V.TensorTypeTC -> cheatDelabPretty op args
 
 delabOp1 :: (MonadDelab m, IsToken token) => (token -> B.Expr -> B.Expr) -> token -> [V.Arg] -> m B.Expr
 delabOp1 op tk [arg]
@@ -303,7 +323,7 @@ delabIf args@[arg1, arg2, arg3]
       e2 <- delabM (argExpr arg2)
       e3 <- delabM (argExpr arg3)
       return $ B.If tokIf e1 tokThen e2 tokElse e3
-delabIf args = delabApp (cheatDelab "if") args
+delabIf args = cheatDelabPretty V.If args
 
 -- | Collapses pi expressions into either a function or a sequence of forall bindings
 delabPi :: (MonadDelab m) => V.Binder -> V.Expr -> m B.Expr
@@ -358,7 +378,19 @@ delabQuantifier q args = case reverse args of
           V.Forall -> B.Forall tokForall
           V.Exists -> B.Exists tokExists
     return $ mkTk binders' tokDot body'
-  _ -> return $ cheatDelab (layoutAsText $ pretty q)
+  _ -> cheatDelabPretty q args
+
+delabQuantifierIn :: (MonadDelab m) => V.Quantifier -> [V.Arg] -> m B.Expr
+delabQuantifierIn q args = case reverse args of
+  V.RelevantExplicitArg _ (V.Lam _ binder body) : V.RelevantExplicitArg _ container : _ -> do
+    binder' <- delabNameBinder binder
+    body' <- delabM body
+    container' <- delabM container
+    let mkTk = case q of
+          V.Forall -> B.ForallIn tokForall
+          V.Exists -> B.ExistsIn tokExists
+    return $ mkTk binder' container' tokDot body'
+  _ -> cheatDelabPretty q args
 
 delabForeach :: (MonadDelab m) => [V.Arg] -> m B.Expr
 delabForeach args = case reverse args of
@@ -367,7 +399,7 @@ delabForeach args = case reverse args of
     binders' <- traverse delabNameBinder (binder : foldedBinders)
     body' <- delabM foldedBody
     return $ B.Foreach tokForeach binders' tokDot body'
-  _ -> return $ cheatDelab (layoutAsText $ pretty V.Foreach)
+  _ -> cheatDelabPretty V.Foreach args
 
 delabAnn :: B.TokAnnotation -> [B.DeclAnnOption] -> B.Decl
 delabAnn name [] = B.DefAnn name B.DeclAnnWithoutOpts

@@ -11,7 +11,7 @@ where
 import Data.List.NonEmpty (NonEmpty)
 import Vehicle.Compile.Type.Constraint.Core
 import Vehicle.Compile.Type.Core (InstanceCandidate (..), InstanceDatabase (..))
-import Vehicle.Data.Builtin.Core (BuiltinFunction (..))
+import Vehicle.Data.Builtin.Core (BuiltinFunction (..), DerivedFunction (..))
 import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Code.DSL
 import Vehicle.Data.DSL
@@ -62,6 +62,8 @@ allInstances =
       <> comparisonCandidates Gt
       <> comparisonCandidates Eq
       <> comparisonCandidates Ne
+      <> quantifierCandidates Forall
+      <> quantifierCandidates Exists
       <> [
            ------------------
            -- IsTensorType --
@@ -115,12 +117,12 @@ dimsCandidate tc standardOp typeOp =
 
 nonDimsCandidate ::
   DecidabilityBuiltinTypeClass ->
-  BuiltinFunction ->
+  DSLExpr DecidabilityBuiltin ->
   DecidabilityBuiltinFunction ->
   [TempCandidate]
 nonDimsCandidate tc standardOp typeOp =
   [ ( decTypeClass tc [tTensor tBool dimNil],
-      builtinFunction standardOp,
+      standardOp,
       False
     ),
     ( decTypeClass tc [type0],
@@ -131,6 +133,27 @@ nonDimsCandidate tc standardOp typeOp =
 
 comparisonCandidates :: ComparisonOp -> [TempCandidate]
 comparisonCandidates op =
-  nonDimsCandidate (HasCompare CompareIndex op) (Compare CompareIndex op) (TypeCompare CompareIndex op)
-    <> nonDimsCandidate (HasCompare CompareNat op) (Compare CompareNat op) (TypeCompare CompareNat op)
-    <> dimsCandidate (HasCompare CompareRatTensor op) (Compare CompareRatTensor op) (TypeCompare CompareRatTensor op)
+  nonDimsCandidate (HasCompareIndex op) (builtinFunction $ CompareIndex op) (TypeCompareIndex op)
+    <> nonDimsCandidate (HasCompareNat op) (builtinFunction $ CompareNat op) (TypeCompareNat op)
+    <> dimsCandidate (HasCompareRatTensorPointwise op) (CompareRatTensorPointwise op) (TypeCompareRatTensorPointwise op)
+    <> nonDimsCandidate (HasCompareRatTensorReduced op) (builtinDerivedFunction $ CompareRatTensorReduced op) (TypeCompareRatTensorPointwise op)
+
+quantifierCandidates :: Quantifier -> [TempCandidate]
+quantifierCandidates q =
+  [ ( decTypeClass (HasQuantifyIndex q) [tTensor tBool dimNil],
+      builtinDerivedFunction (QuantifyIndex q),
+      False
+    ),
+    ( decTypeClass (HasQuantifyIndex q) [type0],
+      decFunction (TypeQuantifyIndex q),
+      False
+    ),
+    ( decTypeClass (HasQuantifyInList q) [tTensor tBool dimNil],
+      builtinDerivedFunction (QuantifyInList q),
+      False
+    ),
+    ( decTypeClass (HasQuantifyInList q) [type0],
+      decFunction (TypeQuantifyInList q),
+      False
+    )
+  ]

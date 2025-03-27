@@ -14,7 +14,7 @@ import Vehicle.Compile.Type.Monad
 import Vehicle.Compile.Type.System
 import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Builtin.Interface.Type
-import Vehicle.Data.Builtin.Standard (BuiltinConstructor (..), BuiltinFunction (..), BuiltinType (..))
+import Vehicle.Data.Builtin.Standard (BuiltinConstructor (..), BuiltinFunction (..), BuiltinType (..), DerivedFunction (..))
 import Vehicle.Data.Code.DSL
 import Vehicle.Data.DSL
 import Vehicle.Syntax.Builtin (Builtin (..))
@@ -25,7 +25,7 @@ import Prelude hiding (iterate, pi)
 --------------------------------------------------------------------------------
 
 instance TypableBuiltin DecidabilityBuiltin where
-  typeBuiltin = typeDecidabilityBuiltin
+  typeBuiltin p b = return $ fromDSL p $ typeDecidabilityBuiltin b
   useDependentMetas _ = True
   isConstructor = isDecidabilityConstructor
 
@@ -38,6 +38,7 @@ isDecidabilityConstructor = \case
   StandardBuiltinType {} -> False
   StandardBuiltinFunction {} -> False
   StandardBuiltinConstructor {} -> True
+  StandardBuiltinDerivedFunction {} -> True
   DecidabilityBuiltinTypeClass {} -> False
   DecidabilityBuiltinTypeClassOp {} -> False
   DecidabilityBuiltinFunction {} -> False
@@ -49,9 +50,18 @@ typeDecidabilityBuiltin = \case
   StandardBuiltinFunction f -> case f of
     QuantifyRatTensor {} -> forAllDims $ \_dims -> forAllTypes $ \t -> (t ~> type0) ~> type0
     _ -> typeOfBuiltinFunction f
+  StandardBuiltinDerivedFunction f -> typeOfDerivedFunction f
   DecidabilityBuiltinTypeClass t -> typeDecidableTypeClass t
   DecidabilityBuiltinTypeClassOp t -> typeDecidableTypeClassOp t
   DecidabilityBuiltinFunction f -> typeDecidableFunction f
+
+typeOfDerivedFunction :: DerivedFunction -> DSLExpr DecidabilityBuiltin
+typeOfDerivedFunction = \case
+  TypeAnn -> forAllExpl "t" type0 $ \t -> t ~> t
+  QuantifyIndex {} -> forAllDim Relevant $ \d -> (tIndex d ~> tBool) ~> tBool
+  QuantifyInList {} -> forAllTypes $ \t -> (t ~> tBool) ~> tList t ~> tBool
+  CompareRatTensorReduced {} -> forAllDims $ \dims -> tRatTensor dims ~> tRatTensor dims ~> tBoolTensor dimNil
+  AppendList {} -> forAllTypes $ \t -> tList t ~> tList t ~> tList t
 
 typeDecidableTypeClass :: DecidabilityBuiltinTypeClass -> DSLExpr DecidabilityBuiltin
 typeDecidableTypeClass = \case
@@ -62,11 +72,14 @@ typeDecidableTypeClass = \case
   HasAnd -> (tDims ~> type0) ~> tDims ~> type0
   HasOr -> (tDims ~> type0) ~> tDims ~> type0
   HasImplies -> (tDims ~> type0) ~> tDims ~> type0
-  HasCompare CompareNat _ -> type0 ~> type0
-  HasCompare CompareIndex _ -> type0 ~> type0
-  HasCompare CompareRatTensor _ -> (tDims ~> type0) ~> tDims ~> type0
+  HasCompareNat _ -> type0 ~> type0
+  HasCompareIndex _ -> type0 ~> type0
+  HasCompareRatTensorPointwise _ -> (tDims ~> type0) ~> tDims ~> type0
   HasReduceAndTensor -> type0 ~> type0
   HasReduceOrTensor -> type0 ~> type0
+  HasQuantifyIndex {} -> type0 ~> type0
+  HasQuantifyInList {} -> type0 ~> type0
+  HasCompareRatTensorReduced {} -> type0 ~> type0
 
 typeDecidableTypeClassOp :: DecidabilityBuiltinTypeClassOp -> DSLExpr DecidabilityBuiltin
 typeDecidableTypeClassOp = \case
@@ -83,11 +96,14 @@ typeDecidableTypeClassOp = \case
   FromBoolTensorLitTC ->
     forAll "t" (tDims ~> type0) $ \t ->
       builtin (DecidabilityBuiltinTypeClass HasBoolTensorLiterals) @@ [t] ~~~> typeOfCast t
-  CompareTC CompareIndex op -> constraint (HasCompare CompareIndex op) typeOfCompareIndex
-  CompareTC CompareNat op -> constraint (HasCompare CompareNat op) typeOfCompareNat
-  CompareTC CompareRatTensor op -> tensorOpConstraint (HasCompare CompareRatTensor op) typeOfCompareRatTensor
+  CompareIndexTC op -> constraint (HasCompareIndex op) typeOfCompareIndex
+  CompareNatTC op -> constraint (HasCompareNat op) typeOfCompareNat
+  CompareRatTensorPointwiseTC op -> tensorOpConstraint (HasCompareRatTensorPointwise op) typeOfCompareRatTensorPointwise
   ReduceAndTensorTC -> constraint HasReduceAndTensor typeOfTensorReduceOp
-  ReduceOrTensorTC -> constraint HasReduceAndTensor typeOfTensorReduceOp
+  ReduceOrTensorTC -> constraint HasReduceOrTensor typeOfTensorReduceOp
+  QuantifyIndexTC q -> constraint (HasQuantifyIndex q) typeOfQuantifyIndex
+  QuantifyInListTC q -> constraint (HasQuantifyInList q) typeOfQuantifyInList
+  CompareRatTensorReducedTC op -> constraint (HasCompareRatTensorReduced op) typeOfCompareRatTensorReduced
 
 constraint :: DecidabilityBuiltinTypeClass -> (DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin) -> DSLExpr DecidabilityBuiltin
 constraint c f =
@@ -102,18 +118,18 @@ tensorOpConstraint c f =
 
 typeDecidableFunction :: DecidabilityBuiltinFunction -> DSLExpr DecidabilityBuiltin
 typeDecidableFunction = \case
+  BoolTensorToType -> typeOfCast type0
   TypeTrue -> type0
   TypeFalse -> type0
   TypeNot -> typeOp1 type0
   TypeAnd -> typeOp2 type0
   TypeOr -> typeOp2 type0
   TypeImplies -> typeOp2 type0
-  TypeCompare CompareIndex _op -> typeOfCompareIndex type0
-  TypeCompare CompareNat _op -> typeOfCompareNat type0
-  TypeCompare CompareRatTensor _op -> typeOfCompareRatTensor type0IgnoreDims type0
-  -- TypeReduceAndTensor -> typeOfTensorReduceOp tDecBool
-  -- TypeReduceOrTensor -> typeOfTensorReduceOp tDecBool
-  BoolTensorToType -> typeOfCast type0
+  TypeCompareIndex _op -> typeOfCompareIndex type0
+  TypeCompareNat _op -> typeOfCompareNat type0
+  TypeCompareRatTensorPointwise _op -> typeOfCompareRatTensorPointwise type0IgnoreDims type0
+  TypeQuantifyIndex _q -> typeOfQuantifyIndex type0
+  TypeQuantifyInList _q -> typeOfQuantifyInList type0
 
 typeOfCompareIndex :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
 typeOfCompareIndex tRes =
@@ -124,11 +140,20 @@ typeOfCompareIndex tRes =
 typeOfCompareNat :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
 typeOfCompareNat tRes = tNat ~> tNat ~> tRes
 
-typeOfCompareRatTensor :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
-typeOfCompareRatTensor tRes dims = tTensor tRat dims ~> tTensor tRat dims ~> tRes .@@ [dims]
+typeOfCompareRatTensorPointwise :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+typeOfCompareRatTensorPointwise tRes dims = tTensor tRat dims ~> tTensor tRat dims ~> tRes .@@ [dims]
+
+typeOfCompareRatTensorReduced :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+typeOfCompareRatTensorReduced t = forAllDims $ \dims -> tTensor tRat dims ~> tTensor tRat dims ~> t
 
 typeOfCast :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
 typeOfCast t = forAllDims $ \dims -> tBoolTensor dims ~> t .@@ [dims]
+
+typeOfQuantifyIndex :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+typeOfQuantifyIndex t = forAllDim Relevant $ \d -> (tIndex d ~> t) ~> t
+
+typeOfQuantifyInList :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
+typeOfQuantifyInList t = forAllTypes $ \tElem -> (tElem ~> t) ~> tList tElem ~> t
 
 typeOp1 :: DSLExpr DecidabilityBuiltin -> DSLExpr DecidabilityBuiltin
 typeOp1 t = t ~> t
@@ -180,9 +205,9 @@ convertToDecidabilityBuiltins p b args =
         And -> convertTo AndTC
         Or -> convertTo OrTC
         Implies -> convertTo ImpliesTC
-        Compare dom op -> case dom of
-          CompareIndex -> convertToAndAddHoles (CompareTC dom op) 1
-          _ -> convertTo $ CompareTC dom op
+        CompareIndex op -> convertToAndAddHoles (CompareIndexTC op) 1
+        CompareNat op -> convertTo $ CompareNatTC op
+        CompareRatTensorPointwise op -> convertTo $ CompareRatTensorPointwiseTC op
         ReduceAndTensor -> convertToAndAddHoles ReduceAndTensorTC 1
         ReduceOrTensor -> convertToAndAddHoles ReduceOrTensorTC 1
         -- Standard conversion
@@ -218,8 +243,15 @@ convertToDecidabilityBuiltins p b args =
             TensorType -> DecidabilityBuiltinTypeClassOp TensorTypeTC
             _ -> StandardBuiltinType s
       return $ normAppList (Builtin p b') args
+    DerivedFunction f -> case f of
+      TypeAnn -> sameDerivedFunction f
+      QuantifyIndex q -> convertToAndAddHoles (QuantifyIndexTC q) 1
+      QuantifyInList q -> convertToAndAddHoles (QuantifyInListTC q) 1
+      AppendList -> sameDerivedFunction f
+      CompareRatTensorReduced op -> convertToAndAddHoles (CompareRatTensorReducedTC op) 1
     _ -> monomorphisationError b args
   where
+    sameDerivedFunction f = return $ normAppList (Builtin p (StandardBuiltinDerivedFunction f)) args
     sameFunction f = return $ normAppList (Builtin p (StandardBuiltinFunction f)) args
     sameConstructor c = return $ normAppList (Builtin p (StandardBuiltinConstructor c)) args
     convertToAndAddHoles t numberOfHoles = do

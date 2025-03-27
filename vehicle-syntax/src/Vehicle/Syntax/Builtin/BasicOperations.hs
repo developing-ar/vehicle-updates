@@ -67,12 +67,12 @@ comparisonOp Ne = (/=)
 
 comparisonOpName :: ComparisonOp -> Doc a
 comparisonOpName = \case
-  Le -> "leq"
+  Le -> "le"
   Lt -> "lt"
-  Ge -> "geq"
+  Ge -> "ge"
   Gt -> "gt"
-  Eq -> "equals"
-  Ne -> "notEquals"
+  Eq -> "eq"
+  Ne -> "ne"
 
 isStrict :: ComparisonOp -> Bool
 isStrict order = order == Lt || order == Gt
@@ -127,24 +127,6 @@ instance Pretty Quantifier where
 
 --------------------------------------------------------------------------------
 -- Domains
-
-data ComparisonDomain
-  = CompareIndex
-  | CompareNat
-  | CompareRatTensor
-  deriving (Eq, Ord, Show, Generic)
-
-instance NFData ComparisonDomain
-
-instance Hashable ComparisonDomain
-
-instance Serialize ComparisonDomain
-
-instance Pretty ComparisonDomain where
-  pretty = \case
-    CompareIndex -> "Index"
-    CompareNat -> "Nat"
-    CompareRatTensor -> "RatTensor"
 
 data NegDomain
   = NegRatTensor

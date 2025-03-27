@@ -2,9 +2,6 @@
 -- Type annotations
 --------------------------------------------------------------------------------
 
-id : A -> A
-id x = x
-
 -- Implementation of the `:` syntax
 typeAnn : forallT (t : Type) . t -> t
 typeAnn t a = a
@@ -33,20 +30,28 @@ existsInList f xs = fold (\x y -> x or y) False (map f xs)
 -- Tensor
 --------------------------------------------------------------------------------
 
-{-
-forallInTensor : (A -> Bool) -> Tensor A dims -> Bool
-forallInTensor f xs = reduceAnd (foreach (\x y -> x and y) True (map f xs))
+eqRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+eqRatTensorReduced xs ys = reduceAnd True (xs ==. ys)
 
-existsInTensor : (A -> Bool) -> Tensor A dims -> Bool
-existsInTensor f xs = reduceOr (map f xs)
+neRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+neRatTensorReduced xs ys = not (eqRatTensorReduced xs ys)
+
+leRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+leRatTensorReduced xs ys = reduceAnd True (xs <=. ys)
+
+ltRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+ltRatTensorReduced xs ys = reduceAnd True (xs <. ys)
+
+geRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+geRatTensorReduced xs ys = reduceAnd True (xs >=. ys)
+
+gtRatTensorReduced : Tensor Rat dims -> Tensor Rat dims -> Bool
+gtRatTensorReduced xs ys = reduceAnd True (xs >. ys)
 
 --------------------------------------------------------------------------------
 -- Index
 --------------------------------------------------------------------------------
 
-foreachIndex : forallT n . (Index n -> A) -> Tensor A [n]
-foreachIndex n f = map f (indices n)
--}
 existsIndex : forallT {n} . (Index n -> Bool) -> Bool
 existsIndex f = reduceOr False (foreach i . f i)
 

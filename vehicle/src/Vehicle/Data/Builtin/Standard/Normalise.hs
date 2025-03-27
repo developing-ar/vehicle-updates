@@ -7,7 +7,7 @@ import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Normalise
 import Vehicle.Data.Builtin.Standard.Core
 import Vehicle.Data.Code.Interface
-import Vehicle.Prelude (GenericArg (..))
+import Vehicle.Prelude (GenericArg (..), HasIdentifier (identifierOf))
 
 ---------------------------------------------------------------------------------
 --- Normalisation
@@ -39,9 +39,9 @@ instance HasPrimitives Builtin where
 instance NormalisableBuiltin Builtin where
   evalScheme = \case
     BuiltinFunction f -> case f of
-      Compare CompareNat op -> Simple (evalCompareNat op)
-      Compare CompareIndex op -> Simple (evalCompareIndex op)
-      Compare CompareRatTensor op -> Simple (evalCompareRatTensor op)
+      CompareIndex op -> Simple (evalCompareIndex op)
+      CompareNat op -> Simple (evalCompareNat op)
+      CompareRatTensorPointwise op -> Simple (evalCompareRatTensor op)
       Not -> Simple evalNot
       And -> Simple evalAnd
       Or -> Simple evalOr
@@ -77,6 +77,7 @@ instance NormalisableBuiltin Builtin where
       FromNat FromNatToRat -> Simple evalFromNatToRat
       FromRat FromRatToRat -> Simple evalFromRatToRat
       FromVectorToList -> Simple evalVectorToList
+    DerivedFunction f -> Derived (identifierOf f)
     _ -> None
 
   blockingArgs = \case

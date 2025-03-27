@@ -27,7 +27,7 @@ import Prelude hiding (iterate)
 --------------------------------------------------------------------------------
 
 instance TypableBuiltin LinearityBuiltin where
-  typeBuiltin = typeLinearityBuiltin
+  typeBuiltin p b = return (fromDSL p $ typeLinearityBuiltin b)
   useDependentMetas _ = False
   isConstructor = isLinearityBuiltinConstructor
   isCastConstraint _ = False
@@ -75,7 +75,9 @@ typeOfBuiltinFunction = \case
   ReduceMinRatTensor -> typeOfOp2 maxLinearity
   ReduceMaxRatTensor -> typeOfOp2 maxLinearity
   -- Comparisons
-  Compare {} -> typeOfOp2 maxLinearity
+  CompareNat {} -> typeOfOp2 maxLinearity
+  CompareIndex {} -> typeOfOp2 maxLinearity
+  CompareRatTensorPointwise {} -> typeOfOp2 maxLinearity
   -- Container functions
   FoldList -> typeOfFold
   MapList -> typeOfMap
@@ -205,6 +207,7 @@ convertToLinearityTypes p b args = case b of
     NatType -> freshLinearityMeta p
     ListType -> return $ extractElementType b args
     TensorType -> return $ extractElementType b args
+  DerivedFunction f -> return $ FreeVar p (identifierOf f)
   TypeClass {} -> monomorphisationError b args
   TypeClassOp {} -> monomorphisationError b args
   NatInDomainConstraint -> monomorphisationError b args

@@ -117,6 +117,7 @@ library
     Vehicle.Syntax.AST.Visibility
     Vehicle.Syntax.Builtin
     Vehicle.Syntax.Builtin.BasicOperations
+    Vehicle.Syntax.Builtin.Derived
     Vehicle.Syntax.Parse
     Vehicle.Syntax.Prelude
     Vehicle.Syntax.Print

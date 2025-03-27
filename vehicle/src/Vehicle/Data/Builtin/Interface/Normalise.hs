@@ -45,6 +45,7 @@ type EvalApp builtin m = Value builtin -> [VArg builtin] -> m (Value builtin)
 data EvalScheme builtin m
   = forall args. (IsArgs args) => Simple (args (Value builtin) -> m (Value builtin))
   | forall args. (IsArgs args) => NonSimple (EvalApp builtin m -> args (Value builtin) -> m (Value builtin))
+  | Derived Identifier
   | None
 
 -- | A type-class for builtins that can be normalised compositionally.
@@ -53,17 +54,6 @@ class (PrintableBuiltin builtin) => NormalisableBuiltin builtin where
   blockingArgs :: builtin -> BlockingArgs
   isTypeClassOp :: builtin -> Bool
   isCast :: (MonadLogger m) => builtin -> Maybe ([GenericArg (Expr builtin)] -> m (Expr builtin))
-
-evaluateBuiltin ::
-  (MonadLogger m, NormalisableBuiltin builtin) =>
-  EvalApp builtin m ->
-  builtin ->
-  Spine builtin ->
-  m (Value builtin)
-evaluateBuiltin evalApp b spine = case evalScheme b of
-  Simple eval -> maybe (return $ VBuiltin b spine) eval (getExpr accessSpine spine)
-  NonSimple eval -> maybe (return $ VBuiltin b spine) (eval evalApp) (getExpr accessSpine spine)
-  None -> return $ VBuiltin b spine
 
 forceEvalSimpleBuiltin ::
   (IsArgs args, MonadLogger m, Pretty builtin, PrintableBuiltin builtin) =>
@@ -603,12 +593,6 @@ blockingArgsMax :: MaxDomain -> BlockingArgs
 blockingArgsMax = \case
   MaxRatTensor -> Known [1, 2]
 
-blockingArgsCompare :: ComparisonDomain -> BlockingArgs
-blockingArgsCompare = \case
-  CompareIndex -> Known [2, 3]
-  CompareNat -> Known [0, 1]
-  CompareRatTensor -> Known [1, 2]
-
 functionBlockingArgs :: BuiltinFunction -> BlockingArgs
 functionBlockingArgs = \case
   QuantifyRatTensor {} -> noBlockingArgs
@@ -623,7 +607,9 @@ functionBlockingArgs = \case
   Min dom -> blockingArgsMin dom
   Max dom -> blockingArgsMax dom
   PowRat -> Known [0, 1]
-  Compare dom _op -> blockingArgsCompare dom
+  CompareIndex _op -> Known [2, 3]
+  CompareNat _op -> Known [0, 1]
+  CompareRatTensorPointwise _op -> Known [1, 2]
   If -> Known [1]
   At -> Known [3, 4]
   FoldList -> Known [4]

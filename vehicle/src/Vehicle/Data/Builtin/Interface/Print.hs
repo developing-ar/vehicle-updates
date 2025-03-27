@@ -26,6 +26,9 @@ instance ConvertableBuiltin BuiltinConstructor Builtin where
 instance ConvertableBuiltin BuiltinFunction Builtin where
   convertBuiltin p = Builtin p . BuiltinFunction
 
+instance ConvertableBuiltin DerivedFunction Builtin where
+  convertBuiltin p = Builtin p . DerivedFunction
+
 instance ConvertableBuiltin ComparisonOp Builtin where
   convertBuiltin p = convertBuiltin p . CompareTC
 

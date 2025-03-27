@@ -28,7 +28,6 @@ import Vehicle.Compile.Type.Monad.Class (createFreshConstraintCtx)
 import Vehicle.Compile.Type.System (HasTypeSystem (..), TCM)
 import Vehicle.Data.Builtin.Interface.Type (TypableBuiltin (..))
 import Vehicle.Data.Code.Value
-import Vehicle.Data.DSL (fromDSL)
 import Vehicle.Data.Universe (UniverseLevel (..))
 import Prelude hiding (pi)
 
@@ -233,7 +232,8 @@ inferExpr e = do
       (checkedBody, typeOfBody) <- addBinderToContext checkedBinder $ inferExpr body
       return (Lam p checkedBinder checkedBody, Pi p checkedBinder typeOfBody)
     Builtin p op -> do
-      return (Builtin p op, fromDSL p $ typeBuiltin op)
+      typ <- typeBuiltin p op
+      return (Builtin p op, typ)
 
   showInferExit res
   return res
