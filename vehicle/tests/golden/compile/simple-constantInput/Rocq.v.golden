@@ -13,11 +13,12 @@ Require Import mathcomp.ssreflect.seq.
 Require Import mathcomp.ssreflect.tuple.
 Require Import mathcomp.algebra.zmodp.
 Require Import mathcomp.reals.reals.
-Require Import Vehicle.Tensor.
-Require Import Vehicle.Real.
+Require Import vehicle.tensor.
 Import DefaultTupleProdOrder.
 Open Scope ring_scope.
 Open Scope order_scope.
+
+Parameter R : realType.
 
 Parameter f : tensor R (2%N :: nil) -> tensor R (1%N :: nil).
 

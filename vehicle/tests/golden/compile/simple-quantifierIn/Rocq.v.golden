@@ -12,10 +12,19 @@ Require Import mathcomp.ssreflect.seq.
 Require Import mathcomp.ssreflect.tuple.
 Require Import mathcomp.reals.reals.
 Require Import vehicle.tensor.
+Require Import vehicle.std.
 Open Scope ring_scope.
 
 Parameter R : realType.
 
 Parameter f : tensor R (2%N :: nil) -> tensor R (1%N :: nil).
 
-Axiom reachable : exists x, f x == stack [tuple (0 : R)].
+Definition dataset : list (tensor R (2%N :: nil)) := stack [tuple (1 / 2 : R); (1 : R)] :: nil.
+
+Axiom empty : forallInList (fun x => True) dataset.
+
+Axiom double : forallInList (fun x => forallInList (fun y => x == y) dataset) dataset.
+
+Axiom forallForallIn : forall x, forallInList (fun y => x == y) dataset.
+
+Axiom forallInForall : forallInList (fun x => forall y, f x != y) dataset.

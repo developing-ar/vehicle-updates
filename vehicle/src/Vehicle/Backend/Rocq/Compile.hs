@@ -16,14 +16,13 @@ import Data.Vector qualified as Vector
 import GHC.Real (denominator, numerator)
 import Prettyprinter hiding (hcat, hsep, vcat, vsep)
 import Vehicle.Compile.Context.Bound (getNamedBoundCtx)
-import Vehicle.Compile.Context.Name (MonadNameContext, runFreshNameContextT, addNameToContext, ixToProperName)
+import Vehicle.Compile.Context.Name (MonadNameContext, addNameToContext, ixToProperName, runFreshNameContextT)
 import Vehicle.Compile.Error
 import Vehicle.Compile.Prelude hiding (Module)
 import Vehicle.Compile.Print
 import Vehicle.Data.Builtin.Decidability
 import Vehicle.Data.Builtin.Standard hiding (TensorType)
 import Vehicle.Data.Universe (UniverseLevel (..))
-import Vehicle.Libraries.StandardLibrary.Definitions (StdLibFunction (..), findStdLibFunction)
 import Vehicle.Syntax.Builtin
 import Vehicle.Syntax.Sugar
   ( BinderType (..),
@@ -63,15 +62,13 @@ compileProgToRocq prog options =
     let rocqProgram =
           unAnnotate
             ( (vsep2 :: [Code] -> Code)
-                [ preamble programDependencies,
-                  -- importStatements progamDependencies,
-                  -- moduleHeader nameOfModule,
+                [ importStatements programDependencies,
+                  preamble programDependencies,
                   programDoc
                 ]
             )
 
     return rocqProgram
-
 
 --------------------------------------------------------------------------------
 -- Debug functions
@@ -114,17 +111,13 @@ data Library
   | MathcompAlgebraZmodp
   | MathcompRealsReals
   | VehicleTensor
-  | VehicleReal
-  | VehicleOrderNotations
-  | VehicleUtils
+  | VehicleStd
   deriving (Eq, Ord)
 
 instance Pretty Library where
   pretty = \case
-    VehicleTensor -> "Vehicle.Tensor"
-    VehicleReal -> "Vehicle.Real"
-    VehicleOrderNotations -> "Vehicle.OrderNotations"
-    VehicleUtils -> "Vehicle.Utils"
+    VehicleTensor -> "vehicle.tensor"
+    VehicleStd -> "vehicle.std"
     MathcompAlgebraSsralg -> "mathcomp.algebra.ssralg"
     MathcompSsreflectOrder -> "mathcomp.ssreflect.order"
     MathcompSsreflectFintype -> "mathcomp.ssreflect.fintype"
@@ -156,8 +149,17 @@ instance Pretty Scope where
     TensorScope -> "tensor_scope"
     OrderScope -> "order_scope"
 
-preamble :: Set Dependency -> Doc a
-preamble deps = vsep $ map pretty (Set.toList deps)
+importStatements :: Set Dependency -> Code
+importStatements deps = vsep $ map pretty (Set.toList deps)
+
+preamble :: Set Dependency -> Code
+preamble deps = if
+    Set.member (RequireImport MathcompRealsReals) deps
+  then
+    compilePostulate "R" "realType"
+  else
+    ""
+  
 
 --------------------------------------------------------------------------------
 -- Intermediate results of compilation
@@ -262,7 +264,7 @@ type MonadRocqCompile m =
 -- Program Compilation
 
 compileProg :: (MonadRocqCompile m) => RocqOptions -> Prog DecidabilityBuiltin -> m Code
-compileProg opts (Main ds) =  vsep2 <$> traverse (compileDecl opts) ds
+compileProg opts (Main ds) = vsep2 <$> traverse (compileDecl opts) ds
 
 compileDecl :: (MonadRocqCompile m) => RocqOptions -> Decl DecidabilityBuiltin -> m Code
 compileDecl _opts = \case
@@ -273,7 +275,7 @@ compileDecl _opts = \case
     if isProperty anns
       then compileProperty (compileIdentifier n) <$> compileExpr e
       else do
-        binders' <- compileTopLevelBinders binders -- catMaybes <$> mapM compileTopLevelBinder binders
+        binders' <- compileTopLevelBinders binders
         (_, cbody) <- compileBinders binders (compileExpr body)
         defType <- resolveReturnType binders' t
         return $ compileFunDef (compileIdentifier n) defType binders' cbody
@@ -290,7 +292,7 @@ compileExpr expr = do
     Meta {} -> resolutionError currentPhase "Meta"
     Universe _ l -> return $ compileType l
     FreeVar _ n -> return $ annotateConstant [] (pretty (nameOf n))
-    BoundVar p ix -> do -- return $ "<boundvar:" <> pretty ix <> ">" -- do
+    BoundVar p ix -> do
       n <- ixToProperName p ix
       return $ annotateConstant [] (pretty n)
     Pi _ binder result -> case binderNamingForm binder of
@@ -389,7 +391,7 @@ compileBuiltin b args = case b of
   StandardBuiltinType t -> case t of
     BoolType -> return $ compileType (UniverseLevel 0)
     -- For the Rocq backend, rationals are promoted to reals
-    RatType -> return $ annotateConstant [RequireImport VehicleReal, RequireImport MathcompRealsReals] "R"
+    RatType -> return $ annotateConstant [RequireImport MathcompRealsReals] "R"
     UnitType -> return "unit"
     NatType -> return "nat"
     ListType -> annotateApp [] "list" args
@@ -412,28 +414,30 @@ compileBuiltin b args = case b of
     Implies -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] 55 "_ ==> _" (Just "implb") args
     Add AddNat -> annotateInfixApp [RequireImport MathcompAlgebraSsralg, Open RingScope] 50 "_ + _" (Just "GRing.add") args
     Mul MulNat -> annotateInfixApp [RequireImport MathcompAlgebraSsralg, Open RingScope] 40 "_ * _" (Just "GRing.mul") args
-    Add AddRatTensor -> annotateInfixApp [] 50 "_ + _" (Just "addt") args
-    Sub SubRatTensor -> annotateInfixApp [] 50 "_ - _" (Just "subt") args
-    Mul MulRatTensor -> annotateInfixApp [] 40 "_ * _" (Just "mult") args
-    Div DivRatTensor -> annotateInfixApp [] 40 "_ / _" (Just "divt") args
-    Neg NegRatTensor -> annotateApp [] "negt" args
-    Min MinRatTensor -> annotateApp [] "mint" args
-    Max MaxRatTensor -> annotateApp [] "maxt" args
-    Compare domain op -> compileComparison domain op args
+    Add AddRatTensor -> annotateInfixApp [RequireImport VehicleTensor, Open TensorScope] 50 "_ +%t _" (Just "addt") args
+    Sub SubRatTensor -> annotateInfixApp [RequireImport VehicleTensor, Open TensorScope] 50 "_ -%t _" (Just "subt") args
+    Mul MulRatTensor -> annotateInfixApp [RequireImport VehicleTensor, Open TensorScope] 40 "_ *%t _" (Just "mult") args
+    Div DivRatTensor -> annotateInfixApp [RequireImport VehicleTensor, Open TensorScope] 40 "_ /%t _" (Just "divt") args
+    Neg NegRatTensor -> annotateApp [RequireImport VehicleTensor] "negt" args
+    Min MinRatTensor -> annotateApp [RequireImport VehicleTensor] "mint" args
+    Max MaxRatTensor -> annotateApp [RequireImport VehicleTensor] "maxt" args
+    CompareIndex op -> compileComparison CIndex op args
+    CompareNat op -> compileComparison CNat op args
+    CompareRatTensorPointwise op -> compileComparison CRatTensor op args
     FoldList -> annotateApp [RequireImport MathcompSsreflectSeq] "foldr" args
     MapList -> annotateApp [RequireImport MathcompSsreflectSeq] "map" args
     ReduceAndTensor -> annotateApp [RequireImport VehicleTensor] "reduceAnd" args
     ReduceOrTensor -> annotateApp [RequireImport VehicleTensor] "reduceOr" args
     ReduceAddRatTensor -> annotateApp [] "reduceAdd" args
-    ReduceMinRatTensor -> annotateApp [] "reduceMin" args
-    ReduceMaxRatTensor -> annotateApp [] "reduceMax" args
+    ReduceMinRatTensor -> unsupportedError
+    ReduceMaxRatTensor -> unsupportedError
     ReduceMulRatTensor -> annotateApp [] "reduceMul" args
-    ConstTensor -> annotateApp [] "constTensor" args
+    ConstTensor -> annotateApp [] "const" args
     QuantifyRatTensor q -> case reverse args of
       (ExplicitArg _ _ (Lam _ binder body)) : _ -> compileTypeLevelQuantifier q [binder] body
       _ -> unsupportedArgsError
     At -> annotateApp [RequireImport MathcompSsreflectTuple] "tnth" args
-    If -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] minPrecedence "if _ then _ else _" (Just "if_expr") args -- TODO : Check precedence
+    If -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] minPrecedence "if _ then _ else _" (Just "if_expr") args
     Foreach -> annotateApp [RequireImport VehicleTensor] "foreach" args
     StackTensor -> compileStack args
     Iterate -> unsupportedError
@@ -445,10 +449,19 @@ compileBuiltin b args = case b of
     TypeAnd -> annotateInfixApp [] 80 "_ /\\ _" (Just "and") args
     TypeOr -> annotateInfixApp [] 85 "_ \\/ _" (Just "or") args
     TypeImplies -> annotateInfixApp [RequireImport MathcompSsreflectSsrbool] minPrecedence "_ -> _" (Just "implies") args
-    TypeCompare domain op -> compileComparison domain op args
+    TypeCompareIndex op -> compileComparison CIndex op args
+    TypeCompareNat op -> compileComparison CNat op args
+    TypeCompareRatTensorPointwise op -> compileComparison CRatTensor op args
     BoolTensorToType -> monoError
+    TypeQuantifyIndex q -> case q of
+      Forall -> annotateApp [RequireImport VehicleStd] "forallIndex" args
+      Exists -> annotateApp [RequireImport VehicleStd] "existsIndex" args
+    TypeQuantifyInList q -> case q of
+      Forall -> annotateApp [RequireImport VehicleStd] "forallInList" args
+      Exists -> annotateApp [RequireImport VehicleStd] "existsInList" args
   DecidabilityBuiltinTypeClass {} -> monoError
   DecidabilityBuiltinTypeClassOp {} -> monoError
+  StandardBuiltinDerivedFunction f -> compileDerivedFunction f args
   where
     unsupportedError :: a
     unsupportedError =
@@ -476,22 +489,30 @@ compileApp fun args = do
   case fun of
     Builtin _p b ->
       compileBuiltin b userArgs
-    FreeVar _ (findStdLibFunction -> Just stdlibFn) ->
-      compileStdLibFunction stdlibFn userArgs
     _ -> do
       cFun <- compileExpr fun
       annotateApp [] cFun userArgs
 
-compileStdLibFunction :: (MonadRocqCompile m) => StdLibFunction -> [Arg DecidabilityBuiltin] -> m Code
-compileStdLibFunction fn args = case fn of
-  StdId -> annotateApp [] "id" args
-  StdExistsIndex -> return "<std-exists-index>" -- unsupported -- annotateApp [VehicleUtils] Nothing "existsIndex" args
-  StdForallIndex -> return "<std-forall-index>" -- unsupported -- annotateApp [VehicleUtils] Nothing "forallIndex" args
-  StdVectorType -> unsupported
-  StdAppendList -> annotateInfixApp [RequireImport MathcompSsreflectSeq] 5 "_++_" (Just "cat") args
-  StdForallInList -> annotateApp [] "forallInList" args
-  StdExistsInList -> unsupported
-  StdTypeAnn -> annotateInfixApp [] minPrecedence "_ : _" Nothing (reverse args)
+compileDerivedFunction :: (MonadRocqCompile m) => DerivedFunction -> [Arg DecidabilityBuiltin] -> m Code
+compileDerivedFunction fn args = case fn of
+  QuantifyIndex q -> case q of
+    Exists -> annotateApp [RequireImport VehicleStd] "existsIndex" args
+    Forall -> annotateApp [RequireImport VehicleStd] "forallIndex" args
+  AppendList -> annotateInfixApp [RequireImport MathcompSsreflectSeq] 5 "_++_" (Just "cat") args
+  QuantifyInList {} -> unsupported
+  TypeAnn -> annotateInfixApp [] minPrecedence "_ : _" Nothing (reverse args)
+  CompareRatTensorReduced op ->
+    annotateApp
+      [RequireImport VehicleStd]
+      ( case op of
+          Le -> "leRatTensorReduced"
+          Lt -> "ltRatTensorReduced"
+          Ge -> "geRatTensorReduced"
+          Gt -> "gtRatTensorReduced"
+          Eq -> "eqRatTensorReduced"
+          Ne -> "neRatTensorReduced"
+      )
+      args
   where
     unsupported = developerError $ "Compilation of stdlib function" <+> quotePretty fn <+> "not implemented"
 
@@ -554,6 +575,12 @@ compileLam binder expr = do
   (cBinders, cBody) <- compileBinders (binder : binders) (compileExpr body)
   return $ annotate (mempty, minPrecedence) ("fun" <+> hsep cBinders <+> "=>" <+> cBody)
 
+data ComparisonDomain
+  = CIndex
+  | CNat
+  | CRatTensor
+  deriving (Eq)
+
 compileComparison :: (MonadRocqCompile m) => ComparisonDomain -> ComparisonOp -> [Arg DecidabilityBuiltin] -> m Code
 compileComparison domain op = do
   let (opDoc, dependencies) = case op of
@@ -564,14 +591,15 @@ compileComparison domain op = do
         Eq -> ("==", eqDeps)
         Ne -> ("!=", eqDeps)
   let typeDeps = case (domain, op) of
-        (CompareIndex, _) -> [RequireImport MathcompSsreflectSsrnat]
-        (CompareNat, _) -> [RequireImport MathcompSsreflectSsrnat]
-        (CompareRatTensor, Eq) -> [RequireImport VehicleTensor]
-        (CompareRatTensor, Ne) -> [RequireImport VehicleTensor]
-        (CompareRatTensor, _) -> [RequireImport VehicleTensor, Import DefaultTupleProdOrder]
-  let (opDoc', dependencies') = if domain == CompareIndex
-      then ("_ " <> opDoc <> " _ :> nat", dependencies ++ [RequireImport MathcompSsreflectSsrnat])
-      else ("_ " <> opDoc <> " _", dependencies)
+        (CIndex, _) -> [RequireImport MathcompSsreflectSsrnat]
+        (CNat, _) -> [RequireImport MathcompSsreflectSsrnat]
+        (CRatTensor, Eq) -> [RequireImport VehicleTensor]
+        (CRatTensor, Ne) -> [RequireImport VehicleTensor]
+        (CRatTensor, _) -> [RequireImport VehicleTensor, Import DefaultTupleProdOrder]
+  let (opDoc', dependencies') =
+        if domain == CIndex
+          then ("_ " <> opDoc <> " _ :> nat", dependencies ++ [RequireImport MathcompSsreflectSsrnat])
+          else ("_ " <> opDoc <> " _", dependencies)
   annotateInfixApp (dependencies' <> typeDeps) 70 opDoc' Nothing
   where
     orderDeps = [RequireImport MathcompSsreflectSsrbool, RequireImport MathcompSsreflectOrder, Open OrderScope]

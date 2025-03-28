@@ -11,13 +11,13 @@ Require Import mathcomp.ssreflect.eqtype.
 Require Import mathcomp.ssreflect.order.
 Require Import mathcomp.ssreflect.seq.
 Require Import mathcomp.reals.reals.
-Require Import Vehicle.Tensor.
-Require Import Vehicle.Real.
+Require Import vehicle.tensor.
+Require Import vehicle.std.
 Import DefaultTupleProdOrder.
 Open Scope ring_scope.
 Open Scope order_scope.
 
-Definition forallInList (f : nat -> Prop) (xs : list nat) : Prop := foldr (fun x => fun y => x /\ y) True (map f xs).
+Parameter R : realType.
 
 Axiom e1 : let x := True in let y := False in x /\ y.
 

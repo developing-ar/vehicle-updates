@@ -1,5 +1,5 @@
-Real.v
-Tensor.v
+tensor.v
+std.v
 
 -I .
--R . Vehicle
+-R . vehicle

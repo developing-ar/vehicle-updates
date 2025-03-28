@@ -14,7 +14,7 @@ Require Import mathcomp.algebra.zmodp.
 Open Scope ring_scope.
 Open Scope order_scope.
 
-Definition typeAnn (t : Type) (a : t) : t := a.
+
 
 Axiom eqIndex : (0 : ordinal 1%N) == (1 : ordinal 2%N) :> nat.
 

@@ -6,19 +6,22 @@
 
 Require Import mathcomp.ssreflect.ssrbool.
 Require Import mathcomp.algebra.ssralg.
+Require Import mathcomp.ssreflect.ssrnat.
 Require Import mathcomp.ssreflect.order.
 Require Import mathcomp.ssreflect.seq.
 Require Import mathcomp.reals.reals.
-Require Import Vehicle.Tensor.
-Require Import Vehicle.Real.
+Require Import vehicle.tensor.
 Import DefaultTupleProdOrder.
 Open Scope ring_scope.
+Open Scope tensor_scope.
 Open Scope order_scope.
 
-Parameter encode : tensor R (5 :: nil) -> tensor R (2 :: nil).
+Parameter R : realType.
 
-Parameter decode : tensor R (2 :: nil) -> tensor R (5 :: nil).
+Parameter encode : tensor R (5%N :: nil) -> tensor R (2%N :: nil).
 
-Definition epsilon : tensor R (5 :: nil) := foreach (fun i => 1 / 10 : R).
+Parameter decode : tensor R (2%N :: nil) -> tensor R (5%N :: nil).
 
-Axiom identity : forall x, ((x - epsilon) <= decode (encode x)) /\ (decode (encode x) <= (x + epsilon)).
+Definition epsilon : tensor R (5%N :: nil) := foreach (fun i => 1 / 10 : R).
+
+Axiom identity : forall x, ((x -%t epsilon) <= decode (encode x)) /\ (decode (encode x) <= (x +%t epsilon)).
