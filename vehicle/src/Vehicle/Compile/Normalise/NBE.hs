@@ -189,11 +189,7 @@ evalBuiltin freeEnv b spine
       Simple evalFn -> maybe (return $ VBuiltin b spine) evalFn (getExpr accessSpine spine)
       NonSimple evalFn -> maybe (return $ VBuiltin b spine) (evalFn (evalApp freeEnv)) (getExpr accessSpine spine)
       Derived ident -> do
-        logDebug MaxDetail $ "Hi2"
-        logDebug MaxDetail $ pretty ident
-        logDebug MaxDetail $ prettyVerbose spine
         blocked <- isBlocked b spine
-        logDebug MaxDetail $ pretty blocked
         if blocked
           then return $ VBuiltin b spine
           else evalApp freeEnv (lookupIdentValueInEnv freeEnv ident) spine

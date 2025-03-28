@@ -8,7 +8,6 @@ import Control.Monad (foldM, zipWithM)
 import Control.Monad.Writer (Any (..), MonadWriter (..), execWriterT)
 import Data.Maybe (fromMaybe, isJust)
 import Vehicle.Compile.Prelude
-import Vehicle.Compile.Print (prettyVerbose)
 import Vehicle.Data.Builtin.Core
 import Vehicle.Data.Builtin.Interface
 import Vehicle.Data.Builtin.Interface.Print (PrintableBuiltin)
@@ -54,20 +53,19 @@ class (PrintableBuiltin builtin) => NormalisableBuiltin builtin where
   evalScheme :: (MonadLogger m) => builtin -> EvalScheme builtin m
   blockingArgs :: builtin -> BlockingArgs
   isTypeClassOp :: builtin -> Bool
-  isCast :: (MonadLogger m) => builtin -> Maybe ([GenericArg (Expr builtin)] -> m (Expr builtin))
+  isCast :: (MonadLogger m) => Provenance -> builtin -> Maybe ([GenericArg (Expr builtin)] -> m (Expr builtin))
 
 forceEvalSimpleBuiltin ::
   (IsArgs args, MonadLogger m, Pretty builtin, PrintableBuiltin builtin) =>
+  Provenance ->
   builtin ->
   EvalSimple args Expr builtin m ->
   [GenericArg (Expr builtin)] ->
   m (Expr builtin)
-forceEvalSimpleBuiltin b eval spine =
+forceEvalSimpleBuiltin p b eval spine =
   case getExpr accessSpine spine of
     Just args -> eval args
-    Nothing ->
-      developerError $
-        "Should not be evaluating" <+> quotePretty b <+> "with incomplete args of" <+> prettyVerbose spine
+    Nothing -> return $ normAppList (Builtin p b) spine
 
 --------------------------------------------------------------------------------
 -- Evaluation
@@ -653,9 +651,7 @@ traverseBlockingArgs ::
   m (Spine builtin)
 traverseBlockingArgs f b spine = case blockingArgs b of
   Unknown -> traverseSpine f spine
-  Known xs -> do
-    logDebug MaxDetail $ "Bye" <+> pretty b <+> pretty xs
-    recurse spine 0 xs
+  Known xs -> recurse spine 0 xs
   where
     recurse ::
       Spine builtin ->
@@ -679,7 +675,6 @@ isValueBlocked ::
   Value builtin ->
   m (Value builtin)
 isValueBlocked v = do
-  logDebug MaxDetail $ prettyVerbose v
   let blocked = case v of
         VUniverse {} -> False
         VMeta {} -> True
