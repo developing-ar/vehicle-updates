@@ -83,6 +83,7 @@ instance NormalisableBuiltin Builtin where
   blockingArgs = \case
     BuiltinFunction f -> functionBlockingArgs f
     BuiltinCast c -> castBlockingArgs c
+    DerivedFunction f -> derivedFunctionBlockingArgs f
     _ -> noBlockingArgs
 
   isTypeClassOp = \case
