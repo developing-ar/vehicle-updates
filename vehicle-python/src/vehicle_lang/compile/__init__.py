@@ -3,6 +3,7 @@ from typing import Any, Dict, Iterable, Optional, Union
 
 from .. import session
 from ..typing import DeclarationName, DifferentiableLogic, QueryFormat
+from .error import VehicleError as VehicleError
 
 
 def compile_to_query(
@@ -59,17 +60,12 @@ def compile_to_query(
     if cache is not None:
         args.extend(["--cache", str(cache)])
 
-    print(args)
-
     # Call Vehicle
-    # exec, out, err, _ = session.check_output(args)
+    exec, out, err, _ = session.check_output(args)
 
-    # if exec != 0:
-    #     raise VehicleError(f"Vehicle exited with code {exec}: {err}")
-    # if not out:
-    #     raise VehicleError(f"Vehicle produced no output: {err}")
+    if exec != 0:
+        raise VehicleError(f"{err}")
+    elif not out:
+        raise VehicleError(f"Vehicle produced no output")
 
-    exec, out = session.check_output(args)
-
-    # Check for errors
     return out
