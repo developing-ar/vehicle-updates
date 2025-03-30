@@ -1,5 +1,5 @@
 import atexit
-import io
+import pty
 import os
 import sys
 from contextlib import AbstractContextManager, redirect_stderr, redirect_stdout
@@ -75,30 +75,64 @@ class Session(SessionContextManager):
         else:
             raise VehicleSessionClosed()
                 
-    def check_output(self, args: Sequence[str]):
+    def check_output(
+        self, 
+        args: Sequence[str]
+    ) -> Tuple[int, Optional[str], Optional[str], Optional[str]]:
         stdout_fd = sys.stdout.fileno()
-        read_fd, write_fd = os.pipe()
+        stderr_fd = sys.stderr.fileno()
 
-        saved_stdout_fd = os.dup(stdout_fd)       # Save stdout file description
-        os.dup2(write_fd, stdout_fd)              # Redirect stdout to pipe
+        # Create a pseudo-terminal pair to capture stdout
+        master_fd, slave_fd = pty.openpty() 
+        # Create a pipe to capture stderr
+        pread_fd, pwrite_fd = os.pipe()
+
+        saved_stdout_fd = os.dup(stdout_fd) 
+        saved_stderr_fd = os.dup(stderr_fd)
 
         try:
+            # Redirect stdout and stderr
+            os.dup2(slave_fd, stdout_fd)  
+            os.dup2(pwrite_fd, stderr_fd)
+
+            # Close unused write ends
+            os.close(slave_fd)  
+            os.close(pwrite_fd)
+
             with temporary_files("log", prefix="vehicle") as (log,):
                 exitCode = self.check_call(
                     [f"--redirect-logs={log}", *args]
                 )
+
             sys.stdout.flush()
+
         finally:
-            os.close(stdout_fd)             # Close stdout file descriptor (to send EOF)
-            os.close(write_fd)              # Close write end of pipe
+            # Restore stdout and stderr
+            os.dup2(saved_stdout_fd, stdout_fd)
+            os.dup2(saved_stderr_fd, stderr_fd)
 
-        with os.fdopen(read_fd) as f:
-            output = f.read()
+            # Cleanup
+            os.close(saved_stdout_fd)
+            os.close(saved_stderr_fd)
 
-        os.dup2(saved_stdout_fd, stdout_fd)       # Restore the original stdout file descriptor
-        os.close(saved_stdout_fd)                
+        out_lines = []
 
-        return exitCode, output
+        with os.fdopen(master_fd, "r") as f:    
+            try:
+                while line := f.readline():
+                    out_lines.append(line)
+            except OSError:
+                pass
+
+        with os.fdopen(pread_fd, "r") as f:  
+            err = f.read()
+
+        return (
+                exitCode,
+                "".join(out_lines) or None,
+                err or None,
+                log.read_text(),
+            )
 
     def close(self) -> None:
         if not self.closed:
