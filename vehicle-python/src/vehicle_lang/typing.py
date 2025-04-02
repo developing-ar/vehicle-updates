@@ -86,7 +86,7 @@ class DifferentiableLogic(Enum):
             DifferentiableLogic.Product: "ProductLoss",
             DifferentiableLogic.Yager: "YagerLoss",
         }[self]
-    
+
 
 class QueryFormat(Enum):
     """
@@ -102,7 +102,7 @@ class QueryFormat(Enum):
         return {
             QueryFormat.VNNLib: "VNNLibQueries",
             QueryFormat.Marabou: "MarabouQueries",
-            QueryFormat.Agda: "Agda"
+            QueryFormat.Agda: "Agda",
         }[self]
 
 
@@ -141,3 +141,15 @@ class TypeSystem(Enum):
             TypeSystem.Polarity: "Polarity",
             TypeSystem.Linearity: "Linearity",
         }[self]
+
+
+class ExportTarget(Enum):
+    """
+    The target to export to. Only Agda is currently supported.
+    """
+
+    Agda = 1
+
+    @property
+    def _vehicle_option_name(self) -> str:
+        return {ExportTarget.Agda: "Agda"}[self]

@@ -1,8 +1,8 @@
 import atexit
-import pty
-import os
-import sys
 import io
+import os
+import pty
+import sys
 from contextlib import AbstractContextManager, redirect_stderr, redirect_stdout
 from types import TracebackType
 from typing import TYPE_CHECKING, ClassVar, List, Optional, Sequence, Tuple, Type
@@ -75,7 +75,7 @@ class Session(SessionContextManager):
             return _unsafe_vehicle_main(args)
         else:
             raise VehicleSessionClosed()
-        
+
     def check_output(
         self,
         args: Sequence[str],
@@ -95,35 +95,32 @@ class Session(SessionContextManager):
                         err.getvalue() or None,
                         log.read_text(),
                     )
-                
+
     def check_output_pty(
-        self, 
-        args: Sequence[str]
+        self, args: Sequence[str]
     ) -> Tuple[int, Optional[str], Optional[str], Optional[str]]:
         stdout_fd = sys.stdout.fileno()
         stderr_fd = sys.stderr.fileno()
 
         # Create a pseudo-terminal pair to capture stdout
-        master_fd, slave_fd = pty.openpty() 
+        master_fd, slave_fd = pty.openpty()
         # Create a pipe to capture stderr
         pread_fd, pwrite_fd = os.pipe()
 
-        saved_stdout_fd = os.dup(stdout_fd) 
+        saved_stdout_fd = os.dup(stdout_fd)
         saved_stderr_fd = os.dup(stderr_fd)
 
         try:
             # Redirect stdout and stderr
-            os.dup2(slave_fd, stdout_fd)  
+            os.dup2(slave_fd, stdout_fd)
             os.dup2(pwrite_fd, stderr_fd)
 
             # Close unused write ends
-            os.close(slave_fd)  
+            os.close(slave_fd)
             os.close(pwrite_fd)
 
             with temporary_files("log", prefix="vehicle") as (log,):
-                exitCode = self.check_call(
-                    [f"--redirect-logs={log}", *args]
-                )
+                exitCode = self.check_call([f"--redirect-logs={log}", *args])
 
             sys.stdout.flush()
 
@@ -138,22 +135,22 @@ class Session(SessionContextManager):
 
         out_lines = []
 
-        with os.fdopen(master_fd, "r") as f:    
+        with os.fdopen(master_fd, "r") as f:
             try:
                 while line := f.readline():
                     out_lines.append(line)
             except OSError:
                 pass
 
-        with os.fdopen(pread_fd, "r") as f:  
+        with os.fdopen(pread_fd, "r") as f:
             err = f.read()
 
         return (
-                exitCode,
-                "".join(out_lines) or None,
-                err or None,
-                log.read_text(),
-            )
+            exitCode,
+            "".join(out_lines) or None,
+            err or None,
+            log.read_text(),
+        )
 
     def close(self) -> None:
         if not self.closed:

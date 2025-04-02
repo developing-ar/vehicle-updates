@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Union
 
 from .. import session
+from ..error import VehicleError as VehicleError
 from ..typing import DeclarationName, DifferentiableLogic, QueryFormat
-from .error import VehicleError as VehicleError
 
 
 def compile_to_query(
@@ -31,7 +31,13 @@ def compile_to_query(
     :param cache: The location of the verification cache for ITP compilation.
     """
 
-    args = ["compile", "--specification", str(path), "--target", target._vehicle_option_name]
+    args = [
+        "compile",
+        "--specification",
+        str(path),
+        "--target",
+        target._vehicle_option_name,
+    ]
 
     # Add declarations if specified
     if declarations is not None:
