@@ -1,0 +1,27 @@
+from pathlib import Path
+from typing import Union
+
+from .. import session
+from ..error import VehicleError
+
+def validate(
+    cache: Union[str, Path]
+) -> None:
+    """
+    Validate a verification result to check whether it still holds.
+
+    :param cache: The path to the proof cache used by Vehicle.
+    """
+    args = ["validate", "--cache", str(cache)]
+
+    # Call Vehicle
+    exc, out, err, log = session.check_output(args)
+
+    # Check for errors
+    if exc != 0:
+        raise VehicleError(err or out or log or "unknown error")
+    if out is None:
+        raise VehicleError("no output")
+
+    # TODO: Change this to return json
+    return None

@@ -123,3 +123,21 @@ class Verifier(Enum):
         return {
             Verifier.Marabou: "Marabou",
         }[self]
+
+
+class TypeSystem(Enum):
+    """
+    The type system supported used to check a vehicle specification
+    """
+
+    Standard = 1
+    Polarity = 2
+    Linearity = 3
+
+    @property
+    def _vehicle_option_name(self) -> str:
+        return {
+            TypeSystem.Standard: "Standard",
+            TypeSystem.Polarity: "Polarity",
+            TypeSystem.Linearity: "Linearity",
+        }[self]

@@ -22,11 +22,17 @@ from .compile import compile_to_query as compile_to_query
 
 __all__: List[str] = [
     "VERSION",
+    # Check
+    "check",
     # Compile
     "load_loss_function",
 	"compile_to_query",
     # Verify
     "verify",
+    # Validate,
+    "validate",
+    # export
+    "export",
     # Error types
     "VehicleError",
     "VehicleSessionClosed",
