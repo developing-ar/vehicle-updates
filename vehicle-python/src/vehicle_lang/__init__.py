@@ -7,24 +7,22 @@ from .compile.error import VehiclePropertyNotFound as VehiclePropertyNotFound
 # from .compile.python import load_loss_function as load_loss_function
 from .error import VehicleError as VehicleError
 from .error import VehicleInternalError as VehicleInternalError
+from .error import VehicleSyntaxError as VehicleSyntaxError
 from .session.error import VehicleSessionClosed as VehicleSessionClosed
 from .session.error import VehicleSessionUsed as VehicleSessionUsed
 from .typing import AnyOptimiser as AnyOptimiser
 from .typing import AnyOptimisers as AnyOptimisers
 from .typing import DeclarationName as DeclarationName
 from .typing import DifferentiableLogic as DifferentiableLogic
-from .typing import QueryFormat as QueryFormat
 from .typing import Optimiser as Optimiser
 from .typing import QuantifiedVariableName as QuantifiedVariableName
 from .typing import Verifier as Verifier
 from .verify import verify as verify
-from .compile import compile_to_query as compile_to_query
 
 __all__: List[str] = [
     "VERSION",
     # Compile
     "load_loss_function",
-	"compile_to_query",
     # Verify
     "verify",
     # Error types
@@ -34,6 +32,7 @@ __all__: List[str] = [
     "VehicleBuiltinUnsupported",
     "VehicleInternalError",
     "VehiclePropertyNotFound",
+    "VehicleSyntaxError",
     # Argument types
     "DeclarationName",
     "QuantifiedVariableName",
@@ -41,6 +40,5 @@ __all__: List[str] = [
     "AnyOptimiser",
     "AnyOptimisers",
     "DifferentiableLogic",
-	"QueryFormat",
     "Verifier",
 ]
