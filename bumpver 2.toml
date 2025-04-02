@@ -1,0 +1,36 @@
+[bumpver]
+current_version = "v0.16.1"
+version_pattern = "vMAJOR.MINOR.PATCH"
+commit_message = "Bump version {old_version} -> {new_version}"
+commit = true
+tag = true
+push = true
+
+[bumpver.file_patterns]
+"bumpver.toml" = ['current_version = "{version}"']
+"vehicle-python/vehicle-python-binding.cabal" = [
+    "^version:         {pep440_version}$",
+]
+"CITATION.cff" = [
+    '^version: "{pep440_version}"',
+    'date-released: "YYYY-0M-0D"',
+    'repository-artifact: "https://github.com/vehicle-lang/vehicle/releases/tag/{version}"'
+]
+"CONTRIBUTING.md" = [
+    "This should print `{pep440_version}`.",
+    "vehicle_lang-{pep440_version}-",
+    "<https://github.com/vehicle-lang/vehicle/releases/tag/v{pep440_version}>"
+]
+"vehicle-python/src/vehicle_lang/_version.py" = [
+    '^VERSION: str = "{pep440_version}"$'
+]
+"vehicle/vehicle.cabal" = ["^version:            {pep440_version}$"]
+"vehicle-syntax/vehicle-syntax.cabal" = [
+    "^version:            {pep440_version}$"
+]
+"vehicle/tests/golden/**/*.agda.golden" = [
+    "--  - Vehicle version: {pep440_version}+dev"
+]
+"vehicle/tests/golden/**/Marabou.queries/*-query*.txt.golden" = [
+    "//  - Vehicle version: {pep440_version}+dev"
+]
