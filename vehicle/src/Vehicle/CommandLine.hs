@@ -42,7 +42,13 @@ import Options.Applicative
     switch,
     value,
   )
-import Vehicle.Backend.Prelude (DifferentiableLogicID, ITP, Target (..), TypingSystem (..), findTarget)
+import Vehicle.Backend.Prelude
+  ( DifferentiableLogicID,
+    ITP,
+    Target (..),
+    TypingSystem (..),
+    findTarget,
+  )
 import Vehicle.Compile (CompileOptions (..))
 import Vehicle.Export (ExportOptions (..))
 import Vehicle.Prelude
@@ -75,7 +81,8 @@ data GlobalOptions = GlobalOptions
   { version :: Bool,
     logFile :: Maybe FilePath,
     loggingLevel :: LoggingLevel,
-    noWarnings :: Bool
+    noWarnings :: Bool,
+    json :: Bool
   }
   deriving (Eq, Show)
 
@@ -85,7 +92,8 @@ defaultGlobalOptions =
     { version = False,
       logFile = Nothing,
       loggingLevel = defaultLoggingLevel,
-      noWarnings = False
+      noWarnings = False,
+      json = False
     }
 
 data ModeOptions
@@ -154,6 +162,7 @@ globalOptionsParser =
     <*> redirectLogsParser
     <*> loggingLevelParser
     <*> noWarningsParser
+    <*> jsonParser
 
 --------------------------------------------------------------------------------
 -- Modes
@@ -208,7 +217,7 @@ compileParser =
     <*> outputParser
     <*> modulePrefixOption
     <*> compileCacheParser
-    <*> outputAsJSONParser
+    <*> compileOutputAsJSONParser
 
 compileParserInfo :: ParserInfo ModeOptions
 compileParserInfo = info (Compile <$> compileParser) compileDescription
@@ -447,10 +456,10 @@ outputParser =
         <> metavar "FILE"
         <> help "Output location for compiled file(s). Defaults to stdout if not provided."
 
-outputAsJSONParser :: Parser Bool
-outputAsJSONParser =
+compileOutputAsJSONParser :: Parser Bool
+compileOutputAsJSONParser =
   switch $
-    long "json"
+    long "output-json"
       <> short 'j'
       <> help "Output the program as JSON instead of text."
       <> internal
@@ -574,3 +583,10 @@ verifyCacheParser =
 
 compileCacheParser :: Parser (Maybe FilePath)
 compileCacheParser = optional exportCacheParser
+
+jsonParser :: Parser Bool
+jsonParser =
+  switch $
+    long "json"
+      <> short 'j'
+      <> help "Output any error messages as JSON instead of text."

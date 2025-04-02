@@ -5,8 +5,17 @@ module Vehicle
   )
 where
 
-import Control.Exception (Exception (..), Handler (..), SomeException (..), catches, handle, throwIO)
+import Control.Exception
+  ( Exception (..),
+    Handler (..),
+    SomeException (..),
+    catches,
+    handle,
+    throwIO,
+  )
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Aeson (encode, object, (.=))
+import Data.ByteString.Lazy.Char8 qualified as BLC (unpack)
 import Data.Text qualified as Text (pack)
 import Data.Text.IO qualified as TextIO (hPutStrLn)
 import GHC.IO.Encoding (setLocaleEncoding)
@@ -17,15 +26,21 @@ import System.FilePath (takeDirectory)
 import System.IO
   ( BufferMode (NoBuffering),
     IOMode (WriteMode),
+    hPutStrLn,
     hSetBuffering,
+    stderr,
     utf8,
     withFile,
   )
-import Vehicle.CommandLine (GlobalOptions (..), ModeOptions (..), Options (..), commandLineOptionsParserInfo)
+import Vehicle.CommandLine
+  ( GlobalOptions (..),
+    ModeOptions (..),
+    Options (..),
+    commandLineOptionsParserInfo,
+  )
 import Vehicle.Compile (compile)
 import Vehicle.Export (export)
 import Vehicle.Prelude
-import Vehicle.Prelude.IO as VIO (MonadStdIO (writeStderrLn))
 import Vehicle.Prelude.Logging
 import Vehicle.TypeCheck (typeCheck)
 import Vehicle.Validate (validate)
@@ -47,23 +62,32 @@ mainWithArgsAndExitCode args = do
 rethrowExitCode :: ExitCode -> IO ()
 rethrowExitCode = throwIO
 
-uncaughtException :: (MonadStdIO IO) => SomeException -> IO ()
-uncaughtException (SomeException e) = do
-  writeStderrLn (Text.pack $ displayException e)
+uncaughtException :: (MonadStdIO IO) => GlobalOptions -> SomeException -> IO ()
+uncaughtException opts (SomeException e) = do
+  if json opts
+    then do
+      let jsonError = encode $ object ["error" .= displayException e]
+      liftIO $ hPutStrLn stderr (BLC.unpack jsonError)
+    else writeStderrLn (Text.pack $ displayException e)
   exitFailure
 
 runVehicle :: (MonadStdIO IO) => Options -> IO ()
 runVehicle Options {..} = do
   withLogger globalOptions $ \logSettings -> do
     -- Catch uncaught exceptions
-    flip catches [Handler rethrowExitCode, Handler uncaughtException] $ do
+    flip catches [Handler rethrowExitCode, Handler (uncaughtException globalOptions)] $ do
       -- Handle --version
       if version globalOptions
         then writeStdoutLn (Text.pack preciseVehicleVersion)
         else case modeOptions of
           Nothing ->
-            fatalError
-              "No mode provided. Please use one of 'typeCheck', 'compile', 'verify', 'check', 'export'"
+            if json globalOptions
+              then
+                fatalErrorAsJSON
+                  "No mode provided. Please use one of 'typeCheck', 'compile', 'verify', 'check', 'export'"
+              else
+                fatalError
+                  "No mode provided. Please use one of 'typeCheck', 'compile', 'verify', 'check', 'export'"
           Just mode -> case mode of
             Check options -> typeCheck logSettings options
             Compile options -> compile logSettings options
@@ -72,10 +96,10 @@ runVehicle Options {..} = do
             Export options -> export logSettings options
 
 withLogger :: (MonadStdIO IO) => GlobalOptions -> (LoggingSettings -> IO a) -> IO a
-withLogger GlobalOptions {logFile, loggingLevel, noWarnings} action = do
-  let runAction logLn = action LoggingSettings {putLogLn = logLn, loggingLevel, noWarnings}
+withLogger GlobalOptions {logFile, loggingLevel, noWarnings, json} action = do
+  let runAction logLn = action LoggingSettings {putLogLn = logLn, loggingLevel, noWarnings, errorAsJSON = json}
   case logFile of
-    Nothing -> runAction VIO.writeStderrLn
+    Nothing -> runAction writeStderrLn
     Just fp -> do
       createDirectoryIfMissing True (takeDirectory fp)
       withFile fp WriteMode $ \logHandle -> do
