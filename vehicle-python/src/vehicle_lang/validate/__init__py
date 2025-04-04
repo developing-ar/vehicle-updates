@@ -6,7 +6,7 @@ from ..error import VehicleError
 
 def validate(
     cache: Union[str, Path]
-) -> None:
+) -> str:
     """
     Validate a verification result to check whether it still holds.
 
@@ -19,9 +19,8 @@ def validate(
 
     # Check for errors
     if exc != 0:
-        raise VehicleError(err or out or log or "unknown error")
-    if out is None:
-        raise VehicleError("no output")
+        raise VehicleError(f"{err}")
+    elif not out:
+        raise VehicleError(f"Vehicle produced no output")
 
-    # TODO: Change this to return json
-    return None
+    return out

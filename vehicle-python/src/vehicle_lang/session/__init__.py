@@ -178,7 +178,7 @@ def check_call(args: Sequence[str]) -> int:
 def check_output(
     args: Sequence[str],
 ) -> Tuple[int, Optional[str], Optional[str], Optional[str]]:
-    return Session().__enter__().check_output(args)
+    return Session().__enter__().check_output_pty(args)
 
 
 def close() -> None:

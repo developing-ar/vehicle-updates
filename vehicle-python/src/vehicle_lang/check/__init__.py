@@ -8,7 +8,7 @@ from ..typing import TypeSystem
 
 def check(
     specification: Union[str, Path], typeSystem: TypeSystem = TypeSystem.Standard
-) -> None:
+) -> str:
     """
     Type-check a .vcl specification file.
 
@@ -24,7 +24,6 @@ def check(
     # Check for errors
     if exc != 0:
         # TODO: Change this to return JSON
-        raise VehicleError(err or out or log or "unknown error")
-
-    else:  # if out is none, then the specification is correct
-        return None
+        raise VehicleError(err or "Unknown Error")
+    else:
+        return out
