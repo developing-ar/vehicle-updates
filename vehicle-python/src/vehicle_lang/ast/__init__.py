@@ -5,7 +5,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Generic, Iterable, Optional, Sequence, Tuple, Union
 
-from typing_extensions import Literal, Self, TypeAlias, TypeVar, override
+from typing_extensions import Self, TypeAlias, TypeVar, override
 
 from .. import session
 from ..error import VehicleError

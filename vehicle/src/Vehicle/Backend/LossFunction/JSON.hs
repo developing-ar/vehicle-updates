@@ -115,6 +115,7 @@ toRat = mapRatio toInt
       | x > toInteger (maxBound :: Int) = developerError $ "Overflow converting" <+> pretty x <+> "to `Int`"
       | otherwise = fromInteger x
 
+
 --------------------------------------------------------------------------------
 -- JSON instances
 
@@ -129,6 +130,7 @@ instance ToJSON JExpr where
 
 instance ToJSON JBinder where
   toJSON = genericToJSON jsonOptions
+
 
 --------------------------------------------------------------------------------
 -- Conversion of JExpr to JSON

@@ -18,11 +18,14 @@ from .typing import Optimiser as Optimiser
 from .typing import QuantifiedVariableName as QuantifiedVariableName
 from .typing import Verifier as Verifier
 from .verify import verify as verify
+from .typing import QueryFormat as QueryFormat
+from .compile import compile_to_query as compile_to_query
 
 __all__: List[str] = [
     "VERSION",
     # Compile
     "load_loss_function",
+    "compile_to_query",
     # Verify
     "verify",
     # Error types
@@ -38,6 +41,7 @@ __all__: List[str] = [
     "QuantifiedVariableName",
     "Optimiser",
     "AnyOptimiser",
+    "QueryFormat",
     "AnyOptimisers",
     "DifferentiableLogic",
     "Verifier",

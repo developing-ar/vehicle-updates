@@ -87,6 +87,22 @@ class DifferentiableLogic(Enum):
             DifferentiableLogic.Yager: "YagerLoss",
         }[self]
 
+class QueryFormat(Enum):
+    """
+    The query formats supported by Vehicle.
+    """
+
+    VNNLib = 1
+    Marabou = 2
+    Agda = 3
+
+    @property
+    def _vehicle_option_name(self) -> str:
+        return {
+            QueryFormat.VNNLib: "VNNLibQueries",
+            QueryFormat.Marabou: "MarabouQueries",
+            QueryFormat.Agda: "Agda"
+        }[self]
 
 class Verifier(Enum):
     """
