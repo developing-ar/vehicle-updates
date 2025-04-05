@@ -15,12 +15,12 @@ def validate(
     args = ["validate", "--cache", str(cache)]
 
     # Call Vehicle
-    exc, out, err, log = session.check_output(args)
+    exc, out, err, _ = session.check_output(args)
 
     # Check for errors
     if exc != 0:
         raise VehicleError(f"{err}")
     elif not out:
-        raise VehicleError(f"Vehicle produced no output")
+        return ''
 
     return out
