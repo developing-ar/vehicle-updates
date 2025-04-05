@@ -32,7 +32,7 @@ __all__: List[str] = [
     # Validate,
     "validate",
     # export
-    "export",
+    "export_to_solver",
     # Error types
     "VehicleError",
     "VehicleSessionClosed",
