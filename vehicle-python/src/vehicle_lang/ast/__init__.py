@@ -65,37 +65,71 @@ class Tensor(Generic[DType]):
 
 
 @dataclass(frozen=True)
-class Dimension():
+class Dimension(AST):
     value: int
 
 
 @dataclass(frozen=True)
-class DimensionNil():
+class DimensionNil(AST):
     pass
 
 
 @dataclass(frozen=True)
-class DimensionCons():
+class DimensionCons(AST):
     head: Dimension
-    tail: DimensionNil
+    tail: Union["DimensionCons", DimensionNil]
 
 
 @dataclass(frozen=True)
-class DimensionIndex():
+class DimensionIndex(AST):
     value: int
+
+
+################################################################################
+# Abstract AST Nodes
+################################################################################
+
+@dataclass(frozen=True, init=False)
+class BuiltinLiteral(AST):
+    # Abstract base for literal values
+    value: Any
+    def __init__(self) -> None: raise TypeError("Cannot instantiate abstract class")
+
+@dataclass(frozen=True, init=False)
+class BuiltinConstant(AST):
+    # Abstract base for constant symbols
+    def __init__(self) -> None: raise TypeError("Cannot instantiate abstract class")
+
+@dataclass(frozen=True, init=False)
+class BuiltinType(AST):
+    # Abstract base for built-in type symbols
+    def __init__(self) -> None: raise TypeError("Cannot instantiate abstract class")
+
+@dataclass(frozen=True, init=False)
+class BuiltinFunction(AST):
+    # Abstract base for built-in function symbols
+    def __init__(self) -> None: raise TypeError("Cannot instantiate abstract class")
+
+@dataclass(frozen=True, init=False)
+class Expression(AST):
+    # Abstract base for expression nodes
+    def __init__(self) -> None: raise TypeError("Cannot instantiate abstract class")
+
+@dataclass(frozen=True, init=False)
+class Declaration(AST, metaclass=ABCMeta):
+    # Abstract base for top-level declarations
+    def __init__(self) -> None: raise TypeError("Cannot instantiate abstract class")
+
+
+# Type Alias for common Union used in function arguments/bodies
+# ==============================================================================
+
+FunctionInput: TypeAlias = Union[BuiltinFunction, Expression, BuiltinConstant, BuiltinLiteral]
 
 
 ################################################################################
 # Builtin Literals
 ################################################################################
-
-
-@dataclass(frozen=True, init=False)
-class BuiltinLiteral(AST):
-    value: Any
-
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class BuiltinLiteral")
 
 
 @dataclass(frozen=True)
@@ -131,12 +165,6 @@ class RatLiteral(BuiltinLiteral):
 ################################################################################
 # Builtin Constants
 ################################################################################
-
-
-@dataclass(frozen=True, init=False)
-class BuiltinConstant(AST):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class BuiltinConstant")
     
 
 @dataclass(frozen=True)
@@ -158,12 +186,6 @@ class NilList(BuiltinConstant):
 ################################################################################
 # Builtin Types
 ################################################################################
-
-
-@dataclass(frozen=True, init=False)
-class BuiltinType(AST):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class BuiltinType")
 
 
 @dataclass(frozen=True)
@@ -214,24 +236,6 @@ class UnitType(BuiltinType):
 ################################################################################
 # Builtin Functions
 ################################################################################
-
-# TODO: 
-# Change superclass to BuiltinFunction
-
-
-@dataclass(frozen=True, init=False)
-class BuiltinFunction(AST):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class BuiltinFunction")
-    
-
-@dataclass(frozen=True, init=False)
-class Expression(AST):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class Expression")
-
-
-FunctionInput: TypeAlias = Union[BuiltinFunction, Expression, BuiltinConstant, BuiltinLiteral]
 
 
 @dataclass(frozen=True)
@@ -488,7 +492,7 @@ class PartialApp(Expression):
 @dataclass(frozen=True)
 class Var(Expression):
     name: Name
-    arguments: Sequence[Expression]
+    arguments: Sequence[FunctionInput]
 
 
 @dataclass(frozen=True)
@@ -500,15 +504,6 @@ class Builtin(Expression):
 ################################################################################
 # Declarations
 ################################################################################
-
-
-@dataclass(frozen=True, init=False)
-class Declaration(AST, metaclass=ABCMeta):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class Declaration")
-
-    @abstractmethod
-    def get_name(self) -> Name: ...
 
 
 @dataclass(frozen=True)
