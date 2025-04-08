@@ -41,13 +41,13 @@ outputFormat =
 
 -- | Compiles an individual variable
 compileMarabouVar :: CompileQueryVariable
-compileMarabouVar inputOrOutput ioIndex = do
+compileMarabouVar _metaNetworkEntry inputOrOutput ioIndex = do
   let name = if inputOrOutput == Input then "x" else "y"
   layoutAsText $ name <> pretty ioIndex
 
 -- | Compiles an expression representing a single Marabou query.
 compileMarabouQuery :: CompileQuery
-compileMarabouQuery address (QueryContents _variables assertions) = do
+compileMarabouQuery address (QueryContents _variables assertions) _metaNetwork = do
   assertionDocs <- forM assertions (compileAssertion address)
   let assertionsDoc = vsep assertionDocs
   return $ layoutAsText assertionsDoc

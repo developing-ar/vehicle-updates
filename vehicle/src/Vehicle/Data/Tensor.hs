@@ -23,6 +23,11 @@ type TensorIndices = [Int]
 showTensorIndices :: TensorIndices -> String
 showTensorIndices xs = concatMap (\v -> "!" <> show v) (reverse xs)
 
+newtype PrettyTensorShape = PrettyTensorShape TensorShape
+
+instance Pretty PrettyTensorShape where
+  pretty (PrettyTensorShape shape) = pretty (unwords (map show shape))
+
 --------------------------------------------------------------------------------
 -- Tensor constants
 

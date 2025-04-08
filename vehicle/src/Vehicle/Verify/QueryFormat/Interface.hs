@@ -12,6 +12,8 @@ import Vehicle.Verify.QueryFormat.Core
 -- | Returns the string representation used by the query format
 -- for a given network variable.
 type CompileQueryVariable =
+  -- Which network does this query variable belong to
+  MetaNetworkEntry ->
   -- Does this variable represent an input or an output
   InputOrOutput ->
   -- The shape of the overall tensor that contains the element variable.
@@ -45,6 +47,7 @@ type CompileQuery =
   (MonadLogger m, MonadError CompileError m) =>
   QueryAddress ->
   QueryContents ->
+  MetaNetwork ->
   m Text
 
 -- | A format for an output query that verifiers can parse.

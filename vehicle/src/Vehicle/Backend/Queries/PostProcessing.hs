@@ -62,19 +62,19 @@ convertPartitionsToQueries partitions = do
         checkIfNetworkInputsBounded globalCtx (queryFormatID queryFormat) queryAddress metaNetworkApps assertions
 
         -- Convert to query variables
+        let metaNetwork = makeMetaNetwork metaNetworkApps
         (variableStore, queryAssertions) <-
-          compileQueryVariables globalCtx (compileVariable queryFormat) metaNetworkApps assertions
+          compileQueryVariables globalCtx (compileVariable queryFormat) metaNetworkApps assertions metaNetwork
 
         logDebug MaxDetail $ "Variable mapping:" <+> pretty variableStore
 
         -- Construct the meta-data object
         let reconstruction = Reconstruction variableStore allReconstructionSteps
-        let metaNetwork = makeMetaNetwork metaNetworkApps
         let queryMetaData = QueryMetaData queryAddress metaNetwork reconstruction
 
         -- Compile to query format
         let queryContents = QueryContents (getQueryVariables reconstruction) queryAssertions
-        queryText <- compileQuery queryFormat queryAddress queryContents
+        queryText <- compileQuery queryFormat queryAddress queryContents metaNetwork
 
         -- Write out the query
         case outputLocation of
@@ -277,13 +277,14 @@ compileQueryVariables ::
   CompileQueryVariable ->
   [NetworkApplicationReplacement] ->
   ConjunctAll (QueryAssertion NetworkElementVariable) ->
+  MetaNetwork ->
   m (VariableStore, ConjunctAll (QueryAssertion QueryVariable))
-compileQueryVariables globalCtx compileVariable metaNetworkApps assertions = do
+compileQueryVariables globalCtx compileVariable metaNetworkApps assertions metaNetwork = do
   -- Compute the set of new input and output variables
   let initialState = IndexingState mempty mempty mempty
   let tensorVars = sortOn fst $ Map.toList (tensorVariableInfo globalCtx)
   let usedNetworkTensorVars = Set.fromList $ concatMap (\x -> [inputVariable x, outputVariable x]) metaNetworkApps
-  let compileVars = compileTensorVariable compileVariable (globalBoundVarCtx globalCtx) usedNetworkTensorVars
+  let compileVars = compileTensorVariable compileVariable (globalBoundVarCtx globalCtx) usedNetworkTensorVars metaNetwork
   indexingState@IndexingState {..} <- foldlM compileVars initialState tensorVars
 
   -- Make the queries more asthetically pleasing
@@ -307,10 +308,11 @@ compileTensorVariable ::
   CompileQueryVariable ->
   GenericBoundCtx Name ->
   Set TensorVariable ->
+  MetaNetwork ->
   IndexingState ->
   (TensorVariable, TensorVariableInfo) ->
   m IndexingState
-compileTensorVariable compileQueryVar boundCtx usedNetworkTensorVariables IndexingState {..} (tensorVar, TensorVariableInfo {..}) = do
+compileTensorVariable compileQueryVar boundCtx usedNetworkTensorVariables metaNetwork IndexingState {..} (tensorVar, TensorVariableInfo {..}) = do
   let lookupVar v = lookupLvInBoundCtx v boundCtx
   let tensorEntry = (tensorVar, lookupVar tensorVar, Nothing)
 
@@ -318,7 +320,7 @@ compileTensorVariable compileQueryVar boundCtx usedNetworkTensorVariables Indexi
     Just inputOrOutput | tensorVar `Set.member` usedNetworkTensorVariables -> do
       let tensorSize = product tensorVariableShape
       let startingIndex = length $ if inputOrOutput == Input then networkInputVariables else networkOutputVariables
-      let queryVariables = fmap (compileQueryVar inputOrOutput) ([startingIndex .. startingIndex + tensorSize] :: [Int])
+      let queryVariables = concatMap (\metaNetworkEntry -> fmap (compileQueryVar metaNetworkEntry inputOrOutput) ([startingIndex .. startingIndex + tensorSize] :: [Int])) metaNetwork
       let elementEntries = zipWith (\v q -> (v, lookupVar v, Just q)) elementVariables queryVariables
       case inputOrOutput of
         Input -> return (elementVariables, mempty, elementEntries)
