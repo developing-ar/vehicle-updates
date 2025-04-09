@@ -397,7 +397,7 @@ class StackTensor(BuiltinFunction):
 
 @dataclass(frozen=True)
 class ConstRatTensor(BuiltinFunction):
-    value: Fraction
+    body: Fraction
 
 
 @dataclass(frozen=True)
@@ -447,7 +447,7 @@ class SearchRatTensor(BuiltinFunction):
 
 @dataclass(frozen=True)
 class DimensionLookup(BuiltinFunction):
-    function: FunctionInput
+    body: FunctionInput
     index: DimensionIndex
 
 
@@ -471,13 +471,13 @@ class Pi(Expression):
 @dataclass(frozen=True)
 class Lam(Expression):
     binder: Binder
-    function: BuiltinFunction
+    body: BuiltinFunction
 
 
 @dataclass(frozen=True)
 class App(Expression):
     provenance: Provenance = field(repr=False)
-    function: Expression
+    body: Expression
     arguments: Sequence[Expression]
 
 
@@ -485,14 +485,14 @@ class App(Expression):
 class PartialApp(Expression):
     provenance: Provenance = field(repr=False)
     arity: int
-    function: Expression
+    body: Expression
     arguments: Sequence[Expression]
 
 
 @dataclass(frozen=True)
 class Var(Expression):
     name: Name
-    arguments: Sequence[FunctionInput]
+    body: Sequence[FunctionInput]
 
 
 @dataclass(frozen=True)
