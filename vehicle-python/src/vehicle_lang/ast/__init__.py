@@ -59,244 +59,96 @@ class Tensor(Generic[DType]):
     value: Tuple[DType, ...]
 
 
-################################################################################
-# Builtin Constants
-################################################################################
-
-
-@dataclass(frozen=True, init=False)
-class BuiltinConstant(AST):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class BuiltinConstant")
+#################################################################################
+# Dimensions
+#################################################################################
 
 
 @dataclass(frozen=True)
-class Unit(BuiltinConstant):
-    pass
-
-
-@dataclass(frozen=True)
-class NilList(BuiltinConstant):
-    pass
-
-
-################################################################################
-# Builtin Functions
-################################################################################
-
-
-@dataclass(frozen=True, init=False)
-class BuiltinFunction(AST):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class BuiltinFunction")
-
-
-@dataclass(frozen=True)
-class ConsList(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class NotBoolTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class AndBoolTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class OrBoolTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class NegRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class AddRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class SubRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class MulRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class DivRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class EqRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class NeRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class LeRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class LtRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class GeRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class GtRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class PowRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class MinRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class MaxRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class ReduceAndBoolTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class ReduceOrBoolTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class ReduceSumRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class ReduceRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class EqIndex(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class NeIndex(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class LeIndex(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class LtIndex(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class GeIndex(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class GtIndex(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class LookupRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class StackRatTensor(BuiltinFunction):
+class Dimension(AST):
     value: int
 
 
 @dataclass(frozen=True)
-class ConstRatTensor(BuiltinFunction):
-    value: Fraction
-
-
-@dataclass(frozen=True)
-class FoldList(BuiltinFunction):
+class DimensionNil(AST):
     pass
 
 
 @dataclass(frozen=True)
-class MapList(BuiltinFunction):
-    pass
+class DimensionCons(AST):
+    head: Dimension
+    tail: Union["DimensionCons", DimensionNil]
 
 
 @dataclass(frozen=True)
-class MapRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class ZipWithRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class IndicesIndexTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class MinimiseRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class MaximiseRatTensor(BuiltinFunction):
-    pass
-
-
-@dataclass(frozen=True)
-class If(BuiltinFunction):
-    pass
+class DimensionIndex(AST):
+    value: int
 
 
 ################################################################################
-# Builtin Literals
+# Abstract AST Nodes
 ################################################################################
 
 
 @dataclass(frozen=True, init=False)
 class BuiltinLiteral(AST):
+    # Abstract base for literal values
     value: Any
 
     def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class BuiltinLiteral")
+        raise TypeError("Cannot instantiate abstract class")
+
+
+@dataclass(frozen=True, init=False)
+class BuiltinConstant(AST):
+    # Abstract base for constant symbols
+    def __init__(self) -> None:
+        raise TypeError("Cannot instantiate abstract class")
+
+
+@dataclass(frozen=True, init=False)
+class BuiltinType(AST):
+    # Abstract base for built-in type symbols
+    def __init__(self) -> None:
+        raise TypeError("Cannot instantiate abstract class")
+
+
+@dataclass(frozen=True, init=False)
+class Expression(AST):
+    # Abstract base for expression nodes
+    def __init__(self) -> None:
+        raise TypeError("Cannot instantiate abstract class")
+
+
+@dataclass(frozen=True, init=False)
+class BuiltinFunction(Expression):
+    # Abstract base for built-in function symbols
+    def __init__(self) -> None:
+        raise TypeError("Cannot instantiate abstract class")
+
+
+@dataclass(frozen=True, init=False)
+class Declaration(AST, metaclass=ABCMeta):
+    # Abstract base for top-level declarations
+    def __init__(self) -> None:
+        raise TypeError("Cannot instantiate abstract class")
+
+    def get_name(self) -> Name:
+        # Abstract method to get the name of the declaration
+        raise NotImplementedError("Subclasses must implement get_name()")
+
+
+# Type Alias for common Union used in function arguments/bodies
+# ==============================================================================
+
+FunctionInput: TypeAlias = Union[
+    BuiltinFunction, Expression, BuiltinConstant, BuiltinLiteral
+]
+
+
+################################################################################
+# Builtin Literals
+################################################################################
 
 
 @dataclass(frozen=True)
@@ -324,15 +176,40 @@ class RatTensor(BuiltinLiteral):
     value: Tensor[Fraction]
 
 
+@dataclass(frozen=True)
+class RatLiteral(BuiltinLiteral):
+    value: Fraction
+
+
+################################################################################
+# Builtin Constants
+################################################################################
+
+
+@dataclass(frozen=True)
+class Unit(BuiltinConstant):
+    pass
+
+
+@dataclass(frozen=True)
+class ConstTensor(BuiltinConstant):
+    literal: BuiltinLiteral
+    dimension: DimensionCons
+
+
+@dataclass(frozen=True)
+class NilList(BuiltinConstant):
+    pass
+
+
 ################################################################################
 # Builtin Types
 ################################################################################
 
 
-@dataclass(frozen=True, init=False)
-class BuiltinType(AST):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class BuiltinType")
+@dataclass(frozen=True)
+class TensorType(BuiltinType):
+    body: BuiltinType
 
 
 @dataclass(frozen=True)
@@ -346,22 +223,22 @@ class IndexTensorType(BuiltinType):
 
 
 @dataclass(frozen=True)
-class BoolTensorType(BuiltinType):
+class BoolType(BuiltinType):
     pass
 
 
 @dataclass(frozen=True)
-class NatTensorType(BuiltinType):
+class NatType(BuiltinType):
     pass
 
 
 @dataclass(frozen=True)
-class IntTensorType(BuiltinType):
+class IntType(BuiltinType):
     pass
 
 
 @dataclass(frozen=True)
-class RatTensorType(BuiltinType):
+class RatType(BuiltinType):
     pass
 
 
@@ -376,41 +253,250 @@ class UnitType(BuiltinType):
 
 
 ################################################################################
-# Expressions
+# Builtin Functions
 ################################################################################
 
 
-@dataclass(frozen=True, init=False)
-class Expression(AST):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class Expression")
+@dataclass(frozen=True)
+class ConsList(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class NotBoolTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class AndBoolTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class OrBoolTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class NegRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class AddRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class SubRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class MulRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class DivRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class EqRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class NeRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class LeRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class LtRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class GeRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class GtRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class PowRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class MinRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class MaxRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class ReduceAndBoolTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class ReduceOrBoolTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class ReduceSumRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class ReduceRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class ReduceMulRatTensor(BuiltinFunction):
+    body: FunctionInput
+
+
+@dataclass(frozen=True)
+class EqIndex(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class NeIndex(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class LeIndex(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class LtIndex(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class GeIndex(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class GtIndex(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class LookupRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class StackTensor(BuiltinFunction):
+    element_type: BuiltinType
+    dimensions: Union[DimensionCons, DimensionNil]
+    body: FunctionInput
+
+
+@dataclass(frozen=True)
+class ConstRatTensor(BuiltinFunction):
+    body: Fraction
+
+
+@dataclass(frozen=True)
+class FoldList(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class MapList(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class MapRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class ZipWithRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class IndicesIndexTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class MinimiseRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class MaximiseRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class If(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class SearchRatTensor(BuiltinFunction):
+    body: Sequence[FunctionInput]
+
+
+@dataclass(frozen=True)
+class DimensionLookup(BuiltinFunction):
+    body: FunctionInput
+    index: DimensionIndex
+
+
+################################################################################
+# Expressions
+################################################################################
 
 
 @dataclass(frozen=True)
 class Binder(AST):
     provenance: Provenance = field(repr=False)
     name: Optional[Name]
-    type: Expression
+    type: Union[Expression, BuiltinType]
 
 
 @dataclass(frozen=True)
 class Pi(Expression):
-    provenance: Provenance = field(repr=False)
-    binder: Binder
-    body: Expression
+    body: Sequence[Union[Expression, BuiltinType]]
 
 
 @dataclass(frozen=True)
 class Lam(Expression):
-    provenance: Provenance = field(repr=False)
     binder: Binder
-    body: Expression
+    body: BuiltinFunction
 
 
 @dataclass(frozen=True)
 class App(Expression):
     provenance: Provenance = field(repr=False)
-    function: Expression
+    body: Expression
     arguments: Sequence[Expression]
 
 
@@ -418,14 +504,14 @@ class App(Expression):
 class PartialApp(Expression):
     provenance: Provenance = field(repr=False)
     arity: int
-    function: Expression
+    body: Expression
     arguments: Sequence[Expression]
 
 
 @dataclass(frozen=True)
 class Var(Expression):
-    provenance: Provenance = field(repr=False)
     name: Name
+    body: Sequence[FunctionInput]
 
 
 @dataclass(frozen=True)
@@ -437,15 +523,6 @@ class Builtin(Expression):
 ################################################################################
 # Declarations
 ################################################################################
-
-
-@dataclass(frozen=True, init=False)
-class Declaration(AST, metaclass=ABCMeta):
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class Declaration")
-
-    @abstractmethod
-    def get_name(self) -> Name: ...
 
 
 @dataclass(frozen=True)

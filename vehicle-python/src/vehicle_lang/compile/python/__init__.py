@@ -177,8 +177,8 @@ class PythonTranslation(ABCTranslation[py.Module, py.stmt, py.expr]):
     def translate_App(self, expression: vcl.App) -> py.expr:
         # NOTE: We handle Minimise/Maximise as a special case, as we must
         #       extract the name of the bound variable from the lambda binding.
-        if isinstance(expression.function, vcl.Builtin) and isinstance(
-            expression.function.builtin, (vcl.MinimiseRatTensor, vcl.MaximiseRatTensor)
+        if isinstance(expression.body, vcl.Builtin) and isinstance(
+            expression.body.builtin, (vcl.MinimiseRatTensor, vcl.MaximiseRatTensor)
         ):
             if len(expression.arguments) != 2:
                 raise VehicleOptimiseTypeError(expression)
@@ -190,7 +190,7 @@ class PythonTranslation(ABCTranslation[py.Module, py.stmt, py.expr]):
             name = loss.binder.name
             return py_app(
                 py_builtin(
-                    builtin=expression.function.builtin.__class__.__name__,
+                    builtin=expression.body.builtin.__class__.__name__,
                     provenance=expression.provenance,
                 ),
                 # name:
@@ -205,11 +205,11 @@ class PythonTranslation(ABCTranslation[py.Module, py.stmt, py.expr]):
                         #     value=name,
                         #     **asdict(expression.provenance),
                         # )
-                        # for name in expression.function.builtin.context
+                        # for name in expression.body.builtin.context
                     ],
                     values=[
                         # py_name(name, provenance=expression.provenance)
-                        # for name in expression.function.builtin.context
+                        # for name in expression.body.builtin.context
                     ],
                     **asdict(expression.provenance),
                 ),
@@ -221,13 +221,13 @@ class PythonTranslation(ABCTranslation[py.Module, py.stmt, py.expr]):
                 provenance=expression.provenance,
             )
         return py_app(
-            self.translate_expression(expression.function),
+            self.translate_expression(expression.body),
             *map(self.translate_expression, expression.arguments),
             provenance=expression.provenance,
         )
 
     def translate_Var(self, expression: vcl.Var) -> py.expr:
-        return py_name(expression.name, provenance=expression.provenance)
+        return py_name(expression.name)
 
     def translate_Builtin(self, expression: vcl.Builtin) -> py.expr:
         # MINIMISE/MAXIMISE
@@ -295,7 +295,6 @@ class PythonTranslation(ABCTranslation[py.Module, py.stmt, py.expr]):
         return py.Lambda(
             args=py_binder(self.translate_binder(expression.binder)),
             body=self.translate_expression(expression.body),
-            **asdict(expression.provenance),
         )
 
     def translate_Pi(self, _expression: vcl.Pi) -> py.expr:
@@ -303,18 +302,21 @@ class PythonTranslation(ABCTranslation[py.Module, py.stmt, py.expr]):
 
     def translate_PartialApp(self, expression: vcl.PartialApp) -> py.expr:
         return py_partial_app(
-            self.translate_expression(expression.function),
+            self.translate_expression(expression.body),
             *map(self.translate_expression, expression.arguments),
             provenance=expression.provenance,
         )
 
 
-def py_name(name: vcl.Name, *, provenance: vcl.Provenance) -> py.Name:
+def py_name(
+    name: vcl.Name, *, provenance: Union[vcl.Provenance, None] = None
+) -> py.Name:
     """Make a name."""
+    prov_dict = asdict(provenance) if provenance else {}
     return py.Name(
         id=name,
         ctx=py.Load(),
-        **asdict(provenance),
+        **prov_dict,
     )
 
 
