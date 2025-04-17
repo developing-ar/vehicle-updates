@@ -59,91 +59,42 @@ class Tensor(Generic[DType]):
     value: Tuple[DType, ...]
 
 
-#################################################################################
-# Dimensions
-#################################################################################
-
-
-@dataclass(frozen=True)
-class Dimension(AST):
-    value: int
-
-
-@dataclass(frozen=True)
-class DimensionNil(AST):
-    pass
-
-
-@dataclass(frozen=True)
-class DimensionCons(AST):
-    head: Dimension
-    tail: Union["DimensionCons", DimensionNil]
-
-
-@dataclass(frozen=True)
-class DimensionIndex(AST):
-    value: int
-
-
 ################################################################################
-# Abstract AST Nodes
+# Expression
 ################################################################################
-
-
-@dataclass(frozen=True, init=False)
-class BuiltinLiteral(AST):
-    # Abstract base for literal values
-    value: Any
-
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class")
-
-
-@dataclass(frozen=True, init=False)
-class BuiltinConstant(AST):
-    # Abstract base for constant symbols
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class")
-
-
-@dataclass(frozen=True, init=False)
-class BuiltinType(AST):
-    # Abstract base for built-in type symbols
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class")
 
 
 @dataclass(frozen=True, init=False)
 class Expression(AST):
     # Abstract base for expression nodes
     def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class")
+        raise TypeError("Cannot instantiate abstract class Expression")
 
 
-@dataclass(frozen=True, init=False)
-class BuiltinFunction(Expression):
-    # Abstract base for built-in function symbols
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class")
+#################################################################################
+# Dimensions
+#################################################################################
 
 
-@dataclass(frozen=True, init=False)
-class Declaration(AST, metaclass=ABCMeta):
-    # Abstract base for top-level declarations
-    def __init__(self) -> None:
-        raise TypeError("Cannot instantiate abstract class")
-
-    def get_name(self) -> Name:
-        # Abstract method to get the name of the declaration
-        raise NotImplementedError("Subclasses must implement get_name()")
+@dataclass(frozen=True)
+class Dimension(Expression):
+    value: int
 
 
-# Type Alias for common Union used in function arguments/bodies
-# ==============================================================================
+@dataclass(frozen=True)
+class DimensionNil(Expression):
+    pass
 
-FunctionInput: TypeAlias = Union[
-    BuiltinFunction, Expression, BuiltinConstant, BuiltinLiteral
-]
+
+@dataclass(frozen=True)
+class DimensionCons(Expression):
+    head: Dimension
+    tail: Union["DimensionCons", DimensionNil]
+
+
+@dataclass(frozen=True)
+class DimensionIndex(Expression):
+    value: int
 
 
 ################################################################################
@@ -152,32 +103,32 @@ FunctionInput: TypeAlias = Union[
 
 
 @dataclass(frozen=True)
-class Index(BuiltinLiteral):
+class Index(Expression):
     value: int
 
 
 @dataclass(frozen=True)
-class BoolTensor(BuiltinLiteral):
+class BoolTensor(Expression):
     value: Tensor[bool]
 
 
 @dataclass(frozen=True)
-class NatTensor(BuiltinLiteral):
+class NatTensor(Expression):
     value: Tensor[int]
 
 
 @dataclass(frozen=True)
-class IntTensor(BuiltinLiteral):
+class IntTensor(Expression):
     value: Tensor[int]
 
 
 @dataclass(frozen=True)
-class RatTensor(BuiltinLiteral):
+class RatTensor(Expression):
     value: Tensor[Fraction]
 
 
 @dataclass(frozen=True)
-class RatLiteral(BuiltinLiteral):
+class RatLiteral(Expression):
     value: Fraction
 
 
@@ -187,19 +138,9 @@ class RatLiteral(BuiltinLiteral):
 
 
 @dataclass(frozen=True)
-class Unit(BuiltinConstant):
-    pass
-
-
-@dataclass(frozen=True)
-class ConstTensor(BuiltinConstant):
-    literal: BuiltinLiteral
-    dimension: DimensionCons
-
-
-@dataclass(frozen=True)
-class NilList(BuiltinConstant):
-    pass
+class ConstTensor(Expression):
+    body: Expression
+    dimension: Expression
 
 
 ################################################################################
@@ -208,47 +149,47 @@ class NilList(BuiltinConstant):
 
 
 @dataclass(frozen=True)
-class TensorType(BuiltinType):
-    body: BuiltinType
+class TensorType(Expression):
+    body: Expression
 
 
 @dataclass(frozen=True)
-class IndexType(BuiltinType):
+class IndexType(Expression):
     pass
 
 
 @dataclass(frozen=True)
-class IndexTensorType(BuiltinType):
+class IndexTensorType(Expression):
     pass
 
 
 @dataclass(frozen=True)
-class BoolType(BuiltinType):
+class BoolType(Expression):
     pass
 
 
 @dataclass(frozen=True)
-class NatType(BuiltinType):
+class NatType(Expression):
     pass
 
 
 @dataclass(frozen=True)
-class IntType(BuiltinType):
+class IntType(Expression):
     pass
 
 
 @dataclass(frozen=True)
-class RatType(BuiltinType):
+class RatType(Expression):
     pass
 
 
 @dataclass(frozen=True)
-class ListType(BuiltinType):
+class ListType(Expression):
     pass
 
 
 @dataclass(frozen=True)
-class UnitType(BuiltinType):
+class UnitType(Expression):
     pass
 
 
@@ -258,220 +199,218 @@ class UnitType(BuiltinType):
 
 
 @dataclass(frozen=True)
-class ConsList(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class ConsList(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class NotBoolTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class NotBoolTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class AndBoolTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class AndBoolTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class OrBoolTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class OrBoolTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class NegRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class NegRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class AddRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class AddRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class SubRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class SubRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class MulRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class MulRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class DivRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class DivRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class EqRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class EqRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class NeRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class NeRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class LeRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class LeRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class LtRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class LtRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class GeRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class GeRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class GtRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class GtRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class PowRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class PowRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class MinRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class MinRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class MaxRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class MaxRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class ReduceAndBoolTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class ReduceAndBoolTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class ReduceOrBoolTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class ReduceOrBoolTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class ReduceSumRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class ReduceSumRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class ReduceRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class ReduceRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class ReduceMulRatTensor(BuiltinFunction):
-    body: FunctionInput
+class ReduceMulRatTensor(Expression):
+    body: Expression
 
 
 @dataclass(frozen=True)
-class EqIndex(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class EqIndex(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class NeIndex(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class NeIndex(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class LeIndex(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class LeIndex(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class LtIndex(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class LtIndex(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class GeIndex(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class GeIndex(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class GtIndex(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class GtIndex(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class LookupRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class LookupRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class StackTensor(BuiltinFunction):
-    element_type: BuiltinType
-    dimensions: Union[DimensionCons, DimensionNil]
-    body: FunctionInput
+class StackTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class ConstRatTensor(BuiltinFunction):
+class ConstRatTensor(Expression):
     body: Fraction
 
 
 @dataclass(frozen=True)
-class FoldList(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class FoldList(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class MapList(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class MapList(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class MapRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class MapRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class ZipWithRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class ZipWithRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class IndicesIndexTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class IndicesIndexTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class MinimiseRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class MinimiseRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class MaximiseRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class MaximiseRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class If(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class If(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class SearchRatTensor(BuiltinFunction):
-    body: Sequence[FunctionInput]
+class SearchRatTensor(Expression):
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
-class DimensionLookup(BuiltinFunction):
-    body: FunctionInput
+class DimensionLookup(Expression):
+    body: Expression
     index: DimensionIndex
 
 
 ################################################################################
-# Expressions
+# Variables
 ################################################################################
 
 
@@ -479,18 +418,18 @@ class DimensionLookup(BuiltinFunction):
 class Binder(AST):
     provenance: Provenance = field(repr=False)
     name: Optional[Name]
-    type: Union[Expression, BuiltinType]
+    type: Union[Expression, Expression]
 
 
 @dataclass(frozen=True)
 class Pi(Expression):
-    body: Sequence[Union[Expression, BuiltinType]]
+    body: Sequence[Expression]
 
 
 @dataclass(frozen=True)
 class Lam(Expression):
     binder: Binder
-    body: BuiltinFunction
+    body: Expression
 
 
 @dataclass(frozen=True)
@@ -511,18 +450,23 @@ class PartialApp(Expression):
 @dataclass(frozen=True)
 class Var(Expression):
     name: Name
-    body: Sequence[FunctionInput]
-
-
-@dataclass(frozen=True)
-class Builtin(Expression):
-    provenance: Provenance = field(repr=False)
-    builtin: Union[BuiltinConstant, BuiltinFunction, BuiltinLiteral, BuiltinType]
+    body: Sequence[Expression]
 
 
 ################################################################################
 # Declarations
 ################################################################################
+
+
+@dataclass(frozen=True, init=False)
+class Declaration(AST, metaclass=ABCMeta):
+    # Abstract base for top-level declarations
+    def __init__(self) -> None:
+        raise TypeError("Cannot instantiate abstract class Declaration")
+
+    def get_name(self) -> Name:
+        # Abstract method to get the name of the declaration
+        raise NotImplementedError("Subclasses must implement get_name()")
 
 
 @dataclass(frozen=True)
