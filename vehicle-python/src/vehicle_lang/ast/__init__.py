@@ -88,8 +88,8 @@ class DimensionNil(Expression):
 
 @dataclass(frozen=True)
 class DimensionCons(Expression):
-    head: Dimension
-    tail: Union["DimensionCons", DimensionNil]
+    head: Expression
+    tail: Expression
 
 
 @dataclass(frozen=True)
@@ -97,29 +97,31 @@ class DimensionIndex(Expression):
     value: int
 
 
+@dataclass(frozen=True)
+class DimensionIndexTensor(Expression):
+    body: Tensor[int]
+
+
+@dataclass(frozen=True)
+class DimensionLookup(Expression):
+    body: Expression
+    index: DimensionIndex
+
+
+@dataclass(frozen=True)
+class ConstTensor(Expression):
+    body: Expression
+    dimension: Expression
+
+
+@dataclass(frozen=True)
+class StackTensor(Expression):
+    body: Sequence[Expression]
+
+
 ################################################################################
-# Builtin Literals
+# Rational tensors
 ################################################################################
-
-
-@dataclass(frozen=True)
-class Index(Expression):
-    value: int
-
-
-@dataclass(frozen=True)
-class BoolTensor(Expression):
-    value: Tensor[bool]
-
-
-@dataclass(frozen=True)
-class NatTensor(Expression):
-    value: Tensor[int]
-
-
-@dataclass(frozen=True)
-class IntTensor(Expression):
-    value: Tensor[int]
 
 
 @dataclass(frozen=True)
@@ -132,180 +134,50 @@ class RatLiteral(Expression):
     value: Fraction
 
 
-################################################################################
-# Builtin Constants
-################################################################################
-
-
-@dataclass(frozen=True)
-class ConstTensor(Expression):
-    body: Expression
-    dimension: Expression
-
-
-################################################################################
-# Builtin Types
-################################################################################
-
-
-@dataclass(frozen=True)
-class TensorType(Expression):
-    body: Expression
-
-
-@dataclass(frozen=True)
-class IndexType(Expression):
-    pass
-
-
-@dataclass(frozen=True)
-class IndexTensorType(Expression):
-    pass
-
-
-@dataclass(frozen=True)
-class BoolType(Expression):
-    pass
-
-
-@dataclass(frozen=True)
-class NatType(Expression):
-    pass
-
-
-@dataclass(frozen=True)
-class IntType(Expression):
-    pass
-
-
-@dataclass(frozen=True)
-class RatType(Expression):
-    pass
-
-
-@dataclass(frozen=True)
-class ListType(Expression):
-    pass
-
-
-@dataclass(frozen=True)
-class UnitType(Expression):
-    pass
-
-
-################################################################################
-# Builtin Functions
-################################################################################
-
-
-@dataclass(frozen=True)
-class ConsList(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class NotBoolTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class AndBoolTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class OrBoolTensor(Expression):
-    body: Sequence[Expression]
-
-
 @dataclass(frozen=True)
 class NegRatTensor(Expression):
-    body: Sequence[Expression]
+    body: Expression
 
 
 @dataclass(frozen=True)
 class AddRatTensor(Expression):
-    body: Sequence[Expression]
+    arg1: Expression
+    arg2: Expression
 
 
 @dataclass(frozen=True)
 class SubRatTensor(Expression):
-    body: Sequence[Expression]
+    arg1: Expression
+    arg2: Expression
 
 
 @dataclass(frozen=True)
 class MulRatTensor(Expression):
-    body: Sequence[Expression]
+    arg1: Expression
+    arg2: Expression
 
 
 @dataclass(frozen=True)
 class DivRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class EqRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class NeRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class LeRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class LtRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class GeRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class GtRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class PowRatTensor(Expression):
-    body: Sequence[Expression]
+    arg1: Expression
+    arg2: Expression
 
 
 @dataclass(frozen=True)
 class MinRatTensor(Expression):
-    body: Sequence[Expression]
+    arg1: Expression
+    arg2: Expression
 
 
 @dataclass(frozen=True)
 class MaxRatTensor(Expression):
-    body: Sequence[Expression]
+    arg1: Expression
+    arg2: Expression
 
 
 @dataclass(frozen=True)
-class ReduceAndBoolTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class ReduceOrBoolTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class ReduceSumRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class ReduceRatTensor(Expression):
-    body: Sequence[Expression]
+class ReduceAddRatTensor(Expression):
+    body: Expression
 
 
 @dataclass(frozen=True)
@@ -314,103 +186,25 @@ class ReduceMulRatTensor(Expression):
 
 
 @dataclass(frozen=True)
-class EqIndex(Expression):
-    body: Sequence[Expression]
+class ReduceMinRatTensor(Expression):
+    body: Expression
 
 
 @dataclass(frozen=True)
-class NeIndex(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class LeIndex(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class LtIndex(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class GeIndex(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class GtIndex(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class LookupRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class StackTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class ConstRatTensor(Expression):
-    body: Fraction
-
-
-@dataclass(frozen=True)
-class FoldList(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class MapList(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class MapRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class ZipWithRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class IndicesIndexTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class MinimiseRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class MaximiseRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class If(Expression):
-    body: Sequence[Expression]
+class ReduceMaxRatTensor(Expression):
+    body: Expression
 
 
 @dataclass(frozen=True)
 class SearchRatTensor(Expression):
-    body: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class DimensionLookup(Expression):
-    body: Expression
-    index: DimensionIndex
+    reductionOp: Expression
+    lowerBound: Expression
+    upperBound: Expression
+    searchLambda: Expression
 
 
 ################################################################################
-# Variables
+# Binder
 ################################################################################
 
 
@@ -418,12 +212,18 @@ class DimensionLookup(Expression):
 class Binder(AST):
     provenance: Provenance = field(repr=False)
     name: Optional[Name]
-    type: Union[Expression, Expression]
+    type: Expression
+
+
+################################################################################
+# Types
+################################################################################
 
 
 @dataclass(frozen=True)
 class Pi(Expression):
-    body: Sequence[Expression]
+    arg1: Expression
+    arg2: Expression
 
 
 @dataclass(frozen=True)
@@ -433,24 +233,19 @@ class Lam(Expression):
 
 
 @dataclass(frozen=True)
-class App(Expression):
-    provenance: Provenance = field(repr=False)
-    body: Expression
-    arguments: Sequence[Expression]
-
-
-@dataclass(frozen=True)
-class PartialApp(Expression):
-    provenance: Provenance = field(repr=False)
-    arity: int
-    body: Expression
-    arguments: Sequence[Expression]
-
-
-@dataclass(frozen=True)
 class Var(Expression):
     name: Name
     body: Sequence[Expression]
+
+
+@dataclass(frozen=True)
+class RatType(Expression):
+    pass
+
+
+@dataclass(frozen=True)
+class TensorType(Expression):
+    body: Expression
 
 
 ################################################################################
