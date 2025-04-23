@@ -42,9 +42,10 @@ import Options.Applicative
     switch,
     value,
   )
-import Vehicle.Backend.Prelude (DifferentiableLogicID, ITP, Target (..), TypingSystem (..), findTarget)
+import Vehicle.Backend.Prelude (DifferentiableLogicID, ITP, ListableEntities (..), Target (..), TypingSystem (..), findTarget)
 import Vehicle.Compile (CompileOptions (..))
 import Vehicle.Export (ExportOptions (..))
+import Vehicle.List (ListOptions (..))
 import Vehicle.Prelude
   ( Doc,
     enumerate,
@@ -94,6 +95,7 @@ data ModeOptions
   | Verify VerifyOptions
   | Validate ValidateOptions
   | Export ExportOptions
+  | List ListOptions
   deriving (Eq, Show)
 
 --------------------------------------------------------------------------------
@@ -167,6 +169,7 @@ modeOptionsParser =
         <> command "verify" verifyParserInfo
         <> command "validate" validateParserInfo
         <> command "export" exportParserInfo
+        <> command "list" listParserInfo
 
 --------------------------------------------------------------------------------
 -- Check mode
@@ -187,6 +190,27 @@ typeCheckParser =
 
 typeCheckParserInfo :: ParserInfo ModeOptions
 typeCheckParserInfo = info (Check <$> typeCheckParser) typeCheckDescription
+
+--------------------------------------------------------------------------------
+-- List mode
+
+listDescription :: InfoMod ModeOptions
+listDescription =
+  progDesc $
+    "List entities for a "
+      <> specificationFileExtension
+      <> " specification file"
+      <> "."
+
+listParser :: Parser ListOptions
+listParser =
+  ListOptions
+    <$> listModeParser
+    <*> specificationParser
+    <*> outputAsJSONParser
+
+listParserInfo :: ParserInfo ModeOptions
+listParserInfo = info (List <$> listParser) listDescription
 
 --------------------------------------------------------------------------------
 -- Compile mode
@@ -375,6 +399,22 @@ typeSystemParser =
               )
         )
       <> value Standard
+
+listModeParser :: Parser ListableEntities
+listModeParser =
+  hsubparser $
+    command
+      "resources"
+      ( info
+          (pure ExternalResources)
+          (progDesc "List all networks, datasets, and parameters in the specification.")
+      )
+      <> command
+        "properties"
+        ( info
+            (pure Properties)
+            (progDesc "List all properties in the specification.")
+        )
 
 specificationParser :: Parser FilePath
 specificationParser =
