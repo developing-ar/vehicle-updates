@@ -320,7 +320,7 @@ compileTensorVariable compileQueryVar boundCtx usedNetworkTensorVariables metaNe
     Just inputOrOutput | tensorVar `Set.member` usedNetworkTensorVariables -> do
       let tensorSize = product tensorVariableShape
       let startingIndex = length $ if inputOrOutput == Input then networkInputVariables else networkOutputVariables
-      let queryVariables = concatMap (\metaNetworkEntry -> fmap (compileQueryVar metaNetworkEntry inputOrOutput) ([startingIndex .. startingIndex + tensorSize] :: [Int])) metaNetwork
+      let queryVariables = concatMap (\(metaNetworkEntry, metaNetworkIndex) -> fmap (compileQueryVar metaNetworkEntry inputOrOutput metaNetworkIndex) ([startingIndex .. startingIndex + tensorSize] :: [Int])) (zip metaNetwork [0 ..])
       let elementEntries = zipWith (\v q -> (v, lookupVar v, Just q)) elementVariables queryVariables
       case inputOrOutput of
         Input -> return (elementVariables, mempty, elementEntries)

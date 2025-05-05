@@ -41,7 +41,7 @@ outputFormat =
 
 -- | Compiles an individual variable
 compileMarabouVar :: CompileQueryVariable
-compileMarabouVar _metaNetworkEntry inputOrOutput ioIndex = do
+compileMarabouVar _metaNetworkEntry inputOrOutput _metaNetworkIndex ioIndex = do
   let name = if inputOrOutput == Input then "x" else "y"
   layoutAsText $ name <> pretty ioIndex
 

@@ -18,6 +18,8 @@ type CompileQueryVariable =
   InputOrOutput ->
   -- The shape of the overall tensor that contains the element variable.
   -- TensorShape ->
+  -- The location of the meta network entry in the network application.
+  Int ->
   -- The location of the element variable in the overall tensor.
   -- TensorIndices ->
   -- The position of the variable in the list of all input/output variables
