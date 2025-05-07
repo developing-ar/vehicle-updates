@@ -1,0 +1,349 @@
+{
+  "queryMetaData": {
+    "tag": "NonTrivial",
+    "contents": {
+      "tag": "Query",
+      "contents": {
+        "queries": {
+          "unDisjunctAll": [
+            {
+              "variableReconstruction": {
+                "variableStore": [
+                  [
+                    0,
+                    "x",
+                    null
+                  ],
+                  [
+                    1,
+                    "x!0",
+                    null
+                  ],
+                  [
+                    2,
+                    "x!1",
+                    null
+                  ],
+                  [
+                    3,
+                    "controller₀[input]",
+                    null
+                  ],
+                  [
+                    4,
+                    "controller₀[input]!0",
+                    "controller@0X_0"
+                  ],
+                  [
+                    5,
+                    "controller₀[input]!1",
+                    "controller@0X_1"
+                  ],
+                  [
+                    6,
+                    "controller₀[output]",
+                    null
+                  ],
+                  [
+                    7,
+                    "controller₀[output]!0",
+                    "controller@0Y_0"
+                  ]
+                ],
+                "reconstructionSteps": [
+                  {
+                    "tag": "ReconstructTensor",
+                    "contents": [
+                      "OtherVariable",
+                      [
+                        2
+                      ],
+                      3,
+                      [
+                        4,
+                        5
+                      ]
+                    ]
+                  },
+                  {
+                    "tag": "ReconstructTensor",
+                    "contents": [
+                      "OtherVariable",
+                      [
+                        1
+                      ],
+                      6,
+                      [
+                        7
+                      ]
+                    ]
+                  },
+                  {
+                    "tag": "SolveRationalEquality",
+                    "contents": [
+                      2,
+                      {
+                        "constantValue": {
+                          "value": [
+                            {
+                              "numerator": -4,
+                              "denominator": 1
+                            }
+                          ],
+                          "tag": "Tensor",
+                          "shape": []
+                        },
+                        "coefficients": {
+                          "5": {
+                            "numerator": 8,
+                            "denominator": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "SolveRationalEquality",
+                    "contents": [
+                      1,
+                      {
+                        "constantValue": {
+                          "value": [
+                            {
+                              "numerator": -4,
+                              "denominator": 1
+                            }
+                          ],
+                          "tag": "Tensor",
+                          "shape": []
+                        },
+                        "coefficients": {
+                          "4": {
+                            "numerator": 8,
+                            "denominator": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "ReconstructTensor",
+                    "contents": [
+                      "UserVariable",
+                      [
+                        2
+                      ],
+                      0,
+                      [
+                        1,
+                        2
+                      ]
+                    ]
+                  }
+                ]
+              },
+              "queryAddress": [
+                {
+                  "propertyName": "safe",
+                  "propertyIndices": [],
+                  "propertyID": 0
+                },
+                1
+              ],
+              "metaNetwork": [
+                {
+                  "metaNetworkEntryName": "controller",
+                  "metaNetworkEntryInfo": {
+                    "networkType": {
+                      "outputTensor": {
+                        "dimensions": [
+                          1
+                        ],
+                        "baseType": []
+                      },
+                      "inputTensor": {
+                        "dimensions": [
+                          2
+                        ],
+                        "baseType": []
+                      }
+                    },
+                    "networkFilepath": "controller.onnx"
+                  }
+                }
+              ]
+            },
+            {
+              "variableReconstruction": {
+                "variableStore": [
+                  [
+                    0,
+                    "x",
+                    null
+                  ],
+                  [
+                    1,
+                    "x!0",
+                    null
+                  ],
+                  [
+                    2,
+                    "x!1",
+                    null
+                  ],
+                  [
+                    3,
+                    "controller₀[input]",
+                    null
+                  ],
+                  [
+                    4,
+                    "controller₀[input]!0",
+                    "controller@0X_0"
+                  ],
+                  [
+                    5,
+                    "controller₀[input]!1",
+                    "controller@0X_1"
+                  ],
+                  [
+                    6,
+                    "controller₀[output]",
+                    null
+                  ],
+                  [
+                    7,
+                    "controller₀[output]!0",
+                    "controller@0Y_0"
+                  ]
+                ],
+                "reconstructionSteps": [
+                  {
+                    "tag": "ReconstructTensor",
+                    "contents": [
+                      "OtherVariable",
+                      [
+                        2
+                      ],
+                      3,
+                      [
+                        4,
+                        5
+                      ]
+                    ]
+                  },
+                  {
+                    "tag": "ReconstructTensor",
+                    "contents": [
+                      "OtherVariable",
+                      [
+                        1
+                      ],
+                      6,
+                      [
+                        7
+                      ]
+                    ]
+                  },
+                  {
+                    "tag": "SolveRationalEquality",
+                    "contents": [
+                      2,
+                      {
+                        "constantValue": {
+                          "value": [
+                            {
+                              "numerator": -4,
+                              "denominator": 1
+                            }
+                          ],
+                          "tag": "Tensor",
+                          "shape": []
+                        },
+                        "coefficients": {
+                          "5": {
+                            "numerator": 8,
+                            "denominator": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "SolveRationalEquality",
+                    "contents": [
+                      1,
+                      {
+                        "constantValue": {
+                          "value": [
+                            {
+                              "numerator": -4,
+                              "denominator": 1
+                            }
+                          ],
+                          "tag": "Tensor",
+                          "shape": []
+                        },
+                        "coefficients": {
+                          "4": {
+                            "numerator": 8,
+                            "denominator": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "ReconstructTensor",
+                    "contents": [
+                      "UserVariable",
+                      [
+                        2
+                      ],
+                      0,
+                      [
+                        1,
+                        2
+                      ]
+                    ]
+                  }
+                ]
+              },
+              "queryAddress": [
+                {
+                  "propertyName": "safe",
+                  "propertyIndices": [],
+                  "propertyID": 0
+                },
+                2
+              ],
+              "metaNetwork": [
+                {
+                  "metaNetworkEntryName": "controller",
+                  "metaNetworkEntryInfo": {
+                    "networkType": {
+                      "outputTensor": {
+                        "dimensions": [
+                          1
+                        ],
+                        "baseType": []
+                      },
+                      "inputTensor": {
+                        "dimensions": [
+                          2
+                        ],
+                        "baseType": []
+                      }
+                    },
+                    "networkFilepath": "controller.onnx"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "negated": true
+      }
+    }
+  }
+}

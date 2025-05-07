@@ -15,6 +15,15 @@
     "needs": ["spec.vcl"]
   },
   {
+    "name": "VNNLib",
+    "run": "vehicle compile -s spec.vcl -t VNNLibQueries -o VNNLib.queries/ --network controller:controller.onnx",
+    "needs": ["spec.vcl", "controller.onnx"],
+    "produces": ["VNNLib.queries/*.txt", "VNNLib.queries/*.vcl-plan"],
+    "ignore": {
+      "lines": ".*\"fileHash\".*"
+    }
+  },
+  {
     "name": "Marabou",
     "run": "vehicle compile -s spec.vcl -t MarabouQueries -o Marabou.queries/ --network controller:controller.onnx",
     "needs": ["spec.vcl", "controller.onnx"],
