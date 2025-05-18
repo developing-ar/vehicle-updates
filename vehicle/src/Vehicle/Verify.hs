@@ -30,7 +30,9 @@ data VerifyOptions = VerifyOptions
     verifierID :: VerifierID,
     verifierLocation :: Maybe VerifierExecutable,
     verifierExtraArgs :: Maybe String,
-    noSatPrint :: Bool
+    noSatPrint :: Bool,
+    -- Logging options
+    outputAsJSON :: Bool
   }
   deriving (Eq, Show)
 
@@ -38,12 +40,12 @@ verify :: (MonadStdIO IO) => LoggingSettings -> VerifyOptions -> IO ()
 verify loggingSettings options@VerifyOptions {..} = do
   validQueryFolder <- isValidQueryFolder specification
   if validQueryFolder
-    then verifyQueries loggingSettings specification verifierID verifierLocation verifierExtraArgs noSatPrint
+    then verifyQueries loggingSettings specification verifierID verifierLocation verifierExtraArgs noSatPrint outputAsJSON
     else
       if takeExtension specification /= specificationFileExtension
         then fatalError (invalidTargetError specification)
         else compileAndVerifyQueries loggingSettings options $ \folder ->
-          verifyQueries loggingSettings folder verifierID verifierLocation verifierExtraArgs noSatPrint
+          verifyQueries loggingSettings folder verifierID verifierLocation verifierExtraArgs noSatPrint outputAsJSON
 
 -- | Compiles the specification to a temporary directory and then tries to verify it.
 compileAndVerifyQueries :: (MonadStdIO IO) => LoggingSettings -> VerifyOptions -> (FilePath -> IO ()) -> IO ()
@@ -69,13 +71,13 @@ compileAndVerifyQueries loggingSettings VerifyOptions {..} verifyCommand = do
 
     verifyCommand tempDir
 
-verifyQueries :: (MonadStdIO IO) => LoggingSettings -> FilePath -> VerifierID -> Maybe VerifierExecutable -> Maybe String -> Bool -> IO ()
-verifyQueries loggingSettings queryFolder verifierID verifierLocation maybeVerifierExtraArgs noSatOutputs = do
+verifyQueries :: (MonadStdIO IO) => LoggingSettings -> FilePath -> VerifierID -> Maybe VerifierExecutable -> Maybe String -> Bool -> Bool -> IO ()
+verifyQueries loggingSettings queryFolder verifierID verifierLocation maybeVerifierExtraArgs noSatOutputs jsonOutput = do
   -- Create the verification settings
   let verifier = verifiers verifierID
   verifierExecutable <- locateVerifierExecutable verifier verifierLocation
   let verifierExtraArgs = maybe [] words maybeVerifierExtraArgs
-  let verifierSettings = VerifierSettings verifier verifierExecutable verifierExtraArgs noSatOutputs
+  let verifierSettings = VerifierSettings verifier verifierExecutable verifierExtraArgs noSatOutputs jsonOutput
   -- Run verification
   runLoggerT loggingSettings $ verifySpecification verifierSettings queryFolder
 

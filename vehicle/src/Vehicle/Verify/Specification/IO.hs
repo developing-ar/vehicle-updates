@@ -18,11 +18,12 @@ import Control.Monad.Except (MonadError (..), runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..))
 import Control.Monad.Writer (MonadWriter (..), WriterT (..), execWriterT)
-import Data.Aeson (decode)
+import Data.Aeson (ToJSON (..), decode, object, (.=))
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy qualified as BIO
 import Data.IDX (encodeIDXFile)
 import Data.IDX.Internal
+import Data.Text.Lazy (unpack)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map qualified as Map
 import Data.Monoid (Sum (..))
@@ -244,6 +245,15 @@ data MultiPropertyStats = MultiPropertyStats
     numberErrored :: Int
   }
 
+instance ToJSON MultiPropertyStats where
+  toJSON MultiPropertyStats {..} =
+    object
+      [ "verified" .= (numberVerified :: Int),
+        "falsified" .= (numberFalsified :: Int),
+        "timed_out" .= (numberTimedOut :: Int),
+        "errored" .= (numberErrored :: Int)
+      ]
+
 instance Semigroup MultiPropertyStats where
   s1 <> s2 =
     MultiPropertyStats
@@ -262,8 +272,8 @@ instance Monoid MultiPropertyStats where
         numberErrored = 0
       }
 
-outputStats :: (MonadVerify m) => PropertyName -> MultiPropertyStats -> m ()
-outputStats name MultiPropertyStats {..} = do
+outputStats :: (MonadVerify m) => PropertyName -> MultiPropertyStats -> Bool -> m ()
+outputStats name MultiPropertyStats {..} outputAsJSON = do
   let results =
         [ ("verified", numberVerified),
           ("falsified", numberFalsified),
@@ -273,10 +283,21 @@ outputStats name MultiPropertyStats {..} = do
           [(String, Int)]
   let totalSize = sum $ fmap snd results
   when (totalSize > 1) $ do
-    let maxTextLength = maximum $ fmap (length . fst) results
-    let prettyResult (t, x) = fill (maxTextLength + 1) (pretty t <> ":") <+> pretty x <> "/" <> pretty totalSize
-    let finalDoc = pretty name <> ":" <> line <> indent 4 (vsep (fmap prettyResult results))
-    programOutput $ "  " <> finalDoc
+    let finalDoc =
+          if outputAsJSON
+            then
+              let resultsJSON =
+                    object
+                      [ "property" .= (show name :: String),
+                        "stats" .= toJSON MultiPropertyStats {..},
+                        "total" .= (totalSize :: Int)
+                      ]
+               in pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON resultsJSON
+            else
+              let maxTextLength = maximum $ fmap (length . fst) results
+                  prettyResult (t, x) = fill (maxTextLength + 1) (pretty t <> ":") <+> pretty x <> "/" <> pretty totalSize
+               in "  " <> pretty name <> ":" <> line <> indent 4 (vsep (fmap prettyResult results))
+    programOutput finalDoc
 
 logPropertyStatus :: (MonadWriter MultiPropertyStats m) => PropertyStatus -> m ()
 logPropertyStatus status = tell $ case status of
@@ -293,7 +314,8 @@ data VerifierSettings = VerifierSettings
   { verifier :: Verifier,
     verifierExecutable :: VerifierExecutable,
     verifierExtraArgs :: [String],
-    noSatPrint :: Bool
+    noSatPrint :: Bool,
+    outputAsJSON :: Bool
   }
 
 type MonadVerify m =
@@ -331,7 +353,7 @@ verifySpecification verifierSettings queryFolder = do
     Just err -> programOutput $ "Resource error:" <+> pretty err
     Nothing -> forM_ properties $ \(name, multiProperty) -> do
       stats <- execWriterT $ verifyMultiproperty verifierSettings queryFolder multiProperty
-      outputStats name stats
+      outputStats name stats $ outputAsJSON verifierSettings
 
 verifyMultiproperty ::
   (MonadVerify m, MonadWriter MultiPropertyStats m) =>

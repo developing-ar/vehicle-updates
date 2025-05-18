@@ -260,6 +260,7 @@ verifyParser =
     <*> verifierLocationParser
     <*> verifierExtraArgsParser
     <*> noSatPrintParser
+    <*> outputAsJSONParser
 
 verifyParserInfo :: ParserInfo ModeOptions
 verifyParserInfo = info (Verify <$> verifyParser) verifyDescription
