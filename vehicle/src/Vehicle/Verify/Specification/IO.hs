@@ -655,7 +655,7 @@ closePropertyProgressBar _progressBar = VIO.writeStdoutLn ""
 readAssignmentsFromFolder ::
   (MonadIO m) =>
   FilePath ->
-  m [(Name, RationalTensor)]
+  m [(String, RationalTensor)]
 readAssignmentsFromFolder assignmentsFolder = do
   exists <- liftIO $ doesDirectoryExist assignmentsFolder
   if not exists
@@ -667,6 +667,6 @@ readAssignmentsFromFolder assignmentsFolder = do
         case idxData of
           Just (IDXDoubles _ dims values) ->
             let boxedValues = BoxedVector.fromList (fmap realToFrac (Vector.toList values))
-             in return (pack $ show file, Tensor (Vector.toList dims) boxedValues)
+             in return (file, Tensor (Vector.toList dims) boxedValues)
           _ -> fatalError $ "Unsupported IDX data format in file: " <+> quotePretty file
       return assignments

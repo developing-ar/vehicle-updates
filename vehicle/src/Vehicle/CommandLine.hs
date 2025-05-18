@@ -276,6 +276,8 @@ validateParser :: Parser ValidateOptions
 validateParser =
   ValidateOptions
     <$> validateCacheParser
+    <*> outputAsJSONParser
+    <*> outputCounterExamplesParser
 
 validateParserInfo :: ParserInfo ModeOptions
 validateParserInfo = info (Validate <$> validateParser) validateDescription
@@ -492,6 +494,14 @@ outputAsJSONParser =
     long "json"
       <> short 'j'
       <> help "Output the program as JSON instead of text."
+      <> internal
+
+outputCounterExamplesParser :: Parser Bool
+outputCounterExamplesParser =
+  switch $
+    long "counter-examples"
+      <> short 'x'
+      <> help "Decode the counter-examples in the validate cache."
       <> internal
 
 propertyParser :: Parser [Text]

@@ -4,19 +4,27 @@ module Vehicle.Validate
   )
 where
 
-import Control.Monad (forM)
+import Control.Monad (forM, when)
 import Control.Monad.Trans (MonadIO (liftIO))
+import Data.Aeson (ToJSON (..), Value (Object), object, (.=))
+import Data.Aeson.Encode.Pretty (encodePretty')
+import Data.Aeson.Key (fromString)
+import Data.ByteString.Lazy.Char8 (unpack)
+import System.FilePath ((</>))
+import Vehicle.Data.Tensor (RationalTensor)
 import Vehicle.Prelude
 import Vehicle.Prelude.Logging
 import Vehicle.Resource
 import Vehicle.Verify.Specification (SpecificationCacheIndex (..), multiPropertyAddresses, properties)
-import Vehicle.Verify.Specification.IO (readPropertyResult, readSpecificationCacheIndex, specificationCacheIndexFileName)
+import Vehicle.Verify.Specification.IO (readAssignmentsFromFolder, readPropertyResult, readSpecificationCacheIndex, specificationCacheIndexFileName)
 
 --------------------------------------------------------------------------------
 -- Proof validation
 
-newtype ValidateOptions = ValidateOptions
-  { verificationCache :: FilePath
+data ValidateOptions = ValidateOptions
+  { verificationCache :: FilePath,
+    outputAsJSON :: Bool,
+    outputCounterExamples :: Bool
   }
   deriving (Eq, Show)
 
@@ -25,7 +33,22 @@ validate loggingSettings checkOptions = runLoggerT loggingSettings $ do
   -- If the user has specified no logging target for check mode then
   -- default to command-line.
   status <- checkSpecificationStatus checkOptions
-  programOutput $ pretty status
+  counterExamples <- collectCounterexamples checkOptions
+
+  if outputAsJSON checkOptions
+    then do
+      let statusJSON =
+            if outputCounterExamples checkOptions
+              then case toJSON status of
+                Object o -> Object (o <> case toJSON (object ["counter-examples" .= toJSON counterExamples]) of Object o' -> o'; _ -> mempty)
+                v -> v
+              else toJSON status
+      programOutput $ pretty $ unpack $ encodePretty' prettyJSONConfig statusJSON
+    else do
+      -- Pretty print the status and counter-examples
+      programOutput $ pretty status
+      when (outputCounterExamples checkOptions) $ do
+        programOutput $ line <> "Counterexamples:" <> line <> pretty counterExamples
 
 checkSpecificationStatus ::
   (MonadIO m, MonadLogger m) =>
@@ -44,6 +67,18 @@ checkSpecificationStatus ValidateOptions {..} = do
         then return Verified
         else return Unverified
 
+-- | Collect counterexamples for all assignments in the verification cache.
+collectCounterexamples :: (MonadStdIO m, MonadLogger m) => ValidateOptions -> m [CounterExampleResult]
+collectCounterexamples ValidateOptions {..} = do
+  let cacheIndexFile = specificationCacheIndexFileName verificationCache
+  SpecificationCacheIndex {..} <- readSpecificationCacheIndex cacheIndexFile
+  let propertyAddresses = concatMap (multiPropertyAddresses . snd) properties
+  results <- forM propertyAddresses $ \addr -> do
+    let assignmentsFolder = verificationCache </> layoutAsString (pretty addr) <> "-assignments"
+    assignments <- readAssignmentsFromFolder assignmentsFolder
+    return $ CounterExampleResult assignments (show $ pretty addr)
+  return results
+
 data ValidateResult
   = Verified
   | Unverified
@@ -53,3 +88,33 @@ instance Pretty ValidateResult where
   pretty Verified = "Status: verified"
   pretty Unverified = "Status: unverified"
   pretty (IntegrityError err) = "Status: unknown" <> line <> line <> pretty err
+
+instance ToJSON ValidateResult where
+  toJSON validateResult = case validateResult of
+    Verified -> object ["status" .= ("verified" :: String)]
+    Unverified -> object ["status" .= ("unverified" :: String)]
+    IntegrityError err ->
+      object
+        [ "status" .= ("unknown" :: String),
+          "error" .= (show $ pretty err :: String)
+        ]
+
+data CounterExampleResult
+  = CounterExampleResult
+  { assignments :: [(String, RationalTensor)],
+    property :: String
+  }
+  deriving (Show, Eq)
+
+instance Pretty CounterExampleResult where
+  pretty (CounterExampleResult assignments propertyName) =
+    pretty propertyName
+      <> line
+      <> vsep (map (\(name, tensor) -> indent 2 $ pretty name <> ": " <> pretty tensor) assignments)
+
+instance ToJSON CounterExampleResult where
+  toJSON (CounterExampleResult assignments propertyName) =
+    object
+      [ "property" .= (propertyName :: String),
+        "assignments" .= map (\(name, tensor) -> object [fromString name .= (show $ pretty tensor :: String)]) assignments
+      ]
