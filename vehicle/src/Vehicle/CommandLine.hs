@@ -501,7 +501,7 @@ outputCounterExamplesParser =
   switch $
     long "counter-examples"
       <> short 'x'
-      <> help "Decode the counter-examples in the validate cache."
+      <> help "Output the counter-examples in the validate cache."
       <> internal
 
 propertyParser :: Parser [Text]
