@@ -101,8 +101,7 @@ instance ToJSON ValidateResult where
           "error" .= (show $ pretty err :: String)
         ]
 
-data CounterExampleResult
-  = CounterExampleResult
+data CounterExampleResult = CounterExampleResult
   { assignments :: [(String, RationalTensor)],
     property :: String
   }
