@@ -9,6 +9,7 @@ module Vehicle.Verify.Specification.IO
     verifySpecification,
     specificationCacheIndexFileName,
     isValidQueryFolder,
+    readAssignmentsFromFolder,
   )
 where
 
@@ -21,7 +22,7 @@ import Control.Monad.Writer (MonadWriter (..), WriterT (..), execWriterT)
 import Data.Aeson (decode)
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy qualified as BIO
-import Data.IDX (encodeIDXFile)
+import Data.IDX (decodeIDXFile, encodeIDXFile)
 import Data.IDX.Internal
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map qualified as Map
@@ -31,9 +32,9 @@ import Data.Text (intercalate, pack)
 import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as LazyText
 import Data.Vector qualified as BoxedVector
-import Data.Vector.Unboxed qualified as Vector (fromList)
+import Data.Vector.Unboxed qualified as Vector (fromList, toList)
 import Prettyprinter (fill)
-import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist)
+import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, listDirectory)
 import System.Exit (ExitCode (..))
 import System.FilePath (takeExtension, takeFileName, (<.>), (</>))
 import System.IO (stdout)
@@ -46,7 +47,7 @@ import Vehicle.Backend.Queries.UserVariableElimination.VariableReconstruction (r
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.QuantifiedVariable (UserVariableAssignment (..))
-import Vehicle.Data.Tensor (Tensor (..))
+import Vehicle.Data.Tensor (RationalTensor, Tensor (..))
 import Vehicle.Prelude.IO qualified as VIO (MonadStdIO (writeStdoutLn))
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat
@@ -649,3 +650,23 @@ createPropertyProgressBar (PropertyAddress _ name indices) numberOfQueries = do
 
 closePropertyProgressBar :: (MonadIO m, MonadStdIO m) => PropertyProgressBar -> m ()
 closePropertyProgressBar _progressBar = VIO.writeStdoutLn ""
+
+-- | Reads (all) counter examples an assignments files folder
+readAssignmentsFromFolder ::
+  (MonadIO m) =>
+  FilePath ->
+  m [(Name, RationalTensor)]
+readAssignmentsFromFolder assignmentsFolder = do
+  exists <- liftIO $ doesDirectoryExist assignmentsFolder
+  if not exists
+    then return []
+    else do
+      files <- liftIO $ listDirectory assignmentsFolder
+      assignments <- forM files $ \file -> do
+        idxData <- liftIO $ decodeIDXFile (assignmentsFolder </> file)
+        case idxData of
+          Just (IDXDoubles _ dims values) ->
+            let boxedValues = BoxedVector.fromList (fmap realToFrac (Vector.toList values))
+             in return (pack $ show file, Tensor (Vector.toList dims) boxedValues)
+          _ -> fatalError $ "Unsupported IDX data format in file: " <+> quotePretty file
+      return assignments
