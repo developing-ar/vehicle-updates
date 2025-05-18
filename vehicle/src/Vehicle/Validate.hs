@@ -34,22 +34,23 @@ validate loggingSettings checkOptions = runLoggerT loggingSettings $ do
   -- default to command-line.
   status <- checkSpecificationStatus checkOptions
   counterExamples <- collectCounterexamples checkOptions
-  let nonEmptyCounterExamples = filter (\(CounterExampleResult assignments _) -> not (null assignments)) counterExamples
 
-  if outputAsJSON checkOptions
+  if not $ outputAsJSON checkOptions
     then do
-      let statusJSON =
-            if outputCounterExamples checkOptions
-              then case toJSON status of
-                Object o -> Object (o <> case toJSON (object ["counter-examples" .= toJSON nonEmptyCounterExamples]) of Object o' -> o'; _ -> mempty)
-                v -> v
-              else toJSON status
-      programOutput $ pretty $ unpack $ encodePretty' prettyJSONConfig statusJSON
-    else do
       -- Pretty print the status and counter-examples
       programOutput $ pretty status
       when (outputCounterExamples checkOptions) $ do
         programOutput $ line <> "Counterexamples:" <> line <> pretty counterExamples
+    else do
+      let statusJSON =
+            if not $ outputCounterExamples checkOptions
+              then toJSON status
+              else do
+                let nonEmptyCounterExamples = filter (\(CounterExampleResult assignments _) -> not (null assignments)) counterExamples
+                 in case toJSON status of
+                      Object o -> Object (o <> case toJSON (object ["counter-examples" .= toJSON nonEmptyCounterExamples]) of Object o' -> o'; _ -> mempty)
+                      v -> v
+      programOutput $ pretty $ unpack $ encodePretty' prettyJSONConfig statusJSON
 
 checkSpecificationStatus ::
   (MonadIO m, MonadLogger m) =>
