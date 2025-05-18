@@ -34,13 +34,14 @@ validate loggingSettings checkOptions = runLoggerT loggingSettings $ do
   -- default to command-line.
   status <- checkSpecificationStatus checkOptions
   counterExamples <- collectCounterexamples checkOptions
+  let nonEmptyCounterExamples = filter (\(CounterExampleResult assignments _) -> not (null assignments)) counterExamples
 
   if outputAsJSON checkOptions
     then do
       let statusJSON =
             if outputCounterExamples checkOptions
               then case toJSON status of
-                Object o -> Object (o <> case toJSON (object ["counter-examples" .= toJSON counterExamples]) of Object o' -> o'; _ -> mempty)
+                Object o -> Object (o <> case toJSON (object ["counter-examples" .= toJSON nonEmptyCounterExamples]) of Object o' -> o'; _ -> mempty)
                 v -> v
               else toJSON status
       programOutput $ pretty $ unpack $ encodePretty' prettyJSONConfig statusJSON
@@ -107,14 +108,18 @@ data CounterExampleResult
   deriving (Show, Eq)
 
 instance Pretty CounterExampleResult where
-  pretty (CounterExampleResult assignments propertyName) =
-    pretty propertyName
-      <> line
-      <> vsep (map (\(name, tensor) -> indent 2 $ pretty name <> ": " <> pretty tensor) assignments)
+  pretty (CounterExampleResult assignments propertyName)
+    | null assignments = mempty
+    | otherwise =
+        pretty propertyName
+          <> line
+          <> vsep (map (\(name, tensor) -> indent 2 $ pretty name <> ": " <> pretty tensor) assignments)
 
 instance ToJSON CounterExampleResult where
-  toJSON (CounterExampleResult assignments propertyName) =
-    object
-      [ "property" .= (propertyName :: String),
-        "assignments" .= map (\(name, tensor) -> object [fromString name .= (show $ pretty tensor :: String)]) assignments
-      ]
+  toJSON (CounterExampleResult assignments propertyName)
+    | null assignments = toJSON ()
+    | otherwise =
+        object
+          [ "property" .= propertyName,
+            "assignments" .= map (\(name, tensor) -> object [fromString name .= show (pretty tensor)]) assignments
+          ]
