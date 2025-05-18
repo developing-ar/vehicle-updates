@@ -276,6 +276,7 @@ validateParser :: Parser ValidateOptions
 validateParser =
   ValidateOptions
     <$> validateCacheParser
+    <*> outputAsJSONParser
 
 validateParserInfo :: ParserInfo ModeOptions
 validateParserInfo = info (Validate <$> validateParser) validateDescription
