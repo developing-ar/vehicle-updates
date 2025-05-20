@@ -91,6 +91,8 @@ instance Pretty ValidateResult where
   pretty Unverified = "Status: unverified"
   pretty (IntegrityError err) = "Status: unknown" <> line <> line <> pretty err
 
+-- | Cannot be derivied generically as ResourceIntegrityError (for IntegrityError) is not
+-- | a generic type or has a toJSON instance.
 instance ToJSON ValidateResult where
   toJSON validateResult = case validateResult of
     Verified -> object ["status" .= ("verified" :: String)]
@@ -110,11 +112,10 @@ data CounterExampleResult = CounterExampleResult
 instance Pretty CounterExampleResult where
   pretty (CounterExampleResult assignments propertyName)
     | null assignments = mempty
-    | otherwise =
-        pretty propertyName
-          <> line
-          <> vsep (map (\(name, tensor) -> indent 2 $ pretty name <> ": " <> pretty tensor) assignments)
+    | otherwise = pretty propertyName <> line <> pretty assignments
 
+-- | Won't derive generically so that the assignments "name" is the key,
+-- | and to have the pretty list of assignments rather then the entire JSON object of a tensor.
 instance ToJSON CounterExampleResult where
   toJSON (CounterExampleResult assignments propertyName)
     | null assignments = toJSON ()
