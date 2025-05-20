@@ -23,7 +23,6 @@ import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy qualified as BIO
 import Data.IDX (encodeIDXFile)
 import Data.IDX.Internal
-import Data.Text.Lazy (unpack)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map qualified as Map
 import Data.Monoid (Sum (..))
@@ -56,6 +55,7 @@ import Vehicle.Verify.Specification
 import Vehicle.Verify.Specification.Status
 import Vehicle.Verify.Verifier
 import Vehicle.Verify.Verifier.Core (QueryVariableAssignment (..))
+import Data.ByteString.Lazy.Char8 (unpack)
 
 --------------------------------------------------------------------------------
 -- Specification
@@ -292,7 +292,7 @@ outputStats name MultiPropertyStats {..} outputAsJSON = do
                         "stats" .= toJSON MultiPropertyStats {..},
                         "total" .= (totalSize :: Int)
                       ]
-               in pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON resultsJSON
+               in pretty $ unpack $ encodePretty' prettyJSONConfig resultsJSON
             else
               let maxTextLength = maximum $ fmap (length . fst) results
                   prettyResult (t, x) = fill (maxTextLength + 1) (pretty t <> ":") <+> pretty x <> "/" <> pretty totalSize
@@ -315,7 +315,7 @@ data VerifierSettings = VerifierSettings
     verifierExecutable :: VerifierExecutable,
     verifierExtraArgs :: [String],
     noSatPrint :: Bool,
-    outputAsJSON :: Bool
+    logAsJSON :: Bool
   }
 
 type MonadVerify m =
@@ -353,7 +353,7 @@ verifySpecification verifierSettings queryFolder = do
     Just err -> programOutput $ "Resource error:" <+> pretty err
     Nothing -> forM_ properties $ \(name, multiProperty) -> do
       stats <- execWriterT $ verifyMultiproperty verifierSettings queryFolder multiProperty
-      outputStats name stats $ outputAsJSON verifierSettings
+      outputStats name stats $ logAsJSON verifierSettings
 
 verifyMultiproperty ::
   (MonadVerify m, MonadWriter MultiPropertyStats m) =>

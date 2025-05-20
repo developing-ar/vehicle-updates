@@ -32,7 +32,7 @@ data VerifyOptions = VerifyOptions
     verifierExtraArgs :: Maybe String,
     noSatPrint :: Bool,
     -- Logging options
-    outputAsJSON :: Bool
+    logAsJSON :: Bool
   }
   deriving (Eq, Show)
 
@@ -40,12 +40,12 @@ verify :: (MonadStdIO IO) => LoggingSettings -> VerifyOptions -> IO ()
 verify loggingSettings options@VerifyOptions {..} = do
   validQueryFolder <- isValidQueryFolder specification
   if validQueryFolder
-    then verifyQueries loggingSettings specification verifierID verifierLocation verifierExtraArgs noSatPrint outputAsJSON
+    then verifyQueries loggingSettings specification verifierID verifierLocation verifierExtraArgs noSatPrint logAsJSON
     else
       if takeExtension specification /= specificationFileExtension
         then fatalError (invalidTargetError specification)
         else compileAndVerifyQueries loggingSettings options $ \folder ->
-          verifyQueries loggingSettings folder verifierID verifierLocation verifierExtraArgs noSatPrint outputAsJSON
+          verifyQueries loggingSettings folder verifierID verifierLocation verifierExtraArgs noSatPrint logAsJSON
 
 -- | Compiles the specification to a temporary directory and then tries to verify it.
 compileAndVerifyQueries :: (MonadStdIO IO) => LoggingSettings -> VerifyOptions -> (FilePath -> IO ()) -> IO ()
