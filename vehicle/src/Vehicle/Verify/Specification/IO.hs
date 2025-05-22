@@ -245,15 +245,31 @@ data MultiPropertyStats = MultiPropertyStats
     numberTimedOut :: Int,
     numberErrored :: Int
   }
+  deriving (Generic)
 
-instance ToJSON MultiPropertyStats where
-  toJSON MultiPropertyStats {..} =
-    object
-      [ "verified" .= (numberVerified :: Int),
-        "falsified" .= (numberFalsified :: Int),
-        "timed_out" .= (numberTimedOut :: Int),
-        "errored" .= (numberErrored :: Int)
-      ]
+instance ToJSON MultiPropertyStats
+
+instance Pretty MultiPropertyStats where
+  pretty MultiPropertyStats {..} =
+    let labels = ["verified", "falsified", "timed out", "errored"] :: [String]
+        values = [numberVerified, numberFalsified, numberTimedOut, numberErrored]
+        totalSize = totalSizeOfMultiProperties $ MultiPropertyStats {..}
+        prettyResults = zip labels values
+        maxTextLength = maximum $ fmap (length . fst) prettyResults
+        prettyResultOverall (label, value) = fill (maxTextLength + 1) (pretty label <> ":") <+> pretty value <> "/" <> pretty totalSize
+     in vsep (fmap prettyResultOverall prettyResults)
+
+data PropertyMultiPropertyStats = PropertyMultiPropertyStats
+  { multiPropertyStats :: MultiPropertyStats,
+    propertyName :: PropertyName
+  }
+  deriving (Generic)
+
+instance ToJSON PropertyMultiPropertyStats
+
+instance Pretty PropertyMultiPropertyStats where
+  pretty PropertyMultiPropertyStats {..} =
+    pretty propertyName <> ":" <> line <> indent 4 (pretty multiPropertyStats)
 
 instance Semigroup MultiPropertyStats where
   s1 <> s2 =
@@ -273,31 +289,23 @@ instance Monoid MultiPropertyStats where
         numberErrored = 0
       }
 
+totalSizeOfMultiProperties :: MultiPropertyStats -> Int
+totalSizeOfMultiProperties MultiPropertyStats {..} =
+  numberVerified + numberFalsified + numberTimedOut + numberErrored
+
 outputStats :: (MonadVerify m) => PropertyName -> MultiPropertyStats -> Bool -> m ()
 outputStats name MultiPropertyStats {..} outputAsJSON = do
   let results =
-        [ ("verified", numberVerified),
-          ("falsified", numberFalsified),
-          ("timed-out", numberTimedOut),
-          ("errored", numberErrored)
-        ] ::
-          [(String, Int)]
-  let totalSize = sum $ fmap snd results
+        PropertyMultiPropertyStats
+          { multiPropertyStats = MultiPropertyStats {..},
+            propertyName = name
+          }
+  let totalSize = totalSizeOfMultiProperties $ multiPropertyStats results
   when (totalSize > 1) $ do
     let finalDoc =
           if outputAsJSON
-            then
-              let resultsJSON =
-                    object
-                      [ "property" .= (show name :: String),
-                        "stats" .= toJSON MultiPropertyStats {..},
-                        "total" .= (totalSize :: Int)
-                      ]
-               in pretty $ unpack $ encodePretty' prettyJSONConfig resultsJSON
-            else
-              let maxTextLength = maximum $ fmap (length . fst) results
-                  prettyResult (t, x) = fill (maxTextLength + 1) (pretty t <> ":") <+> pretty x <> "/" <> pretty totalSize
-               in "  " <> pretty name <> ":" <> line <> indent 4 (vsep (fmap prettyResult results))
+            then pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON results
+            else pretty results
     programOutput finalDoc
 
 logPropertyStatus :: (MonadWriter MultiPropertyStats m) => PropertyStatus -> m ()
