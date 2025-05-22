@@ -21,6 +21,7 @@ import Control.Monad.Writer (MonadWriter (..), WriterT (..), execWriterT)
 import Data.Aeson (ToJSON (..), decode, object, (.=))
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy qualified as BIO
+import Data.ByteString.Lazy.Char8 (unpack)
 import Data.IDX (encodeIDXFile)
 import Data.IDX.Internal
 import Data.List.NonEmpty (NonEmpty (..))
@@ -32,6 +33,7 @@ import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as LazyText
 import Data.Vector qualified as BoxedVector
 import Data.Vector.Unboxed qualified as Vector (fromList)
+import GHC.Generics (Generic)
 import Prettyprinter (fill)
 import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist)
 import System.Exit (ExitCode (..))
@@ -55,7 +57,6 @@ import Vehicle.Verify.Specification
 import Vehicle.Verify.Specification.Status
 import Vehicle.Verify.Verifier
 import Vehicle.Verify.Verifier.Core (QueryVariableAssignment (..))
-import Data.ByteString.Lazy.Char8 (unpack)
 
 --------------------------------------------------------------------------------
 -- Specification
@@ -671,3 +672,32 @@ createPropertyProgressBar (PropertyAddress _ name indices) numberOfQueries = do
 
 closePropertyProgressBar :: (MonadIO m, MonadStdIO m) => PropertyProgressBar -> m ()
 closePropertyProgressBar _progressBar = VIO.writeStdoutLn ""
+
+-- | Manually create JSON object for Progress as it not have a ToJSON instance
+newtype PropertyProgress = PropertyProgress
+  {progress :: Progress ()}
+
+instance ToJSON PropertyProgress where
+  toJSON PropertyProgress {progress = Progress {progressDone = done, progressTodo = todo, progressCustom = custom}} =
+    object
+      [ "progressDone" .= (done :: Int),
+        "progressTodo" .= (todo :: Int),
+        "progressCustom" .= (custom :: ())
+      ]
+
+data PropertyProgressJson = PropertyProgressJson
+  { propertyName :: LazyText.Text,
+    progress :: PropertyProgress
+  }
+  deriving (Generic)
+
+instance ToJSON PropertyProgressJson
+
+createPropertyProgressJSON :: (MonadIO m) => PropertyAddress -> Int -> m PropertyProgressJson
+createPropertyProgressJSON (PropertyAddress _ name indices) numberOfQueries = do
+  let propertyName = LazyText.fromStrict $ intercalate "!" (name : fmap (pack . show) indices)
+  let initialProgress = Progress 0 numberOfQueries ()
+  return $ PropertyProgressJson propertyName (PropertyProgress initialProgress)
+
+closePropertyProgressJSON :: (MonadIO m, MonadStdIO m) => PropertyProgressJson -> m ()
+closePropertyProgressJSON _progressBar = VIO.writeStdoutLn ""
