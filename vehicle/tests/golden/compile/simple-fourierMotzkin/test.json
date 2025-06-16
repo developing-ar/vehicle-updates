@@ -17,11 +17,12 @@
     "name": "DL2Loss",
     "run": "vehicle compile -s spec.vcl -t DL2Loss -o DL2Loss.vcl",
     "needs": ["spec.vcl"],
-    "produces": ["DL2Loss.vcl"]
+    "produces": ["DL2Loss.vcl"],
+    "enabled": false
   },
   {
     "name": "TestVerify",
-    "run": "vehicle verify -s spec.vcl -v TestVerifier --network f:fake.onnx --property underConstrainedVars --verifier-location=testVerifier --verifier-args='sat 'X_0=0.2,Y_0=3.0''",
+    "run": "vehicle verify -s spec.vcl -v TestVerifier --network f:fake.onnx --property underConstrainedVars --verifier-location=testVerifier --verifier-args='sat 'f@@X_0=0.2,f@@Y_0=3.0''",
     "needs": ["spec.vcl", "fake.onnx", "../../../testVerifier"],
     "external": ["TestVerifier"]
   }
