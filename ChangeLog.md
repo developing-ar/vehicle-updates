@@ -40,9 +40,13 @@ Some positive changes from this:
 
 * Improved compilation of `min` and `max` so that in some cases they generate exponentially less queries.
 
-### Python interface
+### Command-line interface
 
 * A new command `list` with sub-commands `resources` and `properties`, to list resources and properties in a vehicle specification.
+
+* Added a new option `--json` to the `vehicle validate` command that causes Vehicle to output the result of the check as machine-readable JSON.
+
+### Python interface
 
 * Exposed the other modes' functionality in Python in the `vehicle_lang` module as:
   - `check`
