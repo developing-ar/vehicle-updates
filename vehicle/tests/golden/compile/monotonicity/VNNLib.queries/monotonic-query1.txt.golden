@@ -4,8 +4,8 @@
 ;  - VNNLib query format version: unknown
 ;  - Vehicle version: 0.16.1+dev
 
-(assert (<= (- () f@0X_1) 0.0))
-(assert (< (+ () f@0Y_1) 0.0))
+(assert (<= (- (+ f@1X_[0]) f@0X_[0]) 0.0))
+(assert (< (+ (- f@1Y_[0]) f@0Y_[0]) 0.0))
 (declare-network f@0
   (declare-input f@0X Real 1)
   (declare-output f@0Y Real 1))

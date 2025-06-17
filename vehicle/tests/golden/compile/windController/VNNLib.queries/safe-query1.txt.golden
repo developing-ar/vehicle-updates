@@ -4,11 +4,11 @@
 ;  - VNNLib query format version: unknown
 ;  - Vehicle version: 0.16.1+dev
 
-(assert (<= (+ (- () (* 8.0 controller@0X_1)) controller@0Y_0) 2.75))
-(assert (<= () 7.25))
-(assert (>= () 0.75))
-(assert (<= () 7.25))
-(assert (>= () 0.75))
+(assert (<= (+ (- (* 16.0 controller@0X_[0]) (* 8.0 controller@0X_[1])) controller@0Y_[0]) 2.75))
+(assert (<= (* 8.0 controller@0X_[0]) 7.25))
+(assert (>= (* 8.0 controller@0X_[0]) 0.75))
+(assert (<= (* 8.0 controller@0X_[1]) 7.25))
+(assert (>= (* 8.0 controller@0X_[1]) 0.75))
 (declare-network controller@0
   (declare-input controller@0X Real 2)
   (declare-output controller@0Y Real 1))

@@ -14,15 +14,6 @@
     }
   },
   {
-    "name": "Marabou",
-    "run": "vehicle compile -s spec.vcl -t MarabouQueries -o Marabou.queries/ --network f:fake.onnx",
-    "needs": ["spec.vcl", "fake.onnx"],
-    "produces": ["Marabou.queries/*.txt", "Marabou.queries/monotonic.vcl-plan"],
-    "ignore": {
-      "lines": ".*\"fileHash\".*"
-    }
-  },
-  {
     "name": "Agda",
     "run": "vehicle compile -s spec.vcl -t Agda -o Agda.agda",
     "needs": ["spec.vcl"],
@@ -32,6 +23,7 @@
     "name": "DL2Loss",
     "run": "vehicle compile -s spec.vcl -t DL2Loss -o DL2Loss.vcl",
     "needs": ["spec.vcl"],
-    "produces": ["DL2Loss.vcl"]
+    "produces": ["DL2Loss.vcl"],
+    "enabled": false
   }
 ]

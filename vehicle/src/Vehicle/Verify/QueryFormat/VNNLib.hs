@@ -4,9 +4,8 @@ import Control.Monad (forM)
 import Data.List.NonEmpty qualified as NonEmpty
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Resource (NetworkTensorType (dimensions), NetworkType (inputTensor, outputTensor))
-import Vehicle.Data.Builtin.Core
 import Vehicle.Data.QuantifiedVariable (prettyRationalAsFloat)
-import Vehicle.Data.Tensor (PrettyTensorShape (PrettyTensorShape), TensorShape)
+import Vehicle.Data.Tensor (TensorShape)
 import Vehicle.Verify.Core
 import Vehicle.Verify.QueryFormat.Core
 import Vehicle.Verify.QueryFormat.Interface
@@ -20,6 +19,7 @@ vnnlibQueryFormat =
   QueryFormat
     { queryFormatID = VNNLibQueries,
       supportsStrictInequalities = True,
+      supportsMultipleNetworks = True,
       compileVariable = compileVNNLibVar,
       compileQuery = compileVNNLibQuery,
       queryOutputFormat = outputFormat
@@ -45,16 +45,16 @@ compileNetworkName networkName networkIndex = pretty networkName <> "@" <> prett
 
 -- | Compiles an individual variable
 compileVNNLibVar :: CompileQueryVariable
-compileVNNLibVar MetaNetworkEntry {..} inputOrOutput metaNetworkIndex ioIndex = do
-  layoutAsText $ compileNetworkVariableName metaNetworkEntryName metaNetworkIndex inputOrOutput <> "_" <> pretty ioIndex
+compileVNNLibVar QueryVariableInfo {..} = do
+  layoutAsText $ compileNetworkVariableName networkName networkAppIndex inputOrOutput <> "_" <> pretty parentVariableIndices
 
 -- | Compiles a network input
 compileNetworkInput :: Name -> TensorShape -> Doc a
-compileNetworkInput name shape = parens ("declare-input" <+> pretty name <+> "Real" <+> pretty (PrettyTensorShape shape))
+compileNetworkInput name shape = parens ("declare-input" <+> pretty name <+> "Real" <+> compileTensorShape shape)
 
 -- | Compile a network output
 compileNetworkOutput :: Name -> TensorShape -> Doc a
-compileNetworkOutput name shape = parens ("declare-output" <+> pretty name <+> "Real" <+> pretty (PrettyTensorShape shape))
+compileNetworkOutput name shape = parens ("declare-output" <+> pretty name <+> "Real" <+> compileTensorShape shape)
 
 -- | "Generates" the name and fetches the shape of the the input or output network tensor
 networkTensor :: MetaNetworkEntry -> InputOrOutput -> Int -> (Name, TensorShape)
@@ -86,17 +86,25 @@ compileVNNLibQuery _address (QueryContents _variables assertions) metaNetwork = 
 compileAssertion :: (MonadLogger m) => QueryAssertion QueryVariable -> m (Doc a)
 compileAssertion QueryAssertion {..} = do
   let compiledRel = compileRel rel
-  let compiledLHS = foldl compileCoefVar "" (NonEmpty.tail lhs)
+  let (headVar NonEmpty.:| tailVars) = lhs
+  let compiledLHS = foldl compileCoefVar (compileCoefFirstVar headVar) tailVars
   let compiledRHS = prettyRationalAsFloat rhs
   return $ parens ("assert" <+> parens (compiledRel <+> parens compiledLHS <+> compiledRHS))
 
 compileRel :: QueryRelation -> Doc a
 compileRel = \case
-  EqualRel -> "=="
-  OrderRel Le -> "<="
-  OrderRel Ge -> ">="
-  OrderRel Lt -> "<"
-  OrderRel Gt -> ">"
+  EqRel -> "=="
+  LeRel -> "<="
+  GeRel -> ">="
+  LtRel -> "<"
+  GtRel -> ">"
+
+compileCoefFirstVar :: (Coefficient, QueryVariable) -> Doc a
+compileCoefFirstVar (coef, var)
+  | coef == 1 = "+" <+> pretty var
+  | coef == -1 = "-" <+> pretty var
+  | coef < 0 = "-" <+> parens ("*" <+> prettyRationalAsFloat (-coef) <+> pretty var)
+  | otherwise = "*" <+> prettyRationalAsFloat coef <+> pretty var
 
 compileCoefVar :: Doc a -> (Coefficient, QueryVariable) -> Doc a
 compileCoefVar r (coef, var)
@@ -104,3 +112,6 @@ compileCoefVar r (coef, var)
   | coef == -1 = "-" <+> parens r <+> pretty var
   | coef < 0 = "-" <+> parens r <+> parens ("*" <+> prettyRationalAsFloat (-coef) <+> pretty var)
   | otherwise = "+" <+> parens r <+> parens ("*" <+> prettyRationalAsFloat coef <+> pretty var)
+
+compileTensorShape :: TensorShape -> Doc a
+compileTensorShape shape = pretty (unwords (map show shape))

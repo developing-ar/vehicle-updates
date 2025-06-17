@@ -12,20 +12,18 @@ import Vehicle.Syntax.AST.Prog
 import Vehicle.Syntax.AST.Provenance
 import Vehicle.Syntax.AST.Relevance
 import Vehicle.Syntax.AST.Visibility
+import Vehicle.Syntax.Tensor
 import Vehicle.Syntax.Builtin
 
 import NoThunks.Class (NoThunks)
 
 -- Vehicle.Syntax.Builtin.Core
 instance NoThunks FunctionPosition
-instance NoThunks EqualityOp
-instance NoThunks EqualityDomain
-instance NoThunks OrderOp
-instance NoThunks OrderDomain
+instance NoThunks ComparisonOp
 instance NoThunks Quantifier
 
 -- Now Vehicle.Data.Builtin.Linearity
--- instance NoThunks LinearityProvenance
+-- instance NoThunks LinearityProof
 -- instance NoThunks Linearity
 -- instance NoThunks LinearityTypeClass
 
@@ -50,14 +48,23 @@ instance (NoThunks expr) => NoThunks (GenericBinder expr)
 instance NoThunks BuiltinConstructor
 instance NoThunks BuiltinFunction
 instance NoThunks BuiltinType
+instance NoThunks BuiltinCast
+instance NoThunks DerivedFunction
 instance NoThunks NegDomain
 instance NoThunks AddDomain
 instance NoThunks SubDomain
 instance NoThunks MulDomain
 instance NoThunks DivDomain
+instance NoThunks MinDomain
+instance NoThunks MaxDomain
 instance NoThunks FromNatDomain
 instance NoThunks FromRatDomain
 instance NoThunks Builtin
+
+-- Vehicle.Syntax.Tensor
+instance NoThunks (Tensor Int)
+instance NoThunks (Tensor Bool)
+instance NoThunks (Tensor Rational)
 
 -- Vehicle.Syntax.AST.Decl
 instance NoThunks expr => NoThunks (GenericDecl expr)
