@@ -22,7 +22,7 @@
   },
   {
     "name": "TestVerify",
-    "run": "vehicle verify -s spec.vcl -v TestVerifier --network f:fake.onnx --property underConstrainedVars --verifier-location=testVerifier --verifier-args='sat 'f@0X_[0]=0.2,f@0Y_[0]=3.0''",
+    "run": "vehicle verify -s spec.vcl -v TestVerifier --network f:fake.onnx --property underConstrainedVars --verifier-location=testVerifier --verifier-args='sat 'f_0_X[0]=0.2,f_0_Y[0]=3.0''",
     "needs": ["spec.vcl", "fake.onnx", "../../../testVerifier"],
     "external": ["TestVerifier"]
   }

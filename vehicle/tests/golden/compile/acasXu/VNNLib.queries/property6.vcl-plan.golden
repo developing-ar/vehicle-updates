@@ -32,16 +32,16 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "acasXu@0Y_[4]": 17,
-                  "acasXu@0Y_[3]": 16,
-                  "acasXu@0Y_[2]": 15,
-                  "acasXu@0Y_[1]": 14,
-                  "acasXu@0Y_[0]": 13,
-                  "acasXu@0X_[4]": 11,
-                  "acasXu@0X_[3]": 10,
-                  "acasXu@0X_[2]": 9,
-                  "acasXu@0X_[1]": 8,
-                  "acasXu@0X_[0]": 7
+                  "acasXu_0_Y[4]": 17,
+                  "acasXu_0_Y[3]": 16,
+                  "acasXu_0_Y[2]": 15,
+                  "acasXu_0_Y[1]": 14,
+                  "acasXu_0_Y[0]": 13,
+                  "acasXu_0_X[4]": 11,
+                  "acasXu_0_X[3]": 10,
+                  "acasXu_0_X[2]": 9,
+                  "acasXu_0_X[1]": 8,
+                  "acasXu_0_X[0]": 7
                 }
               },
               "variableCompilationTrace": {
@@ -303,16 +303,16 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "acasXu@0Y_[4]": 17,
-                  "acasXu@0Y_[3]": 16,
-                  "acasXu@0Y_[2]": 15,
-                  "acasXu@0Y_[1]": 14,
-                  "acasXu@0Y_[0]": 13,
-                  "acasXu@0X_[4]": 11,
-                  "acasXu@0X_[3]": 10,
-                  "acasXu@0X_[2]": 9,
-                  "acasXu@0X_[1]": 8,
-                  "acasXu@0X_[0]": 7
+                  "acasXu_0_Y[4]": 17,
+                  "acasXu_0_Y[3]": 16,
+                  "acasXu_0_Y[2]": 15,
+                  "acasXu_0_Y[1]": 14,
+                  "acasXu_0_Y[0]": 13,
+                  "acasXu_0_X[4]": 11,
+                  "acasXu_0_X[3]": 10,
+                  "acasXu_0_X[2]": 9,
+                  "acasXu_0_X[1]": 8,
+                  "acasXu_0_X[0]": 7
                 }
               },
               "variableCompilationTrace": {
@@ -574,16 +574,16 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "acasXu@0Y_[4]": 17,
-                  "acasXu@0Y_[3]": 16,
-                  "acasXu@0Y_[2]": 15,
-                  "acasXu@0Y_[1]": 14,
-                  "acasXu@0Y_[0]": 13,
-                  "acasXu@0X_[4]": 11,
-                  "acasXu@0X_[3]": 10,
-                  "acasXu@0X_[2]": 9,
-                  "acasXu@0X_[1]": 8,
-                  "acasXu@0X_[0]": 7
+                  "acasXu_0_Y[4]": 17,
+                  "acasXu_0_Y[3]": 16,
+                  "acasXu_0_Y[2]": 15,
+                  "acasXu_0_Y[1]": 14,
+                  "acasXu_0_Y[0]": 13,
+                  "acasXu_0_X[4]": 11,
+                  "acasXu_0_X[3]": 10,
+                  "acasXu_0_X[2]": 9,
+                  "acasXu_0_X[1]": 8,
+                  "acasXu_0_X[0]": 7
                 }
               },
               "variableCompilationTrace": {
@@ -845,16 +845,16 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "acasXu@0Y_[4]": 17,
-                  "acasXu@0Y_[3]": 16,
-                  "acasXu@0Y_[2]": 15,
-                  "acasXu@0Y_[1]": 14,
-                  "acasXu@0Y_[0]": 13,
-                  "acasXu@0X_[4]": 11,
-                  "acasXu@0X_[3]": 10,
-                  "acasXu@0X_[2]": 9,
-                  "acasXu@0X_[1]": 8,
-                  "acasXu@0X_[0]": 7
+                  "acasXu_0_Y[4]": 17,
+                  "acasXu_0_Y[3]": 16,
+                  "acasXu_0_Y[2]": 15,
+                  "acasXu_0_Y[1]": 14,
+                  "acasXu_0_Y[0]": 13,
+                  "acasXu_0_X[4]": 11,
+                  "acasXu_0_X[3]": 10,
+                  "acasXu_0_X[2]": 9,
+                  "acasXu_0_X[1]": 8,
+                  "acasXu_0_X[0]": 7
                 }
               },
               "variableCompilationTrace": {
@@ -1116,16 +1116,16 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "acasXu@0Y_[4]": 17,
-                  "acasXu@0Y_[3]": 16,
-                  "acasXu@0Y_[2]": 15,
-                  "acasXu@0Y_[1]": 14,
-                  "acasXu@0Y_[0]": 13,
-                  "acasXu@0X_[4]": 11,
-                  "acasXu@0X_[3]": 10,
-                  "acasXu@0X_[2]": 9,
-                  "acasXu@0X_[1]": 8,
-                  "acasXu@0X_[0]": 7
+                  "acasXu_0_Y[4]": 17,
+                  "acasXu_0_Y[3]": 16,
+                  "acasXu_0_Y[2]": 15,
+                  "acasXu_0_Y[1]": 14,
+                  "acasXu_0_Y[0]": 13,
+                  "acasXu_0_X[4]": 11,
+                  "acasXu_0_X[3]": 10,
+                  "acasXu_0_X[2]": 9,
+                  "acasXu_0_X[1]": 8,
+                  "acasXu_0_X[0]": 7
                 }
               },
               "variableCompilationTrace": {
@@ -1387,16 +1387,16 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "acasXu@0Y_[4]": 17,
-                  "acasXu@0Y_[3]": 16,
-                  "acasXu@0Y_[2]": 15,
-                  "acasXu@0Y_[1]": 14,
-                  "acasXu@0Y_[0]": 13,
-                  "acasXu@0X_[4]": 11,
-                  "acasXu@0X_[3]": 10,
-                  "acasXu@0X_[2]": 9,
-                  "acasXu@0X_[1]": 8,
-                  "acasXu@0X_[0]": 7
+                  "acasXu_0_Y[4]": 17,
+                  "acasXu_0_Y[3]": 16,
+                  "acasXu_0_Y[2]": 15,
+                  "acasXu_0_Y[1]": 14,
+                  "acasXu_0_Y[0]": 13,
+                  "acasXu_0_X[4]": 11,
+                  "acasXu_0_X[3]": 10,
+                  "acasXu_0_X[2]": 9,
+                  "acasXu_0_X[1]": 8,
+                  "acasXu_0_X[0]": 7
                 }
               },
               "variableCompilationTrace": {
@@ -1658,16 +1658,16 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "acasXu@0Y_[4]": 17,
-                  "acasXu@0Y_[3]": 16,
-                  "acasXu@0Y_[2]": 15,
-                  "acasXu@0Y_[1]": 14,
-                  "acasXu@0Y_[0]": 13,
-                  "acasXu@0X_[4]": 11,
-                  "acasXu@0X_[3]": 10,
-                  "acasXu@0X_[2]": 9,
-                  "acasXu@0X_[1]": 8,
-                  "acasXu@0X_[0]": 7
+                  "acasXu_0_Y[4]": 17,
+                  "acasXu_0_Y[3]": 16,
+                  "acasXu_0_Y[2]": 15,
+                  "acasXu_0_Y[1]": 14,
+                  "acasXu_0_Y[0]": 13,
+                  "acasXu_0_X[4]": 11,
+                  "acasXu_0_X[3]": 10,
+                  "acasXu_0_X[2]": 9,
+                  "acasXu_0_X[1]": 8,
+                  "acasXu_0_X[0]": 7
                 }
               },
               "variableCompilationTrace": {
@@ -1929,16 +1929,16 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "acasXu@0Y_[4]": 17,
-                  "acasXu@0Y_[3]": 16,
-                  "acasXu@0Y_[2]": 15,
-                  "acasXu@0Y_[1]": 14,
-                  "acasXu@0Y_[0]": 13,
-                  "acasXu@0X_[4]": 11,
-                  "acasXu@0X_[3]": 10,
-                  "acasXu@0X_[2]": 9,
-                  "acasXu@0X_[1]": 8,
-                  "acasXu@0X_[0]": 7
+                  "acasXu_0_Y[4]": 17,
+                  "acasXu_0_Y[3]": 16,
+                  "acasXu_0_Y[2]": 15,
+                  "acasXu_0_Y[1]": 14,
+                  "acasXu_0_Y[0]": 13,
+                  "acasXu_0_X[4]": 11,
+                  "acasXu_0_X[3]": 10,
+                  "acasXu_0_X[2]": 9,
+                  "acasXu_0_X[1]": 8,
+                  "acasXu_0_X[0]": 7
                 }
               },
               "variableCompilationTrace": {

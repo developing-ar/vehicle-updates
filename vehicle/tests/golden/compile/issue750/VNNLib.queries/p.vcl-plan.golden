@@ -27,10 +27,10 @@
                   2
                 ],
                 "queryVariableMapping": {
-                  "f@1Y_[0]": 7,
-                  "f@1X_[0]": 5,
-                  "f@0Y_[0]": 11,
-                  "f@0X_[0]": 9
+                  "f_1_Y[0]": 7,
+                  "f_1_X[0]": 5,
+                  "f_0_Y[0]": 11,
+                  "f_0_X[0]": 9
                 }
               },
               "variableCompilationTrace": {

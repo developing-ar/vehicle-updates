@@ -37,24 +37,24 @@ outputFormat =
 -- | Compile network variable name
 compileNetworkVariableName :: Name -> Int -> InputOrOutput -> Doc a
 compileNetworkVariableName networkName networkIndex inputOrOutput =
-  compileNetworkName networkName networkIndex <> if inputOrOutput == Input then "X" else "Y"
+  compileNetworkName networkName networkIndex <> "_" <> if inputOrOutput == Input then "X" else "Y"
 
 -- | Compile network name using @ and application index
 compileNetworkName :: Name -> Int -> Doc a
-compileNetworkName networkName networkIndex = pretty networkName <> "@" <> pretty networkIndex
+compileNetworkName networkName networkIndex = pretty networkName <> "_" <> pretty networkIndex
 
 -- | Compiles an individual variable
 compileVNNLibVar :: CompileQueryVariable
 compileVNNLibVar QueryVariableInfo {..} = do
-  layoutAsText $ compileNetworkVariableName networkName networkAppIndex inputOrOutput <> "_" <> pretty parentVariableIndices
+  layoutAsText $ compileNetworkVariableName networkName networkAppIndex inputOrOutput <> pretty parentVariableIndices
 
 -- | Compiles a network input
 compileNetworkInput :: Name -> TensorShape -> Doc a
-compileNetworkInput name shape = parens ("declare-input" <+> pretty name <+> "Real" <+> compileTensorShape shape)
+compileNetworkInput name shape = parens ("declare-input" <+> pretty name <+> "Real" <+> pretty shape)
 
 -- | Compile a network output
 compileNetworkOutput :: Name -> TensorShape -> Doc a
-compileNetworkOutput name shape = parens ("declare-output" <+> pretty name <+> "Real" <+> compileTensorShape shape)
+compileNetworkOutput name shape = parens ("declare-output" <+> pretty name <+> "Real" <+> pretty shape)
 
 -- | "Generates" the name and fetches the shape of the the input or output network tensor
 networkTensor :: MetaNetworkEntry -> InputOrOutput -> Int -> (Name, TensorShape)
@@ -80,7 +80,7 @@ compileVNNLibQuery :: CompileQuery
 compileVNNLibQuery _address (QueryContents _variables assertions) metaNetwork = do
   networkDocs <- compileNetworks metaNetwork
   assertionDocs <- forM assertions compileAssertion
-  let assertionsDoc = vsep assertionDocs <> line <> networkDocs
+  let assertionsDoc = networkDocs <> line <> vsep assertionDocs
   return $ layoutAsText assertionsDoc
 
 compileAssertion :: (MonadLogger m) => QueryAssertion QueryVariable -> m (Doc a)
@@ -112,6 +112,3 @@ compileCoefVar r (coef, var)
   | coef == -1 = "-" <+> parens r <+> pretty var
   | coef < 0 = "-" <+> parens r <+> parens ("*" <+> prettyRationalAsFloat (-coef) <+> pretty var)
   | otherwise = "+" <+> parens r <+> parens ("*" <+> prettyRationalAsFloat coef <+> pretty var)
-
-compileTensorShape :: TensorShape -> Doc a
-compileTensorShape shape = pretty (unwords (map show shape))
