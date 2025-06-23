@@ -35,18 +35,22 @@ outputFormat =
     }
 
 -- | Compile network variable name
-compileNetworkVariableName :: Name -> Int -> InputOrOutput -> Doc a
+compileNetworkVariableName :: Name -> Maybe Int -> InputOrOutput -> Doc a
 compileNetworkVariableName networkName networkIndex inputOrOutput =
   compileNetworkName networkName networkIndex <> "_" <> if inputOrOutput == Input then "X" else "Y"
 
 -- | Compile network name using @ and application index
-compileNetworkName :: Name -> Int -> Doc a
-compileNetworkName networkName networkIndex = pretty networkName <> "_" <> pretty networkIndex
+compileNetworkName :: Name -> Maybe Int -> Doc a
+compileNetworkName networkName Nothing = pretty networkName
+compileNetworkName networkName (Just networkIndex) = pretty networkName <> "_" <> pretty networkIndex
 
 -- | Compiles an individual variable
 compileVNNLibVar :: CompileQueryVariable
 compileVNNLibVar QueryVariableInfo {..} = do
-  layoutAsText $ compileNetworkVariableName networkName networkAppIndex inputOrOutput <> pretty parentVariableIndices
+  let variableNetworkName = case numberOfNetworkApps of
+        1 -> compileNetworkVariableName networkName Nothing inputOrOutput
+        _ -> compileNetworkVariableName networkName (Just networkAppIndex) inputOrOutput
+  layoutAsText $ variableNetworkName <> pretty parentVariableIndices
 
 -- | Compiles a network input
 compileNetworkInput :: Name -> TensorShape -> Doc a
@@ -57,7 +61,7 @@ compileNetworkOutput :: Name -> TensorShape -> Doc a
 compileNetworkOutput name shape = parens ("declare-output" <+> pretty name <+> "Real" <+> pretty shape)
 
 -- | "Generates" the name and fetches the shape of the the input or output network tensor
-networkTensor :: MetaNetworkEntry -> InputOrOutput -> Int -> (Name, TensorShape)
+networkTensor :: MetaNetworkEntry -> InputOrOutput -> Maybe Int -> (Name, TensorShape)
 networkTensor MetaNetworkEntry {..} inputOrOutput metaNetworkIndex = do
   let networkTensors = networkType metaNetworkEntryInfo
   case inputOrOutput of
@@ -65,7 +69,7 @@ networkTensor MetaNetworkEntry {..} inputOrOutput metaNetworkIndex = do
     Output -> (layoutAsText $ compileNetworkVariableName metaNetworkEntryName metaNetworkIndex inputOrOutput, dimensions $ outputTensor networkTensors)
 
 -- | Compiles the declarations for a network query
-compileNetworkEntry :: MetaNetworkEntry -> Int -> Doc a
+compileNetworkEntry :: MetaNetworkEntry -> Maybe Int -> Doc a
 compileNetworkEntry metaNetworkEntry@MetaNetworkEntry {..} metaNetworkIndex = do
   let networkInputDocs = indent 2 $ uncurry compileNetworkInput $ networkTensor metaNetworkEntry Input metaNetworkIndex
   let networkOutputDocs = indent 2 $ uncurry compileNetworkOutput $ networkTensor metaNetworkEntry Output metaNetworkIndex
@@ -73,7 +77,10 @@ compileNetworkEntry metaNetworkEntry@MetaNetworkEntry {..} metaNetworkIndex = do
 
 -- | Compiles "all" (network) entries in the MetaNetwork
 compileNetworks :: (MonadLogger m) => MetaNetwork -> m (Doc a)
-compileNetworks metaNetwork = return $ vsep (zipWith compileNetworkEntry metaNetwork [0 ..])
+compileNetworks metaNetwork =
+  if length metaNetwork == 1
+    then return $ compileNetworkEntry (head metaNetwork) Nothing
+    else return $ vsep (zipWith compileNetworkEntry metaNetwork (map Just [0 ..]))
 
 -- | Compiles an expression representing a single VNNLib query.
 compileVNNLibQuery :: CompileQuery
