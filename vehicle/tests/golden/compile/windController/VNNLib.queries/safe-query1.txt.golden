@@ -4,11 +4,11 @@
 ;  - VNNLib query format version: unknown
 ;  - Vehicle version: 0.16.1+dev
 
-(declare-network controller_0
-  (declare-input controller_0_X Real [2])
-  (declare-output controller_0_Y Real [1]))
-(assert (<= (+ (- (* 16.0 controller_0_X[0]) (* 8.0 controller_0_X[1])) controller_0_Y[0]) 2.75))
-(assert (<= (* 8.0 controller_0_X[0]) 7.25))
-(assert (>= (* 8.0 controller_0_X[0]) 0.75))
-(assert (<= (* 8.0 controller_0_X[1]) 7.25))
-(assert (>= (* 8.0 controller_0_X[1]) 0.75))
+(declare-network controller
+  (declare-input controller_X Real [2])
+  (declare-output controller_Y Real [1]))
+(assert (<= (+ (- (* 16.0 controller_X[0]) (* 8.0 controller_X[1])) controller_Y[0]) 2.75))
+(assert (<= (* 8.0 controller_X[0]) 7.25))
+(assert (>= (* 8.0 controller_X[0]) 0.75))
+(assert (<= (* 8.0 controller_X[1]) 7.25))
+(assert (>= (* 8.0 controller_X[1]) 0.75))

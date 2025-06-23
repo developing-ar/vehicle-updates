@@ -22,9 +22,9 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "controller_0_Y[0]": 7,
-                  "controller_0_X[1]": 5,
-                  "controller_0_X[0]": 4
+                  "controller_Y[0]": 7,
+                  "controller_X[1]": 5,
+                  "controller_X[0]": 4
                 }
               },
               "variableCompilationTrace": {
@@ -183,9 +183,9 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "controller_0_Y[0]": 7,
-                  "controller_0_X[1]": 5,
-                  "controller_0_X[0]": 4
+                  "controller_Y[0]": 7,
+                  "controller_X[1]": 5,
+                  "controller_X[0]": 4
                 }
               },
               "variableCompilationTrace": {

@@ -53,7 +53,7 @@
   },
   {
     "name": "TestVerify",
-    "run": "vehicle verify -s spec.vcl -v TestVerifier --network controller:controller.onnx --verifier-location=testVerifier --verifier-args='sat 'controller_0_X[0]=0.2,controller_0_X[1]=0.3,controller_0_Y[0]=3.0''",
+    "run": "vehicle verify -s spec.vcl -v TestVerifier --network controller:controller.onnx --verifier-location=testVerifier --verifier-args='sat 'controller_X[0]=0.2,controller_X[1]=0.3,controller_Y[0]=3.0''",
     "needs": ["spec.vcl", "controller.onnx", "../../../testVerifier"],
     "external": ["TestVerifier"]
   }

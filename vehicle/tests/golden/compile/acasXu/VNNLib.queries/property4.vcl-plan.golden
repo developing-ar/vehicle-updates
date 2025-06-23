@@ -32,16 +32,16 @@
                   0
                 ],
                 "queryVariableMapping": {
-                  "acasXu_0_Y[4]": 17,
-                  "acasXu_0_Y[3]": 16,
-                  "acasXu_0_Y[2]": 15,
-                  "acasXu_0_Y[1]": 14,
-                  "acasXu_0_Y[0]": 13,
-                  "acasXu_0_X[4]": 11,
-                  "acasXu_0_X[3]": 10,
-                  "acasXu_0_X[2]": 9,
-                  "acasXu_0_X[1]": 8,
-                  "acasXu_0_X[0]": 7
+                  "acasXu_Y[4]": 17,
+                  "acasXu_Y[3]": 16,
+                  "acasXu_Y[2]": 15,
+                  "acasXu_Y[1]": 14,
+                  "acasXu_Y[0]": 13,
+                  "acasXu_X[4]": 11,
+                  "acasXu_X[3]": 10,
+                  "acasXu_X[2]": 9,
+                  "acasXu_X[1]": 8,
+                  "acasXu_X[0]": 7
                 }
               },
               "variableCompilationTrace": {
