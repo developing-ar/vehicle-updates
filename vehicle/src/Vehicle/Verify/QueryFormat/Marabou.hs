@@ -36,7 +36,7 @@ outputFormat =
   ExternalOutputFormat
     { formatName = pretty MarabouQueries,
       formatVersion = Nothing,
-      commentToken = "//",
+      commentStyle = Line "//",
       emptyLines = False
     }
 

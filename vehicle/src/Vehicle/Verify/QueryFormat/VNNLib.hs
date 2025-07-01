@@ -30,7 +30,7 @@ outputFormat =
   ExternalOutputFormat
     { formatName = pretty VNNLibQueries,
       formatVersion = Nothing,
-      commentToken = ";",
+      commentStyle = Line ";",
       emptyLines = True
     }
 

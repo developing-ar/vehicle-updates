@@ -64,6 +64,7 @@ to discuss it with us.
 #### Interactive Theorem Prover backends
 
 - [Agda](https://agda.readthedocs.io/)
+- [Rocq](https://rocq-prover.org/)
 
 ## Related papers
 

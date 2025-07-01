@@ -122,6 +122,7 @@ library
     Vehicle.Backend.LossFunction.LossCompilation
     Vehicle.Backend.Prelude
     Vehicle.Backend.Queries.Error
+    Vehicle.Backend.Rocq
     Vehicle.CommandLine
     Vehicle.Compile
     Vehicle.Compile.Context.Bound
@@ -193,6 +194,8 @@ library
     Vehicle.Backend.Queries.UserVariableElimination.Core
     Vehicle.Backend.Queries.UserVariableElimination.EliminateExists
     Vehicle.Backend.Queries.UserVariableElimination.VariableReconstruction
+    Vehicle.Backend.Rocq.Compile
+    Vehicle.Backend.Rocq.Interact
     Vehicle.Compile.Arity
     Vehicle.Compile.Context.Bound.Class
     Vehicle.Compile.Context.Bound.Core

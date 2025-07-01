@@ -1,0 +1,68 @@
+name: Test Rocq
+
+on:
+  workflow_call:
+
+defaults:
+  run:
+    shell: sh
+
+jobs:
+  test-vehicle-rocq:
+    strategy:
+      matrix:
+        os:
+          - name: "Linux"
+            type: "ubuntu-latest"
+            plat: "manylinux_2_17_x86_64.manylinux2014_x86_64"
+          - name: "macOS"
+            type: "macos-latest"
+            plat: "macosx_10_9_x86_64"
+        haskell:
+          - ghc:
+              version: "9.4.8"
+            cabal:
+              version: "3.10.2.1"
+              project-file: "cabal.project.ghc-9.4.8"
+              extra-args: ""
+        ocaml:
+          - version: "5"
+        rocq:
+          - version: "9.0.0"
+
+    name: rocq / ${{ matrix.os.name }} - Ocaml ${{ matrix.ocaml.version }} - Rocq ${{ matrix.rocq.version }}
+    runs-on: ${{ matrix.os.type }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Haskell
+        uses: ./.github/actions/setup-haskell
+        with:
+          ghc-version: ${{ matrix.haskell.ghc.version }}
+          cabal-version: ${{ matrix.haskell.cabal.version }}
+          cabal-project-file: ${{ matrix.haskell.cabal.project-file }}
+          cabal-project-freeze-file: ${{ matrix.haskell.cabal.project-file }}.freeze
+
+      - name: Setup Ocaml
+        uses: ocaml/setup-ocaml@v3.2.16
+        with:
+          ocaml-compiler: ${{ matrix.ocaml.version }}
+
+      - name: Install Rocq
+        run: opam install rocq-prover.${{ matrix.rocq.version }}
+
+      - name: Install libraries
+        run: |
+          opam repo add coq-released https://coq.inria.fr/opam/released
+          opam install ./vehicle-rocq
+
+      - name: Test Vehicle-Rocq interaction
+        run: |
+          eval $(opam env)
+          cabal test                                 \
+            vehicle:test:golden-tests                \
+            --test-show-details=always               \
+            --test-option=--color=always             \
+            --test-option=--num-threads=1            \
+            --test-option=--allowlist-externals=rocq

@@ -4,7 +4,8 @@ Usage: vehicle export (-t|--target TARGET) (-c|--cache FILE) [-o|--output FILE]
   Export a.vcl specification file to an interactive theorem prover.
 
 Available options:
-  -t,--target TARGET       The target to export to. Supported options: Agda
+  -t,--target TARGET       The target to export to. Supported options: Agda,
+                           Rocq
   -c,--cache FILE          The location of the verification cache that can be
                            used to check the verification status of the
                            specification. Should be passed when compiling to an

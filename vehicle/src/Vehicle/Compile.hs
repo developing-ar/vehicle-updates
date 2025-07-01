@@ -18,6 +18,7 @@ import Vehicle.Backend.LossFunction.LogicCompilation (compileLogic)
 import Vehicle.Backend.LossFunction.Logics (dslFor)
 import Vehicle.Backend.Prelude
 import Vehicle.Backend.Queries
+import Vehicle.Backend.Rocq
 import Vehicle.Compile.Dependency
 import Vehicle.Compile.Error
 import Vehicle.Compile.FunctionaliseResources (functionaliseResources)
@@ -138,6 +139,10 @@ compileToITP itp CompileOptions {..} typedProg@(Main ds) = do
       let agdaOptions = AgdaOptions verificationCache output moduleName
       agdaCode <- compileProgToAgda decProg agdaOptions
       writeAgdaFile output agdaCode
+    Rocq -> do
+      let rocqOptions = RocqOptions output moduleName
+      rocqCode <- compileProgToRocq decProg rocqOptions
+      writeRocqFile output rocqCode
 
 compileToLossFunction ::
   forall m.
