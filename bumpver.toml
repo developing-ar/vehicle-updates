@@ -7,7 +7,9 @@ tag = true
 push = true
 
 [bumpver.file_patterns]
-"bumpver.toml" = ['current_version = "{version}"']
+"bumpver.toml" = [
+    'current_version = "{version}"'
+]
 "vehicle-python/vehicle-python-binding.cabal" = [
     "^version:         {pep440_version}$",
 ]
@@ -24,13 +26,21 @@ push = true
 "vehicle-python/src/vehicle_lang/_version.py" = [
     '^VERSION: str = "{pep440_version}"$'
 ]
-"vehicle/vehicle.cabal" = ["^version:            {pep440_version}$"]
+"vehicle/vehicle.cabal" = [
+    "^version:            {pep440_version}$"
+]
 "vehicle-syntax/vehicle-syntax.cabal" = [
     "^version:            {pep440_version}$"
 ]
 "vehicle/tests/golden/**/*.agda.golden" = [
     "--  - Vehicle version: {pep440_version}+dev"
 ]
+"vehicle/tests/golden/**/*.v.golden" = [
+    "(*  - Vehicle version: {pep440_version}+dev"
+]
 "vehicle/tests/golden/**/Marabou.queries/*-query*.txt.golden" = [
     "//  - Vehicle version: {pep440_version}+dev"
+]
+"vehicle/tests/golden/**/VNNLib.queries/*-query*.txt.golden" = [
+    ";  - Vehicle version: {pep440_version}+dev"
 ]
