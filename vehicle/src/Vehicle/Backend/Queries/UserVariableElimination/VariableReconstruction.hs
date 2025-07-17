@@ -53,7 +53,7 @@ createInitialAssignment ::
   QueryVariableAssignment ->
   MixedVariableAssignment
 createInitialAssignment queryVariableMap (QueryVariableAssignment valuesByQueryVar) = do
-  let missingVariable var = developerError ("Missing query variable" <+> pretty var)
+  let missingVariable var = developerError ("Solver returned additional unknown variable" <+> pretty var)
   let mapQueryVariable var = coerce $ fromMaybe (missingVariable var) (Map.lookup var queryVariableMap)
   let valuesByNetworkVar = ZeroDimTensor <$> Map.mapKeys mapQueryVariable valuesByQueryVar
   valuesByNetworkVar
