@@ -19,6 +19,7 @@ import Data.List.NonEmpty qualified as NonEmpty (toList)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Generics (Generic)
@@ -169,6 +170,9 @@ listOrd leq (x : xs) (y : ys) = le || (eq && listOrd leq xs ys)
   where
     le = leq x y && not (leq y x)
     eq = leq x y && leq y x
+
+listIntersection :: (Ord a) => [a] -> [a] -> [a]
+listIntersection xs ys = Set.toList $ Set.difference (Set.fromList xs) (Set.fromList ys)
 
 findAndDeleteElem :: (a -> Bool) -> [a] -> Maybe (a, [a])
 findAndDeleteElem p = go id

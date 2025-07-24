@@ -1,5 +1,17 @@
 # Changelog for Vehicle
 
+## Version 0.18.0
+
+### Verifier backend
+
+* Backend now unifies syntactically distinct but semantically identical network applications,
+  e.g. previously `exists x . 0.2 <= f [x + 2] and f [2 + x] >= 0.3` was compiled to a query with two network
+  applications, but is now compiled to a query with a single network application.
+
+* Improved error messages when detecting unsupported multiple network applications so that the actual values the network being applied to are printed.
+
+* Fixed a bug with compilation of networks which have a zero dimension.
+
 ## Version 0.17.0
 
 ### The Vehicle language

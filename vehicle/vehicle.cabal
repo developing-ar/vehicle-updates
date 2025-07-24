@@ -188,6 +188,7 @@ library
     Vehicle.Backend.LossFunction.ZeroTensorLifting
     Vehicle.Backend.Queries
     Vehicle.Backend.Queries.ConstraintSearch
+    Vehicle.Backend.Queries.MetaNetworkCalculation
     Vehicle.Backend.Queries.PostProcessing
     Vehicle.Backend.Queries.Unblock
     Vehicle.Backend.Queries.UserVariableElimination
