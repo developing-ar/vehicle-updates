@@ -32,8 +32,13 @@ jobs:
             plat: "musllinux"
             test: "test"
           - name: "macOS"
-            type: "macos-latest"
+            type: "macOS-13"
             arch: "x86_64"
+            plat: "macosx"
+            test: "test,tensorflow"
+          - name: "macOS"
+            type: "macOS-latest"
+            arch: "arm64"
             plat: "macosx"
             test: "test,tensorflow"
           - name: "Windows"
@@ -51,7 +56,7 @@ jobs:
 
       - name: Setup GHC ${{ env.DEFAULT_GHC_VERSION }}
         if: matrix.os.name == 'macOS' || matrix.os.name == 'Windows'
-        uses: haskell/actions/setup@v2
+        uses: haskell-actions/setup@v2
         with:
           ghc-version: ${{ env.DEFAULT_GHC_VERSION }}
           cabal-version: ${{ env.DEFAULT_CABAL_VERSION }}
@@ -66,7 +71,7 @@ jobs:
           CIBW_BUILD: "*${{ matrix.os.plat }}*"
           CIBW_ARCHS: "${{ matrix.os.arch }}"
           CIBW_TEST_EXTRAS: "${{ matrix.os.test }}"
-          MACOSX_DEPLOYMENT_TARGET: "10.10"
+          MACOSX_DEPLOYMENT_TARGET: "${{ matrix.os.arch == 'x86_64' && '10.10' || '11.0' }}"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
