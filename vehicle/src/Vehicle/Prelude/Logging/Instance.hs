@@ -8,6 +8,7 @@ module Vehicle.Prelude.Logging.Instance
     runSilentLogger,
     SilentLoggerT,
     showCompileWarnings,
+    OutputAsJSON,
   )
 where
 
@@ -29,6 +30,7 @@ import Vehicle.Prelude.Warning
 
 --------------------------------------------------------------------------------
 -- Settings
+type OutputAsJSON = Bool
 
 data LoggingSettings = LoggingSettings
   { putLogLn :: Text -> IO (),
