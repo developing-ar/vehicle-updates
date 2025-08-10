@@ -238,9 +238,9 @@ evalReduceTensor accessReductionOp accessLit evalOp2 op2 args =
     evalBop :: VArg builtin -> Value builtin -> Value builtin -> m (Value builtin)
     evalBop ds xs ys = evalOp2 (TensorOp2Args ds xs ys)
 
-    foldFn e ds x y = do
-      x' <- evalFull ds e x
-      evalBop ds x' y
+    foldFn e ds r y = do
+      y' <- evalFull ds e y
+      evalBop ds r y'
 
 -----------------------------------------------------------------------------
 -- Individual builtin evaluation
@@ -588,20 +588,20 @@ isValueBlocked ::
   Value builtin ->
   m (Value builtin)
 isValueBlocked v = do
-  let blocked = case v of
-        VUniverse {} -> False
-        VMeta {} -> True
-        VFreeVar {} -> True
-        VBoundVar {} -> True
-        VLam {} -> False
-        VPi {} -> False
-        VRecord {} -> False
-        VRecordAcc {} -> True
-        VBuiltin b spine -> case blockingStatus b spine of
-          InsufficientArgs -> True
-          DoesNotReduce -> False
-          AlwaysReduces -> False
-          Blocked {} -> True
+  blocked <- case v of
+    VUniverse {} -> return False
+    VMeta {} -> return True
+    VFreeVar {} -> return True
+    VBoundVar {} -> return True
+    VLam {} -> return False
+    VPi {} -> return False
+    VRecord {} -> return False
+    VRecordAcc {} -> return True
+    VBuiltin b spine -> case blockingStatus b spine of
+      InsufficientArgs -> return True
+      DoesNotReduce -> return False
+      AlwaysReduces -> return False
+      Blocked {} -> return True
   tell (Any blocked)
   return v
 
