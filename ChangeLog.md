@@ -8,7 +8,7 @@
 
 ### Command-line interface
 
-* Update the `--json` option flag to be globally applicable for Vehicle to output the result of implementing commands as machine-readable JSON. It is currently implemented in the commands: `list`, `validate`, and `compile` with the `--json` or `-j` flag.
+* Update the `--json` option flag to be globally applicable for Vehicle to output the result of implementing commands as machine-readable JSON. It is currently implemented in the commands: `check`, `list`, `validate`, and `compile` with the `--json` or `-j` flag.
 
 ## Version 0.18.0
 
