@@ -6,6 +6,10 @@
 
 * Fixed various bugs that sometimes occured when compiling tensors with dimensions >= 2.
 
+### Command-line interface
+
+* Update the `--json` option flag to be globally applicable for Vehicle to output the result of implementing commands as machine-readable JSON. It is currently implemented in the commands: `list`, `validate`, and `compile` with the `--json` or `-j` flag.
+
 ## Version 0.18.0
 
 ### Vehicle language
@@ -99,7 +103,7 @@ Some positive changes from this:
 * Exposed the other modes' functionality in Python in the `vehicle_lang` module as:
   - `check`
   - `compile_to_query`
-  - `validate`
+  - `validate` which outputs as JSON
   - `export_to_solver`
   - `list_resources` and `list_properties` which output as JSON
 
