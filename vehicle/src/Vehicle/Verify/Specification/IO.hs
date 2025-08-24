@@ -48,6 +48,8 @@ import Vehicle.Data.QuantifiedVariable (UserVariableAssignment (..))
 import Vehicle.Data.Tensor as Tensor (HasShape (..), toVector)
 import Vehicle.Prelude.IO qualified as VIO (MonadStdIO (writeStdoutLn))
 import Vehicle.Verify.Core
+import Data.Aeson (encode, object, (.=))
+import qualified Data.ByteString.Lazy.Char8 as BSL
 import Vehicle.Verify.QueryFormat
 import Vehicle.Verify.QueryFormat.Core
 import Vehicle.Verify.Specification
@@ -292,7 +294,8 @@ data VerifierSettings = VerifierSettings
   { verifier :: Verifier,
     verifierExecutable :: VerifierExecutable,
     verifierExtraArgs :: [String],
-    noSatPrint :: Bool
+    noSatPrint :: Bool,
+    jsonOutput :: Bool
   }
 
 type MonadVerify m =
@@ -303,14 +306,13 @@ type MonadVerify m =
 
 type MonadVerifyProperty m =
   ( MonadVerify m,
-    MonadReader (VerifierSettings, FilePath, PropertyProgressBar) m,
+    MonadReader (VerifierSettings, FilePath, PropertyProgressBar, Int) m,
     MonadWriter (Sum Int) m,
     MonadError (QueryMetaData, VerificationError) m
   )
 
 type MonadVerifyQuery m =
   ( MonadVerify m,
-    MonadReader (VerifierSettings, FilePath, PropertyProgressBar) m,
     MonadError VerificationError m
   )
 
@@ -322,15 +324,26 @@ verifySpecification ::
   FilePath ->
   m ()
 verifySpecification verifierSettings queryFolder = do
-  programOutput "Verifying properties:"
+  let json = jsonOutput verifierSettings
+  unless (json) $ programOutput "Verifying properties:"
   let verificationPlanFile = specificationCacheIndexFileName queryFolder
   SpecificationCacheIndex {..} <- readSpecificationCacheIndex verificationPlanFile
   maybeIntegrityError <- checkIntegrityOfResources resourcesIntegrityInfo
   case maybeIntegrityError of
-    Just err -> programOutput $ "Resource error:" <+> pretty err
+    Just err -> unless (json) $ programOutput $ "Resource error:" <+> pretty err
     Nothing -> forM_ properties $ \(name, multiProperty) -> do
       stats <- execWriterT $ verifyMultiproperty verifierSettings queryFolder multiProperty
-      outputStats name stats
+      if json
+            then liftIO $ BSL.putStrLn $ encode $ object
+              [ 
+                "type" .= ("property_summary" :: String),
+                "propertyName" .= name,
+                "verified" .= numberVerified stats,
+                "falsified" .= numberFalsified stats,
+                "timedOut" .= numberTimedOut stats,
+                "errored" .= numberErrored stats
+              ]
+        else outputStats name stats
 
 verifyMultiproperty ::
   (MonadVerify m, MonadWriter MultiPropertyStats m) =>
@@ -354,28 +367,33 @@ verifyProperty verifierSettings verificationCache address = do
   let propertyPlanFile = propertyPlanFileName verificationCache address
   PropertyVerificationPlan {..} <- readPropertyVerificationPlan propertyPlanFile
 
+  let json = jsonOutput verifierSettings
+  -- Determine progressBar only for human mode
   result <- case queryMetaData of
-    Trivial status -> return $ PropertyCompleted (Trivial status)
+    Trivial status ->
+      return $ PropertyCompleted (Trivial status)
     NonTrivial structure -> do
-      logCompilerSection MinDetail ("Verifying property" <+> quotePretty address) $ do
-        -- Perform the verification
-        let numberOfQueries = propertySize queryMetaData
-        progressBar <- createPropertyProgressBar address numberOfQueries
-        let readerState = (verifierSettings, verificationCache, progressBar)
-        (errorOrResult, Sum numberOfQueriesExecuted) <-
-          runWriterT (runExceptT (runReaderT (verifyPropertyBooleanStructure structure) readerState))
+      -- Log property header
+      logCompilerSection MinDetail ("Verifying property" <+> quotePretty address) (return ())
+      -- Determine number of queries and initialize progress bar
+      let numberOfQueries = propertySize queryMetaData
+      progressBar <- if json
+        then return (undefined :: PropertyProgressBar)
+        else createPropertyProgressBar address numberOfQueries
+      -- Verify all queries in reader with total count
+      let readerState = (verifierSettings, verificationCache, progressBar, numberOfQueries)
+      (errorOrResult, Sum queriesExecuted) <-
+        runWriterT $ runExceptT $ runReaderT (verifyPropertyBooleanStructure structure) readerState
+      -- Close progress bar if human mode and incomplete
+      when (not json && queriesExecuted < numberOfQueries) $
+        closePropertyProgressBar progressBar
+      -- Return composed result
+      case errorOrResult of
+        Left err -> return $ PropertyErrored err
+        Right r  -> return $ PropertyCompleted $ NonTrivial r
 
-        -- The progress bar is only closed when all queries are run.
-        -- Not all queries are run, (e.g. short-circuited counter-example found or error occured).
-        -- In this case we have to close it manually.
-        when (numberOfQueriesExecuted < numberOfQueries) $ do
-          closePropertyProgressBar progressBar
-
-        case errorOrResult of
-          Left err -> return $ PropertyErrored err
-          Right result -> return $ PropertyCompleted $ NonTrivial result
-
-  outputPropertyResult verifierSettings verificationCache address result
+  -- Output property result (human-only)
+  unless json $ outputPropertyResult verifierSettings verificationCache address result
 
   logPropertyStatus result
 
@@ -443,12 +461,28 @@ verifyQuery ::
   m (QueryResult UserVariableAssignment)
 verifyQuery queryMetaData@(QueryMetaData queryAddress metaNetwork variables reconstruction) = do
   logCompilerSection MidDetail ("Verifying query" <+> quotePretty queryAddress) $ do
-    (verifierSettings, verificationCache, progressBar) <- ask
+    (verifierSettings, verificationCache, progressBar, totalQueries) <- ask
     let queryFile = calculateQueryFileName verificationCache queryAddress
 
     errorOrResult <- runExceptT $ do
       result <- invokeVerifier verifierSettings metaNetwork queryFile
-      liftIO $ incProgress progressBar 1
+      -- Progress and optional JSON output per query
+      liftIO $ do
+        if jsonOutput verifierSettings
+          then let (PropertyAddress pid pname pindices, qid) = queryAddress in
+            BSL.putStrLn $ encode $ object
+              [ 
+                "type" .= ("query" :: String),
+                "propertyID" .= pid,
+                "propertyName" .= pname,
+                "propertyIndices" .= pindices,
+                "queryID" .= qid,
+                "queryTotal" .= totalQueries,
+                "result" .= case result of
+                  UnSAT -> ("pass" :: String)
+                  SAT _ -> ("fail" :: String)
+              ]
+          else incProgress progressBar 1
 
       case result of
         SAT Nothing -> do
