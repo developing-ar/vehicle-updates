@@ -13,6 +13,9 @@ module Vehicle.Data.Code.TypedView
     BoolTensorValue (..),
     toBoolTensorValue,
     fromBoolTensorValue,
+    MultiDimBoolTensorValue (..),
+    toMultiDimBoolTensorValue,
+    fromMultiDimBoolTensorValue,
     RatTensorValue (..),
     toRatTensorValue,
     fromRatTensorValue,
@@ -296,6 +299,50 @@ fromBoolTensorValue = \case
   VBoolAt args -> mkExpr accessAtTensor args
   VBoolForeach args -> mkExpr accessForeachTensor args
 -}
+
+-------------------------------------------------------------------------------
+-- Multi-dimensional bool tensor
+
+-- | A view on all possible expressions that can have type `Tensor Bool (d :: ds)`.
+data MultiDimBoolTensorValue
+  = VMultiDimBoolTensorLiteral (Tensor Bool)
+  | VMultiDimBoolConstTensor (ConstTensorArgs (Value Builtin))
+  | VMultiDimBoolStackTensor (StackTensorArgs (Value Builtin))
+  | VPointwiseNot (TensorOp1Args (Value Builtin))
+  | VPointwiseAnd (TensorOp2Args (Value Builtin))
+  | VPointwiseOr (TensorOp2Args (Value Builtin))
+  | VCompareRatTensorPointwise (ComparisonOp, TensorOp2Args (Value Builtin))
+  | VMultiDimBoolIf (IfArgs (Value Builtin))
+  | VMultiDimBoolAt (AtTensorArgs (Value Builtin))
+  | VBoolForeach (ForeachTensorArgs (Value Builtin))
+
+toMultiDimBoolTensorValue :: (HasCallStack) => Value Builtin -> MultiDimBoolTensorValue
+toMultiDimBoolTensorValue expr = case expr of
+  (getExpr accessBoolTensorLiteral -> Just t) -> VMultiDimBoolTensorLiteral t
+  (getExpr accessConstTensor -> Just args) -> VMultiDimBoolConstTensor args
+  (getExpr accessStackTensor -> Just args) -> VMultiDimBoolStackTensor args
+  (getExpr accessNotTensor -> Just args) -> VPointwiseNot args
+  (getExpr accessAndTensor -> Just args) -> VPointwiseAnd args
+  (getExpr accessOrTensor -> Just args) -> VPointwiseOr args
+  (getExpr accessCompareRatTensorPointwise -> Just args) -> VCompareRatTensorPointwise args
+  (getExpr accessIf -> Just args) -> VMultiDimBoolIf args
+  (getExpr accessAtTensor -> Just args) -> VMultiDimBoolAt args
+  (getExpr accessForeachTensor -> Just args) -> VBoolForeach args
+  _ -> developerError $ "ill-typed RatTensor expression:" <+> prettyVerbose expr
+
+fromMultiDimBoolTensorValue :: MultiDimBoolTensorValue -> Value Builtin
+fromMultiDimBoolTensorValue = \case
+  VMultiDimBoolTensorLiteral y -> mkExpr accessBoolTensorLiteral y
+  VMultiDimBoolConstTensor args -> mkExpr accessConstTensor args
+  VMultiDimBoolStackTensor args -> mkExpr accessStackTensor args
+  VPointwiseNot args -> mkExpr accessNotTensor args
+  VPointwiseAnd args -> mkExpr accessAndTensor args
+  VPointwiseOr args -> mkExpr accessOrTensor args
+  VCompareRatTensorPointwise args -> mkExpr accessCompareRatTensorPointwise args
+  VMultiDimBoolIf args -> mkExpr accessIf args
+  VMultiDimBoolAt args -> mkExpr accessAtTensor args
+  VBoolForeach args -> mkExpr accessForeachTensor args
+
 -------------------------------------------------------------------------------
 -- Tensor Rat
 

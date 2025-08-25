@@ -1,6 +1,6 @@
 # Changelog for Vehicle
 
-## Version 0.18.1
+## Next release
 
 ### Command-line interface
 
