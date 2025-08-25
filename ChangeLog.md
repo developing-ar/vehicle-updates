@@ -15,6 +15,10 @@
 
 * Fixed bug where comparisons between tensors sometimes caused an error.
 
+### Python interface
+
+* The `check` function outputs as JSON.
+
 ## Version 0.18.0
 
 ### Vehicle language
