@@ -1,14 +1,29 @@
 # Changelog for Vehicle
 
-## Version 0.18.1
+## Next release
+
+### Rocq Interface
+
+* Changes to syntax of compiled Rocq scripts to match standard formatting
+
+* (BREAKING) Changes to tensor definition in the `vehicle-rocq` library
+
+* `windController` example updated to use new tensor definition
+
+## Version 0.19.0
+
+### Command-line interface
+
+* Added extra option `--loggingPass` which allows you to restrict which compiler pass
+  logging is enabled for. See `vehicle --help` for more information.
+
+* Updated the `--json` option flag to be a global command line object. When passed it will cause Vehicle to produce output as machine-readable JSON. It is currently implemented in the commands: `check`, `list`, `validate`, and `compile`.
 
 ### Verifier backend
 
 * Fixed various bugs that sometimes occured when compiling tensors with dimensions >= 2.
 
-### Command-line interface
-
-* Update the `--json` option flag to be globally applicable for Vehicle to output the result of implementing commands as machine-readable JSON. It is currently implemented in the commands: `check`, `list`, `validate`, and `compile` with the `--json` or `-j` flag.
+* Fixed bug where comparisons between tensors sometimes caused an error.
 
 ## Version 0.18.0
 

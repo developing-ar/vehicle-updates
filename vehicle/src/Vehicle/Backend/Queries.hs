@@ -19,6 +19,7 @@ import Vehicle.Compile.ExpandResources.Core
 import Vehicle.Compile.Normalise.NBE
 import Vehicle.Compile.Prelude
 import Vehicle.Compile.Print.Warning ()
+import Vehicle.Data.Builtin.Interface (Accessor (..))
 import Vehicle.Data.Builtin.Standard
 import Vehicle.Data.Code.BooleanExpr
 import Vehicle.Data.Code.Interface
@@ -35,9 +36,6 @@ import Vehicle.Verify.Specification.IO
 --------------------------------------------------------------------------------
 -- Compilation to individual queries
 
-currentPass :: Doc a
-currentPass = "compilation of properties"
-
 -- | Compiles the provided program to individual queries suitable for a
 -- verifier and outputs them. We need to output them as they are generated as
 -- otherwise storing all the queries can result in an out-of-memory errors.
@@ -48,31 +46,30 @@ compileToQueries ::
   Resources ->
   Maybe FilePath ->
   m ()
-compileToQueries queryFormat typedProg resources maybeVerificationFolder =
-  logCompilerPass MinDetail currentPass $ do
-    -- Create the verification folder if required.
-    case maybeVerificationFolder of
-      Nothing -> return ()
-      Just folder -> liftIO $ createDirectoryIfMissing True folder
+compileToQueries queryFormat typedProg resources maybeVerificationFolder = do
+  -- Create the verification folder if required.
+  case maybeVerificationFolder of
+    Nothing -> return ()
+    Just folder -> liftIO $ createDirectoryIfMissing True folder
 
-    -- Expand out the external resources in the specification (datasets, networks etc.)
-    (Main resourceFreeDecls, networkCtx, freeCtx, integrityInfo) <-
-      expandResources resources typedProg
+  -- Expand out the external resources in the specification (datasets, networks etc.)
+  (Main resourceFreeDecls, networkCtx, freeCtx, integrityInfo) <-
+    expandResources resources typedProg
 
-    -- Perform the actual compilation to queries
-    properties <-
-      runFreeContextT freeCtx $
-        compileDecls typedProg queryFormat networkCtx 0 resourceFreeDecls maybeVerificationFolder
+  -- Perform the actual compilation to queries
+  properties <-
+    runFreeContextT freeCtx $
+      compileDecls typedProg queryFormat networkCtx 0 resourceFreeDecls maybeVerificationFolder
 
-    -- Check that there were actually properties in the specification.
-    when (null properties) $ do
-      throwError NoPropertiesFound
+  -- Check that there were actually properties in the specification.
+  when (null properties) $ do
+    throwError NoPropertiesFound
 
-    case maybeVerificationFolder of
-      Nothing -> return ()
-      Just folder -> do
-        let verificationPlan = SpecificationCacheIndex integrityInfo properties
-        writeSpecificationCache folder verificationPlan
+  case maybeVerificationFolder of
+    Nothing -> return ()
+    Just folder -> do
+      let verificationPlan = SpecificationCacheIndex integrityInfo properties
+      writeSpecificationCache folder verificationPlan
 
 --------------------------------------------------------------------------------
 -- Getting properties
@@ -125,7 +122,7 @@ compilePropertyDecl ::
   Expr Builtin ->
   m (Name, MultiProperty ())
 compilePropertyDecl prog propertyData@(_, _, declProv@(ident, _), _, _) expr = do
-  logCompilerPass MinDetail ("property" <+> quotePretty ident) $ do
+  logCompilerSection2 MinDetail ("property" <+> quotePretty ident) $ do
     normalisedExpr <- normaliseInEmptyEnv expr
     multiProperty <-
       compileMultiProperty propertyData normalisedExpr
@@ -152,22 +149,22 @@ compileMultiProperty ::
 compileMultiProperty multiPropertyMetaData = go []
   where
     go :: TensorIndices -> Value Builtin -> m (MultiProperty ())
-    go indices expr = case toBoolTensorValue expr of
-      Just (VBoolStackTensor args) -> do
+    go indices expr = case expr of
+      (getExpr accessStackTensor -> Just args) -> do
         let es' = zip [0 :: Int ..] $ stackElements args
         MultiProperty <$> traverse (\(i, e) -> go (i : indices) e) es'
-      Just (VBoolTensorLiteral bs) | not (isZeroDimensional bs) -> do
+      (getExpr accessBoolTensorLiteral -> Just bs) | not (isZeroDimensional bs) -> do
         -- Important to test for non-zero dimensionality otherwise we don't display the correct
         -- warnings for trivial tensors nor generate .vcl-plan file.
         let es' = zip [0 :: Int ..] (fromBoolTensorValue . VBoolTensorLiteral <$> unstack bs)
         MultiProperty <$> traverse (\(i, e) -> go (i : indices) e) es'
-      Just (VBoolVecLiteral args) -> do
+      (getExpr accessVecLit -> Just args) -> do
         let es' = zip [0 :: Int ..] $ vecLitElements args
         MultiProperty <$> traverse (\(i, e) -> go (i : indices) e) es'
       _ -> do
         let propertyMetaData@PropertyMetaData {..} = updateMetaData multiPropertyMetaData indices
         flip runReaderT propertyMetaData $ do
-          logCompilerPass MinDetail ("property" <+> quotePretty propertyAddress) $ do
+          logCompilerSection2 MinDetail ("property" <+> quotePretty propertyAddress) $ do
             compileSingleProperty expr
             return $ SingleProperty propertyAddress ()
 

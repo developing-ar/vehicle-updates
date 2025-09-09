@@ -61,24 +61,25 @@ diagnoseSpecIncompatiblility prog propertyIdentifier typeCheck = do
   setCallDepth 0
   logDebug MinDetail $
     "ERROR: found uncompilable property."
-      <+> "Switching to linearity type-checking mode for"
+      <+> "Switching to diagnostic type-checking mode for"
       <+> quotePretty propertyIdentifier
       <> line
 
-  monomorphisedProg <-
-    monomorphise prog $
-      MonoSettings
-        { isMonomorphisableBinder = not . isExplicit,
-          keepUnusedDeclaration = (== propertyIdentifier)
-        }
-  irrelevantFreeProg <- removeIrrelevantCodeFromProg monomorphisedProg
-  implicitFreeProg <- removeImplicitArgs irrelevantFreeProg
-  instanceFreeProg <- resolveInstanceArgumentsAndCasts implicitFreeProg
-  errorOrLinearityProg <- typeCheck instanceFreeProg
+  logCompilerPass QueryError $ do
+    monomorphisedProg <-
+      monomorphise prog $
+        MonoSettings
+          { isMonomorphisableBinder = not . isExplicit,
+            keepUnusedDeclaration = (== propertyIdentifier)
+          }
+    irrelevantFreeProg <- removeIrrelevantCodeFromProg monomorphisedProg
+    implicitFreeProg <- removeImplicitArgs irrelevantFreeProg
+    instanceFreeProg <- resolveInstanceArgumentsAndCasts implicitFreeProg
+    errorOrLinearityProg <- typeCheck instanceFreeProg
 
-  case errorOrLinearityProg of
-    Left err -> return $ Left err
-    Right linearityProg -> Right <$> findDeclType propertyIdentifier linearityProg
+    case errorOrLinearityProg of
+      Left err -> return $ Left err
+      Right linearityProg -> Right <$> findDeclType propertyIdentifier linearityProg
 
 removeImplicitArgs ::
   forall m builtin.
@@ -86,7 +87,7 @@ removeImplicitArgs ::
   Prog builtin ->
   m (Prog builtin)
 removeImplicitArgs prog =
-  logCompilerPass MaxDetail "removal of implicit arguments" $ do
+  logCompilerSection2 MaxDetail "removal of implicit arguments" $ do
     result <- traverse go prog
     logCompilerPassOutput $ prettyExternal result
     return result

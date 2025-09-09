@@ -11,7 +11,7 @@ import Vehicle.Backend.LossFunction.LossCompilation qualified as Loss (convertVa
 import Vehicle.Compile.Context.Free (MonadFreeContext, addDeclEntryToContext, runFreshFreeContextT)
 import Vehicle.Compile.Context.Name (MonadNameContext, runFreshNameContextT)
 import Vehicle.Compile.Error
-import Vehicle.Compile.Normalise.NBE (normaliseInEnv)
+import Vehicle.Compile.Normalise.NBE (normaliseInEmptyEnv)
 import Vehicle.Compile.Normalise.Quote (unnormalise)
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Builtin.Core
@@ -24,7 +24,7 @@ convertToLossTensors ::
   Prog Builtin ->
   m (Prog LossBuiltin)
 convertToLossTensors logic (Main ds) =
-  logCompilerPass MinDetail currentPass $
+  logCompilerSection2 MinDetail currentPass $
     runFreshFreeContextT (Proxy @Builtin) $
       runFreshNameContextT $
         Main <$> convertDecls logic ds
@@ -39,8 +39,8 @@ convertDecls logic = \case
   decl : decls -> do
     (normDecl, maybeLossTensorDecl) <- do
       let ident = identifierOf decl
-      logCompilerPass MinDetail ("declaration" <+> quotePretty ident) $ do
-        normStandardDecl <- traverse (normaliseInEnv mempty) decl
+      logCompilerSection2 MinDetail ("declaration" <+> quotePretty ident) $ do
+        normStandardDecl <- traverse normaliseInEmptyEnv decl
         maybeTensorDecl <-
           if not (isPropertyDecl decl)
             then return Nothing

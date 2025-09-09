@@ -44,7 +44,7 @@ typeCheckProg ::
   Prog Builtin ->
   m (Prog builtin)
 typeCheckProg modul instanceCandidates freeCtx prog@(Main uncheckedProg) =
-  logCompilerPass MinDetail "type checking" $
+  logCompilerPass TypeChecking $
     runTypeCheckerTInitially freeCtx instanceCandidates $ do
       let unusedDecls = case modul of
             User -> completelyUnusedDeclarations (createDependencyGraph prog)
@@ -65,7 +65,7 @@ typeCheckSolitaryExpr instanceCandidates freeCtx expr1 = do
     expr2 <- convertFromStandardBuiltins expr1
     (expr3, _exprType) <- inferExprType mempty Relevant expr2
     solveConstraints (Proxy @builtin)
-    expr4 <- substMetasAt 0 expr3
+    expr4 <- substMetaVariablesAt mempty expr3
     checkAllUnknownsSolved (Proxy @builtin)
     return expr4
 
@@ -82,7 +82,7 @@ typeCheckDecls unusedDecls = \case
 
 typeCheckDecl :: forall builtin m. (TCM builtin m) => Decl Builtin -> DeclIsUnused -> m (Decl builtin)
 typeCheckDecl uncheckedDecl isUnused =
-  logCompilerPass MidDetail ("typing" <+> quotePretty (identifierOf uncheckedDecl)) $ do
+  logCompilerSection2 MidDetail ("typing" <+> quotePretty (identifierOf uncheckedDecl)) $ do
     logDebug MidDetail $ prettyExternal uncheckedDecl <> line
 
     convertedDecl <- logCompilerSection MaxDetail "Converting builtins" $ do
@@ -95,10 +95,9 @@ typeCheckDecl uncheckedDecl isUnused =
     decl <- case convertedDecl of
       DefAbstract p n r t -> typeCheckAbstractDef p n r t isUnused
       DefFunction p n b t e -> typeCheckFunctionDef p n b t e isUnused
-      DefRecord p n t fs -> typeCheckRecordDef p n t fs isUnused
-
+      DefRecord p n b t fs -> typeCheckRecordDef p n b t fs isUnused
     checkAllUnknownsSolved (Proxy @builtin)
-    finalDecl <- substMetas decl
+    finalDecl <- substMetaVariables decl
     logCompilerPassOutput $ prettyExternal finalDecl
     setCurrentDecl @builtin Nothing
 
@@ -140,14 +139,14 @@ typeCheckFunctionDef p ident anns typ body isUnused = do
   checkedType <- checkDeclType ident typ
   finalCheckedType <-
     if isProperty anns
-      then logCompilerPass MidDetail "checking suitability of type as @property" $ do
+      then logCompilerSection2 MidDetail "checking suitability of type as @property" $ do
         restrictDeclType RestrictedProperty (ident, p) checkedType
       else return checkedType
 
   -- Type check the body.
   let pass = bidirectionalPassDoc <+> "body of" <+> quotePretty ident
   checkedBody <-
-    logCompilerPass MidDetail pass $
+    logCompilerSection2 MidDetail pass $
       checkExprType mempty Relevant finalCheckedType body
 
   -- Reconstruct the function.
@@ -156,7 +155,7 @@ typeCheckFunctionDef p ident anns typ body isUnused = do
   -- Solve constraints and substitute through.
   setCurrentDecl $ Just (checkedDecl, isUnused)
   solveConstraints (Proxy @builtin)
-  substDecl <- substMetas checkedDecl
+  substDecl <- substMetaVariables checkedDecl
 
   if isProperty anns
     then return substDecl
@@ -176,26 +175,27 @@ typeCheckRecordDef ::
   (TCM builtin m) =>
   Provenance ->
   Identifier ->
+  [Annotation] ->
   Type builtin ->
   RecordFields (Type builtin) ->
   DeclIsUnused ->
   m (Decl builtin)
-typeCheckRecordDef p ident uncheckedType uncheckedFields isUnused = do
+typeCheckRecordDef p ident _anns uncheckedType uncheckedFields isUnused = do
   checkedType <- checkDeclType ident uncheckedType
 
   -- Type check the body.
   let pass = bidirectionalPassDoc <+> "fields of" <+> quotePretty ident
   checkedFields <-
-    logCompilerPass MidDetail pass $
+    logCompilerSection2 MidDetail pass $
       traverse (checkRecordFieldDef ident) uncheckedFields
 
   -- Reconstruct the function.
-  let checkedDecl = DefRecord p ident checkedType checkedFields
+  let checkedDecl = DefRecord p ident _anns checkedType checkedFields
 
   -- Solve constraints and substitute through.
   setCurrentDecl $ Just (checkedDecl, isUnused)
   solveConstraints (Proxy @builtin)
-  substMetas checkedDecl
+  substMetaVariables checkedDecl
 
 checkRecordFieldDef ::
   (TCM builtin m) =>
@@ -209,7 +209,7 @@ checkRecordFieldDef _recordIdent (field, fieldType) = do
 checkDeclType :: (TCM builtin m, HasName name Name) => name -> Type builtin -> m (Type builtin)
 checkDeclType ident declType = do
   let pass = bidirectionalPassDoc <+> "type of" <+> quotePretty (nameOf ident)
-  logCompilerPass MidDetail pass $ do
+  logCompilerSection2 MidDetail pass $ do
     checkExprType mempty Relevant (TypeUniverse mempty 0) declType
 
 restrictAbstractDefType ::
@@ -220,7 +220,7 @@ restrictAbstractDefType ::
   m (Type builtin)
 restrictAbstractDefType resource decl@(ident, _) defType = do
   let resourceName = pretty resource <+> quotePretty ident
-  logCompilerPass MidDetail ("checking suitability of the type of" <+> resourceName) $ do
+  logCompilerSection2 MidDetail ("checking suitability of the type of" <+> resourceName) $ do
     case resource of
       ParameterDef sort -> restrictDeclType (RestrictedParameter sort) decl defType
       DatasetDef -> restrictDeclType RestrictedDataset decl defType
@@ -234,7 +234,7 @@ restrictAbstractDefType resource decl@(ident, _) defType = do
 -- being checked, as metas are handled different according to whether they
 -- occur in the type or not.
 solveConstraints :: forall builtin m. (TCM builtin m) => Proxy builtin -> m ()
-solveConstraints proxy = logCompilerPass MidDetail "constraint solving" $ do
+solveConstraints proxy = logCompilerSection2 MidDetail "constraint solving" $ do
   sortConstraints
   loopOverConstraints 1
   where
@@ -252,7 +252,7 @@ solveConstraints proxy = logCompilerPass MidDetail "constraint solving" $ do
 
       -- Try to solve the constraints pass
       oldConstraintIDS <- getActiveConstraintIDs proxy
-      logCompilerPass MaxDetail ("constraint solving pass" <+> pretty loopNumber) runSolvers
+      logCompilerSection2 MaxDetail ("constraint solving pass" <+> pretty loopNumber) runSolvers
       newConstraintIDS <- getActiveConstraintIDs proxy
 
       if IntSet.null newConstraintIDS
@@ -278,19 +278,19 @@ solveConstraints proxy = logCompilerPass MidDetail "constraint solving" $ do
     tryToUnstick :: (TCM builtin m) => m Bool
     tryToUnstick = do
       -- First try to increase the depth limit for instance search
-      solvedMetas <- logCompilerPass MidDetail "trying to increase the depth for instance search" $ do
+      solvedMetas <- logCompilerSection2 MidDetail "trying to increase the depth for instance search" $ do
         trackSolvedMetas proxy $ runInstanceSolver proxy 1
 
       if not (MetaSet.null solvedMetas)
         then return True
         else do
           -- Then if that fails try to use default instances
-          success <- logCompilerPass MidDetail "trying to generate a new constraint using instance defaults" $ do
+          success <- logCompilerSection2 MidDetail "trying to generate a new constraint using instance defaults" $ do
             addNewInstanceConstraintUsingDefaults proxy
 
           if success
             then return True
-            else logCompilerPass MidDetail "trying to generate a new constraint using instance defaults" $ do
+            else logCompilerSection2 MidDetail "trying to generate a new constraint using instance defaults" $ do
               -- Then if that fails try to use default auxiliary instances
               generateDefaultAuxiliaryConstraint proxy
 

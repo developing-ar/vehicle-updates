@@ -35,7 +35,7 @@ runInstanceSolver ::
   InstanceSearchDepth ->
   m ()
 runInstanceSolver proxy depth = do
-  logCompilerPass MaxDetail "instance solver run" $
+  logCompilerSection2 MaxDetail "instance solver run" $
     runConstraintSolver
       getActiveInstanceConstraints
       setInstanceConstraints
@@ -61,7 +61,7 @@ solveInstanceConstraint ::
   WithContext (InstanceConstraint builtin) ->
   m ()
 solveInstanceConstraint depth constraint = do
-  normConstraint <- substMetas constraint
+  normConstraint <- substMetaVariables constraint
   logDebug MaxDetail $ "Forced:" <+> prettyExternal normConstraint
 
   let goal = instanceGoal $ objectIn normConstraint
@@ -110,7 +110,7 @@ solveInstanceGoal constraint rawBuiltinCandidates depth goal = do
     -- If there are no valid candidates then we fail.
     [] -> do
       freeEnv <- getFreeEnv
-      finalConstraint <- substMetas constraint
+      finalConstraint <- substMetaVariables constraint
       throwError $ TypingError $ FailedInstanceConstraint $ FailedInstanceConstraintError freeEnv finalConstraint unsuccessfulCandidates
 
     -- Otherwise there are still multiple valid candidates so we're forced to block.
@@ -161,7 +161,7 @@ checkCandidate ::
   m (Either (WithContext (InstanceCandidate builtin), UnAnnDoc) (WithContext (InstanceCandidate builtin), TypeCheckerState builtin))
 checkCandidate constraint goal depth candidate = do
   let candidateDoc = squotes (prettyCandidate candidate)
-  logCompilerPass MaxDetail ("trying candidate instance" <+> candidateDoc) $ do
+  logCompilerSection2 MaxDetail ("trying candidate instance" <+> candidateDoc) $ do
     result <- runTypeCheckerTHypothetically $ do
       logCompilerSection MaxDetail "hypothetically accepting candidate" $
         acceptCandidate constraint goal candidate
@@ -222,7 +222,7 @@ instantiateCandidateTelescope goalCtxExtension (constraintCtx, constraintOrigin)
     let initialCtx = goalCtxExtension ++ candidateCtx
     (candidateBody, candidateSol, newInstanceConstraints, finalCtx) <-
       go (candidateExpr, candidateSolution, [], initialCtx)
-    normCandidateBody <- normaliseInEnv (boundContextToEnv finalCtx) candidateBody
+    normCandidateBody <- normaliseInEnv (toNamedBoundCtx finalCtx) (boundContextToEnv finalCtx) candidateBody
     return (normCandidateBody, candidateSol, newInstanceConstraints)
   where
     go ::
@@ -242,7 +242,7 @@ instantiateCandidateTelescope goalCtxExtension (constraintCtx, constraintOrigin)
           Instance {} -> do
             let newInfo = (setConstraintBoundCtx constraintCtx boundCtx, constraintOrigin)
             -- WARNING massive hack should be traversing the normalised type here.
-            normBinderType <- normaliseInEnv (boundContextToEnv boundCtx) binderType
+            normBinderType <- normaliseInEnv (toNamedBoundCtx boundCtx) (boundContextToEnv boundCtx) binderType
             (expr, constraint) <- createDerivedInstanceConstraint newInfo (relevanceOf exprBinder) normBinderType
             return (expr, [constraint])
         let exprBodyResult = newArg `substDBInto` exprBody

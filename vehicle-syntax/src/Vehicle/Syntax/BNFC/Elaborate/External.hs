@@ -123,7 +123,8 @@ elabDeclGroup anns = \case
     p <- mkProvenance tk
     n <- elabName tk
     fields' <- traverse elabRecordFieldDef fields
-    let d' = V.DefRecord p n (UnparsedExpr (tokType 0)) fields'
+    (_, annotations) <- partitionEithers <$> traverse parseAnnotation anns
+    let d' = V.DefRecord p n annotations (UnparsedExpr (tokType 0)) fields'
     return (d', ds)
 
   -- Annotation declaration.
@@ -231,6 +232,9 @@ parseAnnotation (tkName, opts) = do
     "@property" -> do
       validateEmptyOpts tkName opts
       return $ Right V.AnnProperty
+    "@tensor" -> do
+      validateEmptyOpts tkName opts
+      return $ Right V.AnnTensor
     name -> developerError $ "Unknown annotation found" <+> squotes (pretty name)
 
 validateOpts :: forall m token. (MonadElab m, IsToken token) => token -> Set Text -> B.DeclAnnOpts -> m [B.DeclAnnOption]
@@ -317,7 +321,7 @@ elaborateDecl ::
 elaborateDecl file decl = flip runReaderT file $ case decl of
   V.DefAbstract p n r t -> V.DefAbstract p n r <$> elabDeclType t
   V.DefFunction p n b t e -> V.DefFunction p n b <$> elabDeclType t <*> elabDeclBody e
-  V.DefRecord p n t fs -> V.DefRecord p n <$> elabDeclType t <*> traverse elabRecordDefEntry fs
+  V.DefRecord p n b t fs -> V.DefRecord p n b <$> elabDeclType t <*> traverse elabRecordDefEntry fs
 
 elabDeclType ::
   (MonadElab m) =>
@@ -391,11 +395,11 @@ elabExpr expr = case expr of
   B.Ge e1 tk e2 -> elabComparison V.Ge tk e1 e2
   B.Gt e1 tk e2 -> elabComparison V.Gt tk e1 e2
   B.EqPoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Eq) tk [e1, e2]
-  B.NePoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Eq) tk [e1, e2]
-  B.LePoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Eq) tk [e1, e2]
-  B.LtPoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Eq) tk [e1, e2]
-  B.GePoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Eq) tk [e1, e2]
-  B.GtPoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Eq) tk [e1, e2]
+  B.NePoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Ne) tk [e1, e2]
+  B.LePoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Le) tk [e1, e2]
+  B.LtPoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Lt) tk [e1, e2]
+  B.GePoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Ge) tk [e1, e2]
+  B.GtPoint e1 tk e2 -> builtinFunction (V.CompareRatTensorPointwise V.Gt) tk [e1, e2]
   B.Add e1 tk e2 -> builtinTypeClassOp V.AddTC tk [e1, e2]
   B.Sub e1 tk e2 -> builtinTypeClassOp V.SubTC tk [e1, e2]
   B.Mul e1 tk e2 -> builtinTypeClassOp V.MulTC tk [e1, e2]

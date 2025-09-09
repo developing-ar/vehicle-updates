@@ -31,7 +31,7 @@ import Vehicle.Data.Universe (UniverseLevel (..))
 import Vehicle.Syntax.AST.Expr qualified as S
 
 scopeCheck :: (MonadCompile m) => Imports -> S.Prog -> m (Prog Builtin)
-scopeCheck imports prog = logCompilerPass MinDetail "scope checking" $
+scopeCheck imports prog = logCompilerPass Scoping $
   runMonadScopeT $ do
     scopeImports imports
     scopeProg prog
@@ -200,7 +200,7 @@ scopeImports = traverse_ scopeModule
       case decl of
         DefAbstract {} -> return ()
         DefFunction {} -> return ()
-        DefRecord _ ident _ fs -> do
+        DefRecord _ ident _ _ fs -> do
           traverse_ (\(f, _) -> addNewRecordDefField ident f) fs
           addNewRecordDef ident (fmap fst fs)
           return ()
@@ -211,7 +211,7 @@ scopeProg = traverseDecls scopeDecl
 
 scopeDecl :: (MonadScope m) => S.Decl -> m (Decl Builtin)
 scopeDecl decl =
-  logCompilerPass MidDetail ("scoping" <+> quotePretty (identifierOf decl)) $ do
+  logCompilerSection2 MidDetail ("scoping" <+> quotePretty (identifierOf decl)) $ do
     scopedDecl <- case decl of
       DefAbstract p ident r t -> do
         t' <- scopeTopLevelExpr False t
@@ -220,12 +220,11 @@ scopeDecl decl =
         t' <- scopeTopLevelExpr True t
         e' <- scopeTopLevelExpr False e
         return (DefFunction p ident anns t' e')
-      DefRecord p ident t fs -> do
+      DefRecord p ident b t fs -> do
         t' <- scopeTopLevelExpr False t
         fs' <- traverse (scopeDefRecordField ident) fs
         addNewRecordDef ident (fmap fst fs')
-        return (DefRecord p ident t' fs')
-
+        return (DefRecord p ident b t' fs')
     addNewDecl scopedDecl
 
     logCompilerPassOutput (prettyFriendly scopedDecl)

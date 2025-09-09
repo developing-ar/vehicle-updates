@@ -5,7 +5,6 @@ module Vehicle.Compile.Error where
 import Control.Exception (IOException)
 import Control.Monad.Except (MonadError, throwError)
 import Data.Aeson (ToJSON, object, toJSON, (.=))
-import Data.Aeson qualified as Aeson
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 import Data.Typeable (Proxy)
@@ -214,33 +213,11 @@ instance Pretty VehicleError where
   pretty (EError (ExternalError text)) = pretty text
   pretty (DError text) = unAnnotate text
 
-data VehicleErrorJSON = VehicleErrorJSON
-  { errorType :: Text,
-    errorContent :: Aeson.Value
-  }
-  deriving (Generic, Show)
-
-instance ToJSON VehicleErrorJSON
-
-convertVehicleErrorToJSON :: VehicleError -> VehicleErrorJSON
-convertVehicleErrorToJSON (UError uError) =
-  VehicleErrorJSON
-    { errorType = "UserError",
-      errorContent = toJSON uError
-    }
-convertVehicleErrorToJSON (EError eError) =
-  VehicleErrorJSON
-    { errorType = "ExternalError",
-      errorContent = toJSON eError
-    }
-convertVehicleErrorToJSON (DError doc) =
-  VehicleErrorJSON
-    { errorType = "DeveloperError",
-      errorContent = toJSON $ renderString $ layoutPretty defaultLayoutOptions doc
-    }
-
 instance ToJSON VehicleError where
-  toJSON vehicleError = toJSON $ convertVehicleErrorToJSON vehicleError
+  toJSON vehicleError = case vehicleError of
+    DError doc -> toJSON $ renderString $ layoutPretty defaultLayoutOptions doc
+    EError eError -> toJSON eError
+    UError uError -> toJSON uError
 
 fixText :: Doc ann -> Doc ann
 fixText t = "Fix:" <+> t

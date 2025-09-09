@@ -44,7 +44,7 @@ data AgdaOptions = AgdaOptions
 
 compileProgToAgda :: (MonadCompile m) => Prog DecidabilityBuiltin -> AgdaOptions -> m (Doc a)
 compileProgToAgda prog options =
-  logCompilerPass MinDetail currentPhase $ do
+  logCompilerSection2 MinDetail currentPhase $ do
     logDebug MaxDetail $ prettyExternal prog
     prog2 <- capitaliseTypeNames prog
     programDoc <- runFreshNameContextT $ compileProg options prog2
@@ -325,7 +325,7 @@ compileDecl opts = \case
         let binders' = mapMaybe compileTopLevelBinder binders
         (_, cbody) <- compileBinders binders (compileExpr body)
         compileFunDef (compileIdentifier n) <$> compileExpr t <*> pure binders' <*> pure cbody
-  DefRecord _ n t fs -> do
+  DefRecord _ n _ t fs -> do
     t' <- compileExpr t
     fs' <- traverseRecordFields compileExpr fs
     return $
