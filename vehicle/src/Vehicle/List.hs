@@ -30,12 +30,14 @@ list loggingSettings outputAsJSON ListOptions {..} = runCompileMonad loggingSett
           secondaryTypeSystem = Nothing
         }
   let mergedProg = mergeImports imports typedProg
-  printResources mergedProg listEntities outputAsJSON
+  case listEntities of
+    ListableVariables {} -> printVariables mergedProg outputAsJSON
+    ListableResources resourceType -> printResources mergedProg resourceType outputAsJSON
 
 printResources ::
   (MonadIO m, MonadCompile m, PrintableBuiltin builtin) =>
   Prog builtin ->
-  ListableEntities ->
+  ListableResources ->
   Bool ->
   m ()
 printResources (Main decls) listEntities outputAsJSON = do
@@ -48,9 +50,39 @@ printResources (Main decls) listEntities outputAsJSON = do
           ( \decl ->
               convertDeclToListEntity
                 decl
-                (if listEntities == ExternalResources then pretty (abstractSortOf decl) else "@property")
+                $ maybe "" pretty (abstractSortOf decl)
           )
           filteredDecls
+  let outputDocs =
+        if outputAsJSON
+          then pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON listDecls
+          else pretty listDecls
+  programOutput outputDocs
+
+quantifiedVariableToListEntity :: Expr builtin -> Maybe ListEntity
+quantifiedVariableToListEntity = \case
+  BoundVar prov idx -> Just $ ListEntity {entitySort = "variable", entityName = pack (show idx), entityType = "quantified", entityProvenance = prov}
+  _ -> Nothing
+
+parseGenericProgForQuantifiedVariable :: GenericDecl (Expr builtin) -> Maybe ListEntity
+parseGenericProgForQuantifiedVariable = \case
+  DefFunction _ _ _ _ expr -> quantifiedVariableToListEntity expr
+  DefAbstract _ _ _ expr -> quantifiedVariableToListEntity expr
+  DefRecord _ _ _ expr _ -> quantifiedVariableToListEntity expr
+
+listQuantifiedVariables :: [GenericDecl (Expr builtin)] -> [ListEntity]
+listQuantifiedVariables [] = []
+listQuantifiedVariables (decl : decls) = case parseGenericProgForQuantifiedVariable decl of
+  Just entity -> entity : listQuantifiedVariables decls
+  Nothing -> listQuantifiedVariables decls
+
+printVariables ::
+  (MonadIO m, MonadCompile m, PrintableBuiltin builtin) =>
+  Prog builtin ->
+  Bool ->
+  m ()
+printVariables (Main decls) outputAsJSON = do
+  let listDecls = listQuantifiedVariables decls
   let outputDocs =
         if outputAsJSON
           then pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON listDecls
@@ -61,7 +93,8 @@ printResources (Main decls) listEntities outputAsJSON = do
 data ListEntity = ListEntity
   { entitySort :: Text,
     entityName :: Text,
-    entityType :: Text
+    entityType :: Text,
+    entityProvenance :: Provenance
   }
   deriving (Eq, Show, Generic)
 
@@ -72,11 +105,13 @@ instance Pretty ListEntity where
     pretty (entitySort listEntity)
       <+> pretty (entityName listEntity)
       <+> pretty (entityType listEntity)
+      <+> pretty (entityProvenance listEntity)
 
 convertDeclToListEntity :: (PrintableBuiltin builtin) => Decl builtin -> Doc a -> ListEntity
 convertDeclToListEntity decl entitySort =
   ListEntity
     { entitySort = pack $ show entitySort,
       entityName = identifierName $ identifierOf decl,
-      entityType = pack $ show $ prettyFriendlyEmptyCtx (typeOf decl)
+      entityType = pack $ show $ prettyFriendlyEmptyCtx (typeOf decl),
+      entityProvenance = provenanceOf decl
     }

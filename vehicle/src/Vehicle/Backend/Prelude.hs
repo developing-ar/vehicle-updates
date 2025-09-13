@@ -62,11 +62,19 @@ instance Read SecondaryTypeSystem where
 
 --------------------------------------------------------------------------------
 -- Different Listable Entities
-
-data ListableEntities
+data ListableResources
   = ExternalResources
   | Properties
   deriving (Eq, Show, Bounded, Enum)
+
+data ListableVariables
+  = QuantifiedVariables
+  deriving (Eq, Show, Bounded, Enum)
+
+data ListableEntities
+  = ListableResources ListableResources
+  | ListableVariables ListableVariables
+  deriving (Eq, Show)
 
 --------------------------------------------------------------------------------
 -- Action

@@ -45,7 +45,7 @@ import Options.Applicative
     switch,
     value,
   )
-import Vehicle.Backend.Prelude (DifferentiableLogicID, ITP, ListableEntities (..), SecondaryTypeSystem (..), Target (..), findTarget)
+import Vehicle.Backend.Prelude (DifferentiableLogicID, ITP, ListableEntities (..), ListableResources (..), ListableVariables (..), SecondaryTypeSystem (..), Target (..), findTarget)
 import Vehicle.Compile (CompileOptions (..))
 import Vehicle.Export (ExportOptions (..))
 import Vehicle.List (ListOptions (..))
@@ -425,14 +425,20 @@ listModeParser =
     command
       "resources"
       ( info
-          (pure ExternalResources)
+          (pure $ ListableResources ExternalResources)
           (progDesc "List all networks, datasets, and parameters in the specification.")
       )
       <> command
         "properties"
         ( info
-            (pure Properties)
+            (pure $ ListableResources Properties)
             (progDesc "List all properties in the specification.")
+        )
+      <> command
+        "quantifiedVariables"
+        ( info
+            (pure $ ListableVariables QuantifiedVariables)
+            (progDesc "List all quantified variables in the specification.")
         )
 
 specificationParser :: Parser FilePath
