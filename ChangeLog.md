@@ -10,6 +10,10 @@
 
 * `windController` example updated to use new tensor definition
 
+### Command-line interface
+
+* Fixed the `list resources` such that inferable parameters are not listed.
+
 ## Version 0.19.0
 
 ### Command-line interface
