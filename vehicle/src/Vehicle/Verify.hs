@@ -69,15 +69,24 @@ compileAndVerifyQueries loggingSettings outputAsJSON VerifyOptions {..} verifyCo
     verifyCommand tempDir
 
 -- | Verifies queries in either human-readable or JSON streaming mode
-verifyQueries :: (MonadStdIO IO)
-  => LoggingSettings -> OutputAsJSON -> FilePath -> VerifierID -> Maybe VerifierExecutable -> Maybe String -> Bool -> IO ()
+verifyQueries ::
+  (MonadStdIO IO) =>
+  LoggingSettings ->
+  OutputAsJSON ->
+  FilePath ->
+  VerifierID ->
+  Maybe VerifierExecutable ->
+  Maybe String ->
+  Bool ->
+  IO ()
 verifyQueries loggingSettings outputAsJSON queryFolder verifierID verifierLocation maybeVerifierExtraArgs noSatOutputs = do
   let verifier = verifiers verifierID
   verifierExecutable <- locateVerifierExecutable verifier verifierLocation
   let verifierExtraArgs = maybe [] words maybeVerifierExtraArgs
   let verifierSettings = VerifierSettings verifier verifierExecutable verifierExtraArgs noSatOutputs outputAsJSON
   runLoggerT loggingSettings $ verifySpecification verifierSettings queryFolder
-locateVerifierExecutable :: MonadIO m => Verifier -> Maybe VerifierExecutable -> m VerifierExecutable
+
+locateVerifierExecutable :: (MonadIO m) => Verifier -> Maybe VerifierExecutable -> m VerifierExecutable
 locateVerifierExecutable Verifier {..} = \case
   Just providedLocation -> liftIO $ do
     absolutePath <- makeAbsolute providedLocation

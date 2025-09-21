@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Vehicle.Verify.Specification.IO
   ( VerifierSettings (..),
     readSpecification,
@@ -18,9 +21,11 @@ import Control.Monad.Except (MonadError (..), runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..))
 import Control.Monad.Writer (MonadWriter (..), WriterT (..), execWriterT)
-import Data.Aeson (decode)
+import Data.Aeson (ToJSON, decode, defaultOptions, fieldLabelModifier, genericToJSON, toJSON)
+import Data.Aeson qualified as Aeson
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy qualified as BIO
+import Data.ByteString.Lazy.Char8 qualified as BSL
 import Data.IDX (encodeIDXFile)
 import Data.IDX.Internal
 import Data.List.NonEmpty (NonEmpty (..))
@@ -32,6 +37,7 @@ import Data.Text.IO qualified as TIO
 import Data.Text.Lazy qualified as LazyText
 import Data.Vector qualified as BoxedVector
 import Data.Vector.Unboxed qualified as Vector (fromList)
+import GHC.Generics (Generic)
 import Prettyprinter (fill)
 import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist)
 import System.Exit (ExitCode (..))
@@ -48,8 +54,6 @@ import Vehicle.Data.QuantifiedVariable (UserVariableAssignment (..))
 import Vehicle.Data.Tensor as Tensor (HasShape (..), toVector)
 import Vehicle.Prelude.IO qualified as VIO (MonadStdIO (writeStdoutLn))
 import Vehicle.Verify.Core
-import Data.Aeson (encode, object, (.=))
-import qualified Data.ByteString.Lazy.Char8 as BSL
 import Vehicle.Verify.QueryFormat
 import Vehicle.Verify.QueryFormat.Core
 import Vehicle.Verify.Specification
@@ -333,16 +337,19 @@ verifySpecification verifierSettings queryFolder = do
     Just err -> unless (json) $ programOutput $ "Resource error:" <+> pretty err
     Nothing -> forM_ properties $ \(name, multiProperty) -> do
       stats <- execWriterT $ verifyMultiproperty verifierSettings queryFolder multiProperty
-      if json
-            then liftIO $ BSL.putStrLn $ encode $ object
-              [ 
-                "type" .= ("property_summary" :: String),
-                "propertyName" .= name,
-                "verified" .= numberVerified stats,
-                "falsified" .= numberFalsified stats,
-                "timedOut" .= numberTimedOut stats,
-                "errored" .= numberErrored stats
-              ]
+      if json && numberVerified stats + numberFalsified stats + numberTimedOut stats + numberErrored stats > 1
+        then
+          liftIO $
+            BSL.putStrLn $
+              Aeson.encode $
+                PropertySummary
+                  { psType = "property_summary",
+                    propertyName = toJSON name,
+                    verified = numberVerified stats,
+                    falsified = numberFalsified stats,
+                    timedOut = numberTimedOut stats,
+                    errored = numberErrored stats
+                  }
         else outputStats name stats
 
 verifyMultiproperty ::
@@ -377,9 +384,10 @@ verifyProperty verifierSettings verificationCache address = do
       logCompilerSection MinDetail ("Verifying property" <+> quotePretty address) (return ())
       -- Determine number of queries and initialize progress bar
       let numberOfQueries = propertySize queryMetaData
-      progressBar <- if json
-        then return (undefined :: PropertyProgressBar)
-        else createPropertyProgressBar address numberOfQueries
+      progressBar <-
+        if json
+          then return (undefined :: PropertyProgressBar)
+          else createPropertyProgressBar address numberOfQueries
       -- Verify all queries in reader with total count
       let readerState = (verifierSettings, verificationCache, progressBar, numberOfQueries)
       (errorOrResult, Sum queriesExecuted) <-
@@ -390,7 +398,7 @@ verifyProperty verifierSettings verificationCache address = do
       -- Return composed result
       case errorOrResult of
         Left err -> return $ PropertyErrored err
-        Right r  -> return $ PropertyCompleted $ NonTrivial r
+        Right r -> return $ PropertyCompleted $ NonTrivial r
 
   -- Output property result (human-only)
   unless json $ outputPropertyResult verifierSettings verificationCache address result
@@ -469,19 +477,20 @@ verifyQuery queryMetaData@(QueryMetaData queryAddress metaNetwork variables reco
       -- Progress and optional JSON output per query
       liftIO $ do
         if jsonOutput verifierSettings
-          then let (PropertyAddress pid pname pindices, qid) = queryAddress in
-            BSL.putStrLn $ encode $ object
-              [ 
-                "type" .= ("query" :: String),
-                "propertyID" .= pid,
-                "propertyName" .= pname,
-                "propertyIndices" .= pindices,
-                "queryID" .= qid,
-                "queryTotal" .= totalQueries,
-                "result" .= case result of
-                  UnSAT -> ("pass" :: String)
-                  SAT _ -> ("fail" :: String)
-              ]
+          then
+            let (PropertyAddress pid pname pindices, qid) = queryAddress
+                res = if case result of UnSAT -> True; SAT _ -> False then "pass" else "fail"
+             in BSL.putStrLn $
+                  Aeson.encode $
+                    QueryOutput
+                      { qoType = "query",
+                        propertyID = pid,
+                        propertyName = toJSON pname,
+                        propertyIndices = pindices,
+                        queryID = qid,
+                        queryTotal = totalQueries,
+                        result = res
+                      }
           else incProgress progressBar 1
 
       case result of
@@ -682,3 +691,44 @@ createPropertyProgressBar (PropertyAddress _ name indices) numberOfQueries = do
 
 closePropertyProgressBar :: (MonadIO m, MonadStdIO m) => PropertyProgressBar -> m ()
 closePropertyProgressBar _progressBar = VIO.writeStdoutLn ""
+
+-- New JSON event types
+
+data QueryOutput = QueryOutput
+  { qoType :: String,
+    propertyID :: Int,
+    propertyName :: Aeson.Value, -- Using Value to allow Name pretty printing
+    propertyIndices :: [Int],
+    queryID :: Int,
+    queryTotal :: Int,
+    result :: String
+  }
+  deriving (Generic)
+
+instance ToJSON QueryOutput where
+  toJSON =
+    genericToJSON
+      defaultOptions
+        { fieldLabelModifier = \case
+            "qoType" -> "type"
+            other -> other
+        }
+
+data PropertySummary = PropertySummary
+  { psType :: String,
+    propertyName :: Aeson.Value,
+    verified :: Int,
+    falsified :: Int,
+    timedOut :: Int,
+    errored :: Int
+  }
+  deriving (Generic)
+
+instance ToJSON PropertySummary where
+  toJSON =
+    genericToJSON
+      defaultOptions
+        { fieldLabelModifier = \case
+            "psType" -> "type"
+            other -> other
+        }
