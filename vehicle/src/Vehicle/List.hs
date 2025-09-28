@@ -8,16 +8,13 @@ import Data.Text (Text, pack)
 import GHC.Generics
 import Vehicle.Backend.Prelude
 import Vehicle.Compile.Error
-import Vehicle.Compile.Prelude
+import Vehicle.Compile.Prelude hiding (Dataset, Network, Parameter)
 import Vehicle.Compile.Print
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Prelude.Logging.Instance
 import Vehicle.TypeCheck (TypeCheckOptions (..), runCompileMonad, typeCheckUserProg)
 
-data ListOptions = ListOptions
-  { listEntities :: ListableEntities,
-    specification :: FilePath
-  }
+newtype ListOptions = ListOptions {specification :: FilePath}
   deriving (Eq, Show)
 
 list :: (MonadStdIO IO) => LoggingSettings -> OutputAsJSON -> ListOptions -> IO ()
@@ -30,68 +27,34 @@ list loggingSettings outputAsJSON ListOptions {..} = runCompileMonad loggingSett
           secondaryTypeSystem = Nothing
         }
   let mergedProg = mergeImports imports typedProg
-  case listEntities of
-    ListableVariables {} -> printVariables mergedProg outputAsJSON
-    ListableResources resourceType -> printResources mergedProg resourceType outputAsJSON
+  printListableEntities mergedProg outputAsJSON
 
-printResources ::
+printListableEntities ::
   (MonadIO m, MonadCompile m, PrintableBuiltin builtin) =>
   Prog builtin ->
-  ListableResources ->
   Bool ->
   m ()
-printResources (Main decls) listEntities outputAsJSON = do
-  let filterFn = case listEntities of
-        ExternalResources -> isExternalResourceDecl
-        Properties -> isPropertyDecl
-  let filteredDecls = filter filterFn decls
+printListableEntities (Main decls) outputAsJSON = do
+  let annotatedListEntities = filter (\decl -> isAbstractDecl decl || isPropertyDecl decl) decls
   let listDecls =
-        fmap
-          ( \decl ->
-              convertDeclToListEntity
-                decl
-                $ maybe "" pretty (abstractSortOf decl)
-          )
-          filteredDecls
+        foldl
+          convertListEntity
+          []
+          annotatedListEntities
   let outputDocs =
         if outputAsJSON
           then pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON listDecls
           else pretty listDecls
   programOutput outputDocs
-
-quantifiedVariableToListEntity :: Expr builtin -> Maybe ListEntity
-quantifiedVariableToListEntity = \case
-  BoundVar prov idx -> Just $ ListEntity {entitySort = "variable", entityName = pack (show idx), entityType = "quantified", entityProvenance = prov}
-  _ -> Nothing
-
-parseGenericProgForQuantifiedVariable :: GenericDecl (Expr builtin) -> Maybe ListEntity
-parseGenericProgForQuantifiedVariable = \case
-  DefFunction _ _ _ _ expr -> quantifiedVariableToListEntity expr
-  DefAbstract _ _ _ expr -> quantifiedVariableToListEntity expr
-  DefRecord _ _ _ expr _ -> quantifiedVariableToListEntity expr
-
-listQuantifiedVariables :: [GenericDecl (Expr builtin)] -> [ListEntity]
-listQuantifiedVariables [] = []
-listQuantifiedVariables (decl : decls) = case parseGenericProgForQuantifiedVariable decl of
-  Just entity -> entity : listQuantifiedVariables decls
-  Nothing -> listQuantifiedVariables decls
-
-printVariables ::
-  (MonadIO m, MonadCompile m, PrintableBuiltin builtin) =>
-  Prog builtin ->
-  Bool ->
-  m ()
-printVariables (Main decls) outputAsJSON = do
-  let listDecls = listQuantifiedVariables decls
-  let outputDocs =
-        if outputAsJSON
-          then pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON listDecls
-          else pretty listDecls
-  programOutput outputDocs
+  where
+    convertListEntity :: (PrintableBuiltin builtin) => [ListEntity] -> Decl builtin -> [ListEntity]
+    convertListEntity accList decl = case convertDeclToListEntity decl of
+      Nothing -> accList
+      Just listEntity -> listEntity : accList
 
 -- | Data Structure for listable entities
 data ListEntity = ListEntity
-  { entitySort :: Text,
+  { entity :: ListableEntity,
     entityName :: Text,
     entityType :: Text,
     entityProvenance :: Provenance
@@ -102,16 +65,29 @@ instance ToJSON ListEntity
 
 instance Pretty ListEntity where
   pretty listEntity =
-    pretty (entitySort listEntity)
+    pretty (entity listEntity)
       <+> pretty (entityName listEntity)
       <+> pretty (entityType listEntity)
       <+> pretty (entityProvenance listEntity)
 
-convertDeclToListEntity :: (PrintableBuiltin builtin) => Decl builtin -> Doc a -> ListEntity
-convertDeclToListEntity decl entitySort =
-  ListEntity
-    { entitySort = pack $ show entitySort,
-      entityName = identifierName $ identifierOf decl,
-      entityType = pack $ show $ prettyFriendlyEmptyCtx (typeOf decl),
-      entityProvenance = provenanceOf decl
-    }
+declToListableEntity :: Decl builtin -> Maybe ListableEntity
+declToListableEntity b = case b of
+  DefAbstract _ _ sort _ -> case sort of
+    NetworkDef -> Just Network
+    DatasetDef -> Just Dataset
+    ParameterDef _ -> Just Parameter
+    PostulateDef -> Nothing
+  DefFunction _ _ anns _ _ -> if AnnProperty `elem` anns then Just Property else Nothing
+  DefRecord {} -> Nothing
+
+convertDeclToListEntity :: (PrintableBuiltin builtin) => Decl builtin -> Maybe ListEntity
+convertDeclToListEntity decl = case declToListableEntity decl of
+  Nothing -> Nothing
+  Just listableEntity ->
+    Just $
+      ListEntity
+        { entity = listableEntity,
+          entityName = identifierName $ identifierOf decl,
+          entityType = pack $ show $ prettyFriendlyEmptyCtx (typeOf decl),
+          entityProvenance = provenanceOf decl
+        }

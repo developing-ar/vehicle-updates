@@ -1,8 +1,10 @@
 module Vehicle.Backend.Prelude where
 
 import Control.Monad.IO.Class (MonadIO (..))
+import Data.Aeson (ToJSON)
 import Data.Maybe (catMaybes)
 import Data.Text.IO qualified as TIO
+import GHC.Generics (Generic)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 import Vehicle.Prelude
@@ -61,20 +63,20 @@ instance Read SecondaryTypeSystem where
     _ -> []
 
 --------------------------------------------------------------------------------
--- Different Listable Entities
-data ListableResources
-  = ExternalResources
-  | Properties
-  deriving (Eq, Show, Bounded, Enum)
+-- Listable Entities
 
-data ListableVariables
-  = QuantifiedVariables
-  deriving (Eq, Show, Bounded, Enum)
+data ListableEntity
+  = Network
+  | Dataset
+  | Parameter
+  | Property
+  | QuantifiedVariable
+  deriving (Eq, Show, Generic)
 
-data ListableEntities
-  = ListableResources ListableResources
-  | ListableVariables ListableVariables
-  deriving (Eq, Show)
+instance Pretty ListableEntity where
+  pretty x = pretty $ show x
+
+instance ToJSON ListableEntity
 
 --------------------------------------------------------------------------------
 -- Action
