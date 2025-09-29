@@ -86,7 +86,11 @@ verifyQueries loggingSettings outputAsJSON queryFolder verifierID verifierLocati
   let verifierSettings = VerifierSettings verifier verifierExecutable verifierExtraArgs noSatOutputs outputAsJSON
   runLoggerT loggingSettings $ verifySpecification verifierSettings queryFolder
 
-locateVerifierExecutable :: (MonadIO m) => Verifier -> Maybe VerifierExecutable -> m VerifierExecutable
+locateVerifierExecutable ::
+  (MonadIO m) =>
+  Verifier ->
+  Maybe VerifierExecutable ->
+  m VerifierExecutable
 locateVerifierExecutable Verifier {..} = \case
   Just providedLocation -> liftIO $ do
     absolutePath <- makeAbsolute providedLocation
