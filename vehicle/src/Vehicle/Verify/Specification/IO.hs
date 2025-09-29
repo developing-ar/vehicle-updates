@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -21,7 +22,7 @@ import Control.Monad.Except (MonadError (..), runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..))
 import Control.Monad.Writer (MonadWriter (..), WriterT (..), execWriterT)
-import Data.Aeson (ToJSON, decode, defaultOptions, fieldLabelModifier, genericToJSON, toJSON)
+import Data.Aeson (decode, toJSON)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy qualified as BIO
@@ -267,8 +268,9 @@ instance Monoid MultiPropertyStats where
         numberErrored = 0
       }
 
-outputStats :: (MonadVerify m) => PropertyName -> MultiPropertyStats -> m ()
-outputStats name MultiPropertyStats {..} = do
+-- | Outputs property statistics, either human-readable or JSON
+outputStats :: (MonadVerify m) => Bool -> PropertyName -> MultiPropertyStats -> m ()
+outputStats json name MultiPropertyStats {..} = do
   let results =
         [ ("verified", numberVerified),
           ("falsified", numberFalsified),
@@ -276,12 +278,26 @@ outputStats name MultiPropertyStats {..} = do
           ("errored", numberErrored)
         ] ::
           [(String, Int)]
-  let totalSize = sum $ fmap snd results
-  when (totalSize > 1) $ do
-    let maxTextLength = maximum $ fmap (length . fst) results
-    let prettyResult (t, x) = fill (maxTextLength + 1) (pretty t <> ":") <+> pretty x <> "/" <> pretty totalSize
-    let finalDoc = pretty name <> ":" <> line <> indent 4 (vsep (fmap prettyResult results))
-    programOutput $ "  " <> finalDoc
+      totalSize = sum $ fmap snd results
+  when (totalSize > 1) $
+    if json
+      then
+        liftIO $
+          BSL.putStrLn $
+            Aeson.encode $
+              PropertySummary
+                { eventType = "property_summary",
+                  propertyName = toJSON name,
+                  verified = numberVerified,
+                  falsified = numberFalsified,
+                  timedOut = numberTimedOut,
+                  errored = numberErrored
+                }
+      else do
+        let maxTextLength = maximum $ fmap (length . fst) results
+            prettyResult (t, x) = fill (maxTextLength + 1) (pretty t <> ":") <+> pretty x <> "/" <> pretty totalSize
+            finalDoc = pretty name <> ":" <> line <> indent 4 (vsep (fmap prettyResult results))
+        programOutput $ "  " <> finalDoc
 
 logPropertyStatus :: (MonadWriter MultiPropertyStats m) => PropertyStatus -> m ()
 logPropertyStatus status = tell $ case status of
@@ -329,28 +345,15 @@ verifySpecification ::
   m ()
 verifySpecification verifierSettings queryFolder = do
   let json = jsonOutput verifierSettings
-  unless (json) $ programOutput "Verifying properties:"
+  unless json $ programOutput "Verifying properties:"
   let verificationPlanFile = specificationCacheIndexFileName queryFolder
   SpecificationCacheIndex {..} <- readSpecificationCacheIndex verificationPlanFile
   maybeIntegrityError <- checkIntegrityOfResources resourcesIntegrityInfo
   case maybeIntegrityError of
-    Just err -> unless (json) $ programOutput $ "Resource error:" <+> pretty err
+    Just err -> unless json $ programOutput $ "Resource error:" <+> pretty err
     Nothing -> forM_ properties $ \(name, multiProperty) -> do
       stats <- execWriterT $ verifyMultiproperty verifierSettings queryFolder multiProperty
-      if json && numberVerified stats + numberFalsified stats + numberTimedOut stats + numberErrored stats > 1
-        then
-          liftIO $
-            BSL.putStrLn $
-              Aeson.encode $
-                PropertySummary
-                  { psType = "property_summary",
-                    propertyName = toJSON name,
-                    verified = numberVerified stats,
-                    falsified = numberFalsified stats,
-                    timedOut = numberTimedOut stats,
-                    errored = numberErrored stats
-                  }
-        else outputStats name stats
+      outputStats json name stats
 
 verifyMultiproperty ::
   (MonadVerify m, MonadWriter MultiPropertyStats m) =>
@@ -380,25 +383,25 @@ verifyProperty verifierSettings verificationCache address = do
     Trivial status ->
       return $ PropertyCompleted (Trivial status)
     NonTrivial structure -> do
-      -- Log property header
-      logCompilerSection MinDetail ("Verifying property" <+> quotePretty address) (return ())
-      -- Determine number of queries and initialize progress bar
-      let numberOfQueries = propertySize queryMetaData
-      progressBar <-
-        if json
-          then return (undefined :: PropertyProgressBar)
-          else createPropertyProgressBar address numberOfQueries
-      -- Verify all queries in reader with total count
-      let readerState = (verifierSettings, verificationCache, progressBar, numberOfQueries)
-      (errorOrResult, Sum queriesExecuted) <-
-        runWriterT $ runExceptT $ runReaderT (verifyPropertyBooleanStructure structure) readerState
-      -- Close progress bar if human mode and incomplete
-      when (not json && queriesExecuted < numberOfQueries) $
-        closePropertyProgressBar progressBar
-      -- Return composed result
-      case errorOrResult of
-        Left err -> return $ PropertyErrored err
-        Right r -> return $ PropertyCompleted $ NonTrivial r
+      -- Log property header and wrap the verification block
+      logCompilerSection MinDetail ("Verifying property" <+> quotePretty address) $ do
+        -- Determine number of queries and initialize progress bar
+        let numberOfQueries = propertySize queryMetaData
+        progressBar <-
+          if json
+            then return (undefined :: PropertyProgressBar)
+            else createPropertyProgressBar address numberOfQueries
+        -- Verify all queries in reader with full context
+        let readerState = (verifierSettings, verificationCache, progressBar, numberOfQueries)
+        (errorOrResult, Sum queriesExecuted) <-
+          runWriterT $ runExceptT $ runReaderT (verifyPropertyBooleanStructure structure) readerState
+        -- Close progress bar if human mode and incomplete
+        when (not json && queriesExecuted < numberOfQueries) $
+          closePropertyProgressBar progressBar
+        -- Return composed result
+        case errorOrResult of
+          Left err -> return $ PropertyErrored err
+          Right r -> return $ PropertyCompleted $ NonTrivial r
 
   -- Output property result (human-only)
   unless json $ outputPropertyResult verifierSettings verificationCache address result
@@ -479,11 +482,11 @@ verifyQuery queryMetaData@(QueryMetaData queryAddress metaNetwork variables reco
         if jsonOutput verifierSettings
           then
             let (PropertyAddress pid pname pindices, qid) = queryAddress
-                res = if case result of UnSAT -> True; SAT _ -> False then "pass" else "fail"
+                res = case result of UnSAT -> "pass"; SAT _ -> "fail"
              in BSL.putStrLn $
                   Aeson.encode $
-                    QueryOutput
-                      { qoType = "query",
+                    QuerySummary
+                      { eventType = "query",
                         propertyID = pid,
                         propertyName = toJSON pname,
                         propertyIndices = pindices,
@@ -692,43 +695,24 @@ createPropertyProgressBar (PropertyAddress _ name indices) numberOfQueries = do
 closePropertyProgressBar :: (MonadIO m, MonadStdIO m) => PropertyProgressBar -> m ()
 closePropertyProgressBar _progressBar = VIO.writeStdoutLn ""
 
--- New JSON event types
-
-data QueryOutput = QueryOutput
-  { qoType :: String,
+-- JSON event types
+data QuerySummary = QuerySummary
+  { eventType :: String,
     propertyID :: Int,
-    propertyName :: Aeson.Value, -- Using Value to allow Name pretty printing
+    propertyName :: Aeson.Value,
     propertyIndices :: [Int],
     queryID :: Int,
     queryTotal :: Int,
     result :: String
   }
-  deriving (Generic)
-
-instance ToJSON QueryOutput where
-  toJSON =
-    genericToJSON
-      defaultOptions
-        { fieldLabelModifier = \case
-            "qoType" -> "type"
-            other -> other
-        }
+  deriving (Generic, Aeson.ToJSON)
 
 data PropertySummary = PropertySummary
-  { psType :: String,
+  { eventType :: String,
     propertyName :: Aeson.Value,
     verified :: Int,
     falsified :: Int,
     timedOut :: Int,
     errored :: Int
   }
-  deriving (Generic)
-
-instance ToJSON PropertySummary where
-  toJSON =
-    genericToJSON
-      defaultOptions
-        { fieldLabelModifier = \case
-            "psType" -> "type"
-            other -> other
-        }
+  deriving (Generic, Aeson.ToJSON)
