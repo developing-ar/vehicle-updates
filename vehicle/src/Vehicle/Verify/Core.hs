@@ -84,6 +84,11 @@ instance (Pretty witness) => Pretty (QueryResult witness) where
     SAT w -> "SAT:" <+> pretty w
     UnSAT -> "UNSAT"
 
+querySatisified :: QueryResult witness -> Bool
+querySatisified = \case
+  SAT {} -> True
+  UnSAT -> False
+
 --------------------------------------------------------------------------------
 -- Property addresses
 

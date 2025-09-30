@@ -31,6 +31,7 @@ data VerificationError
   | VerifierOutputMalformed (Doc ())
   | VerifierIncompleteWitness (Set QueryVariable)
   | VerifierTimedOut
+  | ResourceIntegrityError ResourceIntegrityError
   deriving (Show)
 
 isTimeoutError :: VerificationError -> Bool
