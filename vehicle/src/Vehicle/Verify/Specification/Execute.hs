@@ -105,7 +105,7 @@ verifyProperty verifierSettings verificationCache address = do
   PropertyVerificationPlan {..} <- readPropertyVerificationPlan propertyPlanFile
 
   -- Determine number of queries and initialise progress bar
-  result <- reportProperty (propertyIndices address) $ case queryMetaData of
+  result <- reportProperty address $ case queryMetaData of
     Trivial status ->
       return $ PropertyCompleted (Trivial status)
     NonTrivial structure -> do
