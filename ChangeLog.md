@@ -2,6 +2,8 @@
 
 ## Next release
 
+## Version 0.20.0
+
 ### Verifier backend
 
 * Reduced compilation time from O(n^2) to O(1) where n is the size of the input tensor in certain
