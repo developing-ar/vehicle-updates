@@ -284,6 +284,8 @@ library
     Vehicle.Verify.QueryFormat.Marabou
     Vehicle.Verify.QueryFormat.VNNLib
     Vehicle.Verify.Specification
+    Vehicle.Verify.Specification.Execute
+    Vehicle.Verify.Specification.Execute.Reporting
     Vehicle.Verify.Specification.IO
     Vehicle.Verify.Specification.Status
     Vehicle.Verify.Verifier.Core
