@@ -5,33 +5,35 @@ module Vehicle.Verify.Specification.Execute.Reporting
     ProgressEvent (..),
     runTextProgressReporterT,
     runJSONProgressReporterT,
+    VerificationSettings (..),
   )
 where
 
 import Control.Monad (when)
-import Control.Monad.Except (ExceptT, MonadTrans (..))
+import Control.Monad.Except (ExceptT, mapExceptT)
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Identity (IdentityT)
-import Control.Monad.Reader (MonadReader (..), ReaderT (..))
-import Control.Monad.State (StateT (..), evalStateT, execStateT)
-import Data.Aeson qualified as Aeson
+import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks, mapReaderT)
+import Control.Monad.State (MonadState (..), StateT (..), evalStateT, gets, modify)
+import Control.Monad.Trans (MonadTrans (..))
+import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.Aeson.Types
-import Data.ByteString.Lazy qualified as LazyText
-import Data.ByteString.Lazy.Char8 qualified as BSL
-import Data.Text (pack)
+import Data.Bifunctor (Bifunctor (..))
+import Data.ByteString.Lazy.Char8 qualified as ByteString (unpack)
+import Data.Text (intercalate, pack)
+import Data.Text.Lazy qualified as LazyText
 import GHC.Generics (Generic)
 import Prettyprinter (fill)
+import System.Console.ANSI (Color (..))
 import System.IO (stdout)
 import System.ProgressBar
 import Vehicle.Compile.Prelude
 import Vehicle.Data.Code.BooleanExpr (MaybeTrivial (..))
 import Vehicle.Data.QuantifiedVariable (UserVariableAssignment (..))
 import Vehicle.Data.Tensor (TensorIndices)
-import Vehicle.Prelude.IO qualified as VIO (MonadStdIO (writeStdoutLn))
 import Vehicle.Verify.Core
 import Vehicle.Verify.Specification (QueryMetaData (..))
 import Vehicle.Verify.Specification.Status
-import Vehicle.Verify.Verifier.Core
+import Vehicle.Verify.Verifier.Core as Core
 
 --------------------------------------------------------------------------------
 -- Interface
@@ -39,14 +41,29 @@ import Vehicle.Verify.Verifier.Core
 --
 -- Mechanism for reporting events that happen during execution of a verification plan
 
-class MonadProgressReporter m where
+class (Monad m) => MonadProgressReporter m where
   reportMultiProperty :: Name -> m () -> m ()
-  reportProperty :: PropertyAddress -> m PropertyStatus -> m PropertyStatus
-  reportQuery :: QueryAddress -> m (QueryResult UserVariableAssignment) -> m (QueryResult UserVariableAssignment)
+  reportProperty :: VerificationSettings -> PropertyAddress -> Int -> m PropertyStatus -> m PropertyStatus
+  reportQuery :: QueryAddress -> m (Either VerifierError (QueryResult UserVariableAssignment)) -> m (Either VerifierError (QueryResult UserVariableAssignment))
 
-instance (MonadProgressReporter m) => MonadProgressReporter (ReaderT a m)
+instance (MonadProgressReporter m) => MonadProgressReporter (ReaderT a m) where
+  reportMultiProperty n = mapReaderT (reportMultiProperty n)
+  reportProperty s d i = mapReaderT (reportProperty s d i)
+  reportQuery q = mapReaderT (reportQuery q)
 
-instance (MonadProgressReporter m) => MonadProgressReporter (ExceptT a m)
+-- If error reporting is doing funny things, I have my doubts about this implementation...
+instance (MonadProgressReporter m) => MonadProgressReporter (ExceptT a m) where
+  reportMultiProperty n = mapExceptT (>>= traverse (reportMultiProperty n . return))
+  reportProperty s d i = mapExceptT (>>= traverse (reportProperty s d i . return))
+  reportQuery q = mapExceptT (>>= traverse (reportQuery q . return))
+
+data VerificationSettings = VerificationSettings
+  { verifier :: Verifier,
+    verifierExecutable :: VerifierExecutable,
+    verifierExtraArgs :: [String],
+    specificationCache :: FilePath,
+    noSatPrint :: Bool
+  }
 
 --------------------------------------------------------------------------------
 -- Multi-property summary
@@ -88,11 +105,6 @@ makeMultiPropertyStatus status = case status of
     | otherwise -> mempty {numberFalsified = 1}
 
 --------------------------------------------------------------------------------
--- Property summary
-
-data PropertySummary
-
---------------------------------------------------------------------------------
 -- Query event
 
 -- JSON event types
@@ -106,38 +118,71 @@ instance ToJSON QuerySummary
 --------------------------------------------------------------------------------
 -- Implementations
 --------------------------------------------------------------------------------
+-- Shared state
+
+type SharedState = (MultiPropertySummary, Int)
+
+runSharedStateT :: (Monad m) => StateT SharedState m a -> m a
+runSharedStateT fn = evalStateT fn (mempty, 0)
+
+getAndClearMultiPropertyState :: (MonadState SharedState m) => m MultiPropertySummary
+getAndClearMultiPropertyState = do
+  summary <- gets fst
+  put (mempty, 0)
+  return summary
+
+getAndClearPropertyState :: (MonadState SharedState m) => PropertyStatus -> m Int
+getAndClearPropertyState result = do
+  (summary, queryCount) <- get
+  put (summary <> makeMultiPropertyStatus result, 0)
+  return queryCount
+
+incrementQueryCount :: (MonadState SharedState m) => m ()
+incrementQueryCount = modify (second (+ 1))
+
+--------------------------------------------------------------------------------
 -- Text progress reporter
+--------------------------------------------------------------------------------
 
 newtype TextReporterT m a = TextReporterT
-  { unTextReporterT :: StateT MultiPropertySummary (ReaderT (Maybe (ProgressBar ())) m) a
+  { unTextReporterT :: (ReaderT (Maybe (ProgressBar ())) (StateT SharedState m)) a
   }
   deriving (Functor, Applicative, Monad)
 
+getProgressBar :: Maybe (ProgressBar ()) -> ProgressBar ()
+getProgressBar = \case
+  Nothing -> developerError "progress bar not initialised"
+  Just pb -> pb
+
 runTextProgressReporterT :: (MonadIO m) => TextReporterT m a -> m a
 runTextProgressReporterT fn = do
-  programOutput "Beginning verification"
-  result <- runReaderT (evalStateT (unTextReporterT fn) mempty) Nothing
-  programOutput "Verification complete"
+  programOutput "Verifying properties:"
+  result <- runSharedStateT $ runReaderT (unTextReporterT fn) Nothing
   return result
 
 instance (MonadStdIO m) => MonadProgressReporter (TextReporterT m) where
   reportMultiProperty name checkMultiPropertyFn = TextReporterT $ do
-    _
     result <- unTextReporterT checkMultiPropertyFn
-    textMultiPropertyComplete name _ -- programOutput $ "  " <> finalDoc
+    summary <- getAndClearMultiPropertyState
+    textMultiPropertyComplete name summary
     return result
 
-  reportProperty propertyAddress checkPropertyFn = TextReporterT $ do
-    progressBar <- createProgressBar propertyAddress _
-    result <- unTextReporterT checkPropertyFn
-    propertyCompleteText result progressBar
+  reportProperty settings propertyAddress numberOfQueries checkPropertyFn = TextReporterT $ do
+    progressBar <- createProgressBar propertyAddress numberOfQueries
+    result <- local (const $ Just progressBar) (unTextReporterT checkPropertyFn)
+    queriesVerified <- getAndClearPropertyState result
+    propertyCompleteText settings result numberOfQueries queriesVerified progressBar
     return result
 
-  reportQuery queryAddress checkQueryFn = TextReporterT $ do
-    progressBar <- asks _
+  reportQuery _queryAddress checkQueryFn = TextReporterT $ do
+    progressBar <- asks getProgressBar
     result <- unTextReporterT checkQueryFn
+    incrementQueryCount
     textQueryComplete progressBar
     return result
+
+instance MonadTrans TextReporterT where
+  lift = TextReporterT . lift . lift
 
 instance (MonadLogger m) => MonadLogger (TextReporterT m) where
   enterCompilerPass = lift . enterCompilerPass
@@ -149,6 +194,13 @@ instance (MonadLogger m) => MonadLogger (TextReporterT m) where
   getDebugLevel = lift getDebugLevel
   logMessage = lift . logMessage
   logWarning = lift . logWarning
+
+instance (MonadIO m) => MonadIO (TextReporterT m) where
+  liftIO = lift . liftIO
+
+instance (MonadStdIO m) => MonadStdIO (TextReporterT m) where
+  writeStdout = lift . writeStdout
+  writeStderr = lift . writeStderr
 
 createProgressBar :: (MonadStdIO m) => PropertyAddress -> Int -> m (ProgressBar ())
 createProgressBar (PropertyAddress _ name indices) numberOfQueries = do
@@ -162,68 +214,59 @@ createProgressBar (PropertyAddress _ name indices) numberOfQueries = do
   let initialProgress = Progress 0 numberOfQueries ()
   liftIO $ hNewProgressBar stdout style 10 initialProgress
 
-propertyCompleteText :: PropertyStatus -> ProgressBar () -> m ()
-propertyCompleteText propertyStatus progressBar = do
+propertyCompleteText ::
+  (MonadStdIO m) =>
+  VerificationSettings ->
+  PropertyStatus ->
+  Int ->
+  Int ->
+  ProgressBar () ->
+  m ()
+propertyCompleteText VerificationSettings {..} propertyStatus numberOfQueries queriesVerified progressBar = do
+  -- Close progress bar if human mode and incomplete
+  when (queriesVerified < numberOfQueries) $
+    closeProgressBar progressBar
+
   -- Print result to command line
   let verifierName = pretty (verifierID verifier)
   let (verified, evidenceText) = case propertyStatus of
-        PropertyCompleted maybeResult -> do
-          case maybeResult of
-            Trivial status -> (Just status, "(trivial)")
-            NonTrivial (negated, status) -> do
+        PropertyCompleted status -> do
+          case status of
+            Trivial value -> (Just value, "(trivial)")
+            NonTrivial (negated, queryResult) -> do
               let witnessText = if negated then "counterexample" else "witness"
-              case status of
+              case queryResult of
                 UnSAT -> (Just negated, verifierName <+> "proved no" <+> witnessText <+> "exists")
                 SAT Nothing -> (Just (not negated), verifierName <+> "found no" <> witnessText)
-                SAT Just {} -> (Just (not negated), verifierName <+> "found a" <+> witnessText)
+                SAT (Just assignment) -> do
+                  let mainResult = verifierName <+> "found a" <+> witnessText
+                  let witnessResult = if noSatPrint then "" else line <> indent 6 (prettyUserVariableAssignment assignment)
+                  (Just (not negated), mainResult <> witnessResult)
         PropertyErrored (_, err) -> do
           let cause = if isTimeoutError err then "timed out" else "errored"
           (Nothing, verifierName <+> cause)
-  VIO.writeStdoutLn (layoutAsText $ "    result: " <> pretty (statusSymbol verified) <+> "-" <+> evidenceText)
-  -- Output any additional information
-  case result of
-    PropertyCompleted status -> case status of
-      NonTrivial (_, SAT (Just (UserVariableAssignment assignments))) -> do
-        -- Output assignments to command line
-        unless noSatPrint $ do
-          let assignmentDocs = vsep (fmap prettyUserVariableAssignment assignments)
-          let witnessDoc = indent 6 assignmentDocs
-          liftIO $ TIO.hPutStrLn stdout (layoutAsText witnessDoc)
+  writeStdoutLn (layoutAsText $ "    result: " <> pretty (statusSymbol verified) <+> "-" <+> evidenceText)
 
-        -- Output assignments to file
-        let witnessFolder = verificationCache </> layoutAsString (pretty address) <> "-assignments"
-        liftIO $ createDirectoryIfMissing True witnessFolder
-        forM_ assignments $ \(var, tensor) -> do
-          let file = witnessFolder </> show var
-          let dims = Vector.fromList (shapeOf tensor)
-          -- TODO got to be a better way to do this conversion...
-          let unboxedVector = Vector.fromList $ BoxedVector.toList (fmap realToFrac (Tensor.toVector tensor))
-          let idxData = IDXDoubles IDXDouble dims unboxedVector
-          liftIO $ encodeIDXFile idxData file
-      _ -> return ()
-    PropertyErrored (QueryMetaData {..}, err) -> do
-      let VerificationErrorAction {..} = convertVerificationError verifier queryAddress err
+statusSymbol :: Maybe Bool -> String
+statusSymbol verified = do
+  let (colour, symbol) = case verified of
+        Just True -> (Green, "🗸")
+        Nothing -> (Yellow, "?")
+        Just False -> (Red, "✗")
+  setTextColour colour symbol
 
-      reproducerMessage <-
-        if reproducerIsUseful
-          then createReproducer verifier verifierExecutable verificationCache metaNetwork queryAddress
-          else return ""
+prettyUserVariableAssignment :: UserVariableAssignment -> Doc a
+prettyUserVariableAssignment (UserVariableAssignment assignment) = do
+  let prettyLine (var, value) = pretty var <> ":" <+> pretty value
+  vsep (fmap prettyLine assignment)
 
-      unless (isTimeoutError err) $ do
-        let finalMessage = "\nError: " <> verificationErrorMessage <> reproducerMessage
-        writeStderrLn (layoutAsText finalMessage)
+closeProgressBar :: (MonadStdIO m) => ProgressBar () -> m ()
+closeProgressBar _ = writeStdoutLn ""
 
-  -- Close progress bar if human mode and incomplete
-  when (queriesExecuted < numberOfQueries) $
-    closePropertyProgressBar progressBar
-
-closeProgressBar :: (MonadIO m) => ProgressBar () -> m ()
-closeProgressBar _ = VIO.writeStdoutLn ""
-
-textQueryComplete :: (MonadIO m) => ProgressBar () -> m ()
+textQueryComplete :: (MonadStdIO m) => ProgressBar () -> m ()
 textQueryComplete progressBar = liftIO $ incProgress progressBar 1
 
-textMultiPropertyComplete :: (MonadLogger m) => Name -> MultiPropertySummary -> m ()
+textMultiPropertyComplete :: (MonadStdIO m) => Name -> MultiPropertySummary -> m ()
 textMultiPropertyComplete name MultiPropertySummary {..} = do
   let results =
         [ ("verified", numberVerified),
@@ -242,48 +285,50 @@ textMultiPropertyComplete name MultiPropertySummary {..} = do
 
 --------------------------------------------------------------------------------
 -- JSON progress reporter
+--------------------------------------------------------------------------------
 
 newtype JSONReporterT m a = JSONReporterT
-  { unJSONReporterT :: IdentityT m a
+  { unJSONReporterT :: StateT SharedState m a
   }
   deriving (Functor, Applicative, Monad)
 
-runJSONProgressReporterT :: (MonadIO m) => JSONReporterT m a -> m a
+runJSONProgressReporterT :: (MonadStdIO m) => JSONReporterT m a -> m a
 runJSONProgressReporterT fn = do
   outputEvent VerificationStart
-  result <- _ $ unJSONReporterT fn
-  outputEvent VerificationFinished
+  result <- runSharedStateT $ unJSONReporterT fn
+  outputEvent VerificationFinish
   return result
-
-data ProgressEvent
-  = VerificationStart
-  | MultiPropertyStart Name
-  | PropertyStart PropertyAddress
-  | QueryStart QueryAddress
-  | QueryComplete QueryAddress Bool
-  | PropertyComplete PropertyAddress PropertySummary
-  | MultiPropertyComplete Name MultiPropertySummary
-  | VerificationFinished
-  deriving (Generic)
 
 instance (MonadStdIO m) => MonadProgressReporter (JSONReporterT m) where
   reportMultiProperty name checkMultiProperty = JSONReporterT $ do
-    outputEvent $ MultiPropertyStart name
+    let startEvent = MultiPropertyStartEvent name
+    outputEvent $ MultiPropertyStart startEvent
     result <- unJSONReporterT checkMultiProperty
-    outputEvent $ MultiPropertyComplete name _
+    _summary <- getAndClearMultiPropertyState
+    outputEvent $ MultiPropertyFinish startEvent
     return result
 
-  reportProperty propertyAddress checkPropertyFn = JSONReporterT $ do
-    outputEvent $ PropertyStart propertyAddress
+  reportProperty settings PropertyAddress {..} numberOfQueries checkPropertyFn = JSONReporterT $ do
+    let startEvent = PropertyStartEvent propertyName propertyIndices numberOfQueries
+    outputEvent $ PropertyStart startEvent
     result <- unJSONReporterT checkPropertyFn
-    outputEvent $ PropertyComplete propertyAddress _
+    _ <- getAndClearPropertyState result
+    outputEvent $ PropertyFinish startEvent (propertyStatusToPropertySummary settings result)
     return result
 
-  reportQuery queryAddress checkQueryFn = JSONReporterT $ do
-    outputEvent $ QueryStart queryAddress
-    result <- unJSONReporterT checkQueryFn
-    outputEvent $ QueryComplete queryAddress (querySatisified result)
-    return result
+  reportQuery (PropertyAddress {..}, queryID) checkQueryFn = JSONReporterT $ do
+    let startEvent = QueryStartEvent propertyName propertyIndices queryID
+    outputEvent $ QueryStart startEvent
+    errorOrResult <- unJSONReporterT checkQueryFn
+    case errorOrResult of
+      Left {} -> return ()
+      Right result -> do
+        let endEvent = QueryEndEvent (querySatisified result)
+        outputEvent $ QueryFinish startEvent endEvent
+    return errorOrResult
+
+instance MonadTrans JSONReporterT where
+  lift = JSONReporterT . lift
 
 instance (MonadLogger m) => MonadLogger (JSONReporterT m) where
   enterCompilerPass = lift . enterCompilerPass
@@ -296,5 +341,79 @@ instance (MonadLogger m) => MonadLogger (JSONReporterT m) where
   logMessage = lift . logMessage
   logWarning = lift . logWarning
 
+instance (MonadStdIO m) => MonadStdIO (JSONReporterT m) where
+  writeStdout = lift . writeStdout
+  writeStderr = lift . writeStderr
+
+instance (MonadIO m) => MonadIO (JSONReporterT m) where
+  liftIO = lift . liftIO
+
 outputEvent :: (MonadStdIO m) => ProgressEvent -> m ()
-outputEvent event = liftIO $ BSL.putStrLn $ Aeson.encode event
+outputEvent event = writeStdoutLn $ pack $ ByteString.unpack $ encodePretty' prettyJSONConfig event
+
+--------------------------------------------------------------------------------
+-- JSON Events
+
+-- Warning: changing these will break compatibility with Vehicle GUI.
+
+data ProgressEvent
+  = VerificationStart
+  | MultiPropertyStart MultiPropertyStartEvent
+  | PropertyStart PropertyStartEvent
+  | QueryStart QueryStartEvent
+  | QueryFinish QueryStartEvent QueryEndEvent
+  | PropertyFinish PropertyStartEvent PropertyEndEvent
+  | MultiPropertyFinish MultiPropertyStartEvent
+  | VerificationFinish
+  deriving (Generic)
+
+instance ToJSON ProgressEvent
+
+newtype MultiPropertyStartEvent = MultiPropertyStartEvent
+  { propertyName :: Name
+  }
+  deriving (Generic)
+
+instance ToJSON MultiPropertyStartEvent
+
+data PropertyStartEvent = PropertyStartEvent
+  { propertyName :: Name,
+    propertyIndices :: TensorIndices,
+    numberOfQueries :: Int
+  }
+  deriving (Generic)
+
+instance ToJSON PropertyStartEvent
+
+data QueryStartEvent = QueryStartEvent
+  { propertyName :: Name,
+    propertyIndices :: TensorIndices,
+    queryID :: QueryID
+  }
+  deriving (Generic)
+
+instance ToJSON QueryStartEvent
+
+newtype QueryEndEvent = QueryEndEvent
+  { satisfied :: Bool
+  }
+  deriving (Generic)
+
+instance ToJSON QueryEndEvent
+
+data PropertyEndEvent = PropertyEndEvent
+  { verified :: Bool,
+    erroredQueryID :: Maybe QueryID,
+    errorMessage :: Maybe String
+  }
+  deriving (Generic)
+
+instance ToJSON PropertyEndEvent
+
+propertyStatusToPropertySummary :: VerificationSettings -> PropertyStatus -> PropertyEndEvent
+propertyStatusToPropertySummary settings status = case status of
+  PropertyCompleted {} -> PropertyEndEvent (isVerified status) Nothing Nothing
+  PropertyErrored (queryData, err) -> do
+    let address = queryAddress queryData
+    let message = verificationErrorMessage $ convertVerificationError (verifier settings) address err
+    PropertyEndEvent False (Just $ snd address) (Just $ layoutAsString message)

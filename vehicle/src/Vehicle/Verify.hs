@@ -15,7 +15,7 @@ import Vehicle.Compile.Prelude (DatasetLocations, NetworkLocations, ParameterVal
 import Vehicle.Prelude
 import Vehicle.Prelude.Logging
 import Vehicle.Verify.Core
-import Vehicle.Verify.Specification.Execute (VerificationSettings (..), verifySpecification)
+import Vehicle.Verify.Specification.Execute (verifySpecification)
 import Vehicle.Verify.Specification.Execute.Reporting
 import Vehicle.Verify.Specification.IO
 import Vehicle.Verify.Verifier
@@ -85,11 +85,8 @@ verifyQueries loggingSettings outputAsJSON queryFolder verifierID verifierLocati
   let verifier = verifiers verifierID
   verifierExecutable <- locateVerifierExecutable verifier verifierLocation
   let verifierExtraArgs = maybe [] words maybeVerifierExtraArgs
-  let verifierSettings = VerificationSettings verifier verifierExecutable verifierExtraArgs noSatOutputs
-  runLoggerT loggingSettings $
-    if outputAsJSON
-      then runJSONProgressReporterT $ verifySpecification verifierSettings queryFolder
-      else runTextProgressReporterT $ verifySpecification verifierSettings queryFolder
+  let verifierSettings = VerificationSettings verifier verifierExecutable verifierExtraArgs queryFolder noSatOutputs
+  runLoggerT loggingSettings $ verifySpecification outputAsJSON verifierSettings
 
 locateVerifierExecutable ::
   (MonadIO m) =>

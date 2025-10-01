@@ -6,7 +6,7 @@ module Vehicle.Verify.Specification.Execute
   )
 where
 
-import Control.Monad (forM, forM_, unless, when)
+import Control.Monad (forM, forM_, unless)
 import Control.Monad.Except (MonadError (..), runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..))
@@ -39,73 +39,57 @@ import Vehicle.Verify.Verifier.Core (QueryVariableAssignment (..))
 --------------------------------------------------------------------------------
 -- Verification
 
-data VerificationSettings = VerificationSettings
-  { verifier :: Verifier,
-    verifierExecutable :: VerifierExecutable,
-    verifierExtraArgs :: [String],
-    noSatPrint :: Bool
-  }
-
 type MonadVerify m =
   ( MonadLogger m,
     MonadStdIO m,
     MonadProgressReporter m,
-    MonadReader (VerificationSettings, FilePath) m
+    MonadReader VerificationSettings m
   )
 
 -- | Uses the verifier to verify the specification. Failure of one property does
 -- not prevent the verification of the other properties.
 verifySpecification ::
-  (MonadVerify m) =>
+  (MonadLogger m, MonadStdIO m) =>
+  Bool ->
   VerificationSettings ->
-  FilePath ->
   m ()
-verifySpecification verifierSettings queryFolder = do
-  let verificationPlanFile = specificationCacheIndexFileName queryFolder
+verifySpecification outputAsJSON verifierSettings
+  | outputAsJSON = runJSONProgressReporterT $ runReaderT verifySpecificationActual verifierSettings
+  | otherwise = runTextProgressReporterT $ runReaderT verifySpecificationActual verifierSettings
+
+verifySpecificationActual :: (MonadVerify m) => m ()
+verifySpecificationActual = do
+  settings <- ask
+  let verificationPlanFile = specificationCacheIndexFileName (specificationCache settings)
   SpecificationCacheIndex {..} <- readSpecificationCacheIndex verificationPlanFile
 
   maybeIntegrityError <- checkIntegrityOfResources resourcesIntegrityInfo
   case maybeIntegrityError of
-    Just err -> throwVerificationError $ ResourceIntegrityError err
-    Nothing -> return ()
-
-  let readerState = (verifierSettings, queryFolder)
-  runReaderT (verifyProperties verifierSettings queryFolder properties) readerState
-
-verifyProperties ::
-  (MonadVerify m) =>
-  VerificationSettings ->
-  FilePath ->
-  [(PropertyName, MultiProperty ())] ->
-  m ()
-verifyProperties verifierSettings queryFolder properties =
-  forM_ properties $ \(name, multiProperty) ->
-    reportMultiProperty name $ verifyMultiproperty verifierSettings queryFolder multiProperty
+    Just err -> writeStderrLn $ layoutAsText $ "Resource error:" <+> pretty err
+    Nothing -> do
+      forM_ properties $ \(name, multiProperty) ->
+        reportMultiProperty name $ verifyMultiproperty multiProperty
 
 verifyMultiproperty ::
   (MonadVerify m) =>
-  VerificationSettings ->
-  FilePath ->
   MultiProperty () ->
   m ()
-verifyMultiproperty settings queryFolder = \case
-  MultiProperty properties -> forM_ properties (verifyMultiproperty settings queryFolder)
-  SingleProperty address () -> verifyProperty settings queryFolder address
+verifyMultiproperty = \case
+  MultiProperty properties -> forM_ properties verifyMultiproperty
+  SingleProperty address () -> verifyProperty address
 
 verifyProperty ::
-  forall m.
   (MonadVerify m) =>
-  VerificationSettings ->
-  FilePath ->
   PropertyAddress ->
   m ()
-verifyProperty verifierSettings verificationCache address = do
+verifyProperty address = do
   -- Read the verification plan for the property
-  let propertyPlanFile = propertyPlanFileName verificationCache address
+  settings <- ask
+  let propertyPlanFile = propertyPlanFileName (specificationCache settings) address
   PropertyVerificationPlan {..} <- readPropertyVerificationPlan propertyPlanFile
 
   -- Determine number of queries and initialise progress bar
-  result <- reportProperty address $ case queryMetaData of
+  result <- reportProperty settings address (propertySize queryMetaData) $ case queryMetaData of
     Trivial status ->
       return $ PropertyCompleted (Trivial status)
     NonTrivial structure -> do
@@ -116,11 +100,11 @@ verifyProperty verifierSettings verificationCache address = do
           Left err -> PropertyErrored err
           Right r -> PropertyCompleted $ NonTrivial r
 
-  outputPropertyResult verifierSettings verificationCache address result
+  outputPropertyResult address result
 
 type MonadVerifyProperty m =
   ( MonadVerify m,
-    MonadError (QueryMetaData, VerificationError) m
+    MonadError (QueryMetaData, VerifierError) m
   )
 
 -- | Lazily tries to verify the property, avoiding evaluating parts
@@ -182,20 +166,22 @@ verifyDisjunctAll (DisjunctAll ys) = go ys
         else go (y :| xs)
 
 type MonadVerifyQuery m =
-  ( MonadVerify m,
-    MonadError VerificationError m
+  ( MonadLogger m,
+    MonadStdIO m,
+    MonadReader VerificationSettings m,
+    MonadError VerifierError m
   )
 
 verifyQuery ::
   (MonadVerifyProperty m) =>
   QueryMetaData ->
   m (QueryResult UserVariableAssignment)
-verifyQuery queryMetaData@(QueryMetaData queryAddress@(_, queryID) metaNetwork variables reconstruction) = do
+verifyQuery queryMetaData@(QueryMetaData queryAddress metaNetwork variables reconstruction) = do
   logCompilerSection MidDetail ("Verifying query" <+> quotePretty queryAddress) $ do
-    (verifierSettings, verificationCache) <- ask
-    let queryFile = calculateQueryFileName verificationCache queryAddress
+    verifierSettings <- ask
+    let queryFile = calculateQueryFileName (specificationCache verifierSettings) queryAddress
 
-    errorOrResult <- runExceptT $ reportQuery queryID $ do
+    errorOrResult <- reportQuery queryAddress $ runExceptT $ do
       result <- invokeVerifier verifierSettings metaNetwork queryFile
       case result of
         SAT Nothing -> do
@@ -221,12 +207,6 @@ invokeVerifier ::
   QueryFile ->
   m (QueryResult QueryVariableAssignment)
 invokeVerifier VerificationSettings {..} metaNetworkEntries queryFile = do
-  -- Check query supported
-  let usesMultipleNetworks = length metaNetworkEntries > 1
-  when (usesMultipleNetworks && not (supportsMultipleNetworkApplications verifier)) $
-    throwError $
-      UnsupportedMultipleNetworks metaNetworkEntries
-
   -- Prepare the command
   let args = prepareArgs verifier metaNetworkEntries queryFile <> verifierExtraArgs
   let command = unwords (verifierExecutable : args)
@@ -313,28 +293,26 @@ createReproducer verifier verifierExecutable verificationCache metaNetwork query
 
 outputPropertyResult ::
   (MonadVerify m) =>
-  VerificationSettings ->
-  FilePath ->
   PropertyAddress ->
   PropertyStatus ->
   m ()
-outputPropertyResult verifierSettings verificationCache address result = do
-  let VerificationSettings {..} = verifierSettings
+outputPropertyResult address result = do
+  VerificationSettings {..} <- ask
 
   -- Write the result to the cache
-  writePropertyResult verificationCache address (isVerified result)
+  writePropertyResult specificationCache address (isVerified result)
 
   -- Output any additional information
   case result of
     PropertyCompleted status -> case status of
-      NonTrivial (_, SAT (Just assignment)) -> writeWitnessToFile verificationCache address assignment
+      NonTrivial (_, SAT (Just assignment)) -> writeWitnessToFile specificationCache address assignment
       _ -> return ()
     PropertyErrored (QueryMetaData {..}, err) -> do
       let VerificationErrorAction {..} = convertVerificationError verifier queryAddress err
 
       reproducerMessage <-
         if reproducerIsUseful
-          then createReproducer verifier verifierExecutable verificationCache metaNetwork queryAddress
+          then createReproducer verifier verifierExecutable specificationCache metaNetwork queryAddress
           else return ""
 
       unless (isTimeoutError err) $ do
