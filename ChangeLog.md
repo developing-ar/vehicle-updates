@@ -1,6 +1,8 @@
 # Changelog for Vehicle
 
-## Next release
+## Version 0.20.1
+
+* Changes to undocumented internal APIs.
 
 ## Version 0.20.0
 
