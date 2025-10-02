@@ -1,86 +1,130 @@
 [
   {
-    "entityType": "Vector Bool n",
-    "entityProvenance": {
-      "tag": "Provenance",
-      "contents": [
-        92,
-        1,
-        92,
-        7
-      ]
-    },
-    "entityName": "robust",
-    "entity": "Property"
+    "tag": "Network",
+    "contents": {
+      "sharedData": {
+        "typeText": "Tensor Real [28, 28] -> Tensor Real [10]",
+        "provenance": {
+          "tag": "Provenance",
+          "contents": [
+            22,
+            1,
+            22,
+            11
+          ]
+        },
+        "name": "classifier"
+      }
+    }
   },
   {
-    "entityType": "Vector Label n",
-    "entityProvenance": {
-      "tag": "Provenance",
-      "contents": [
-        81,
-        1,
-        81,
-        15
-      ]
-    },
-    "entityName": "trainingLabels",
-    "entity": "Dataset"
+    "tag": "Parameter",
+    "contents": {
+      "sharedData": {
+        "typeText": "Real",
+        "provenance": {
+          "tag": "Provenance",
+          "contents": [
+            37,
+            1,
+            37,
+            8
+          ]
+        },
+        "name": "epsilon"
+      },
+      "inferable": false
+    }
   },
   {
-    "entityType": "Vector Image n",
-    "entityProvenance": {
-      "tag": "Provenance",
-      "contents": [
-        78,
-        1,
-        78,
-        15
-      ]
-    },
-    "entityName": "trainingImages",
-    "entity": "Dataset"
+    "tag": "Parameter",
+    "contents": {
+      "sharedData": {
+        "typeText": "Nat",
+        "provenance": {
+          "tag": "Provenance",
+          "contents": [
+            72,
+            1,
+            72,
+            2
+          ]
+        },
+        "name": "n"
+      },
+      "inferable": true
+    }
   },
   {
-    "entityType": "Nat",
-    "entityProvenance": {
-      "tag": "Provenance",
-      "contents": [
-        72,
-        1,
-        72,
-        2
-      ]
-    },
-    "entityName": "n",
-    "entity": "Parameter"
+    "tag": "Dataset",
+    "contents": {
+      "sharedData": {
+        "typeText": "Vector (Tensor Real [28, 28]) n",
+        "provenance": {
+          "tag": "Provenance",
+          "contents": [
+            78,
+            1,
+            78,
+            15
+          ]
+        },
+        "name": "trainingImages"
+      }
+    }
   },
   {
-    "entityType": "Real",
-    "entityProvenance": {
-      "tag": "Provenance",
-      "contents": [
-        37,
-        1,
-        37,
-        8
-      ]
-    },
-    "entityName": "epsilon",
-    "entity": "Parameter"
+    "tag": "Dataset",
+    "contents": {
+      "sharedData": {
+        "typeText": "Vector (Index 10) n",
+        "provenance": {
+          "tag": "Provenance",
+          "contents": [
+            81,
+            1,
+            81,
+            15
+          ]
+        },
+        "name": "trainingLabels"
+      }
+    }
   },
   {
-    "entityType": "Image -> Tensor Real [10]",
-    "entityProvenance": {
-      "tag": "Provenance",
-      "contents": [
-        22,
-        1,
-        22,
-        11
+    "tag": "Property",
+    "contents": {
+      "sharedData": {
+        "typeText": "Vector Bool n",
+        "provenance": {
+          "tag": "Provenance",
+          "contents": [
+            92,
+            1,
+            92,
+            7
+          ]
+        },
+        "name": "robust"
+      },
+      "quantifiedVariables": [
+        {
+          "sharedData": {
+            "typeText": "Tensor Real [28, 28]",
+            "provenance": {
+              "tag": "Provenance",
+              "contents": [
+                49,
+                35,
+                49,
+                47
+              ]
+            },
+            "name": "perturbation"
+          },
+          "quantifier": "Forall"
+        }
       ]
-    },
-    "entityName": "classifier",
-    "entity": "Network"
+    }
   }
 ]

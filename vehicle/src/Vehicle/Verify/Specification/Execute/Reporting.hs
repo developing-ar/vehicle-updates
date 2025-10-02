@@ -153,7 +153,7 @@ getProgressBar = \case
   Nothing -> developerError "progress bar not initialised"
   Just pb -> pb
 
-runTextProgressReporterT :: (MonadIO m) => TextReporterT m a -> m a
+runTextProgressReporterT :: (MonadStdIO m) => TextReporterT m a -> m a
 runTextProgressReporterT fn = do
   programOutput "Verifying properties:"
   result <- runSharedStateT $ runReaderT (unTextReporterT fn) Nothing

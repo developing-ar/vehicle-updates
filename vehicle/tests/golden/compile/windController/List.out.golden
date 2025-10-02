@@ -1,30 +1,56 @@
 [
   {
-    "entityType": "Bool",
-    "entityProvenance": {
-      "tag": "Provenance",
-      "contents": [
-        34,
-        1,
-        34,
-        5
-      ]
-    },
-    "entityName": "safe",
-    "entity": "Property"
+    "tag": "Network",
+    "contents": {
+      "sharedData": {
+        "typeText": "Tensor Real [2] -> OutputVector",
+        "provenance": {
+          "tag": "Provenance",
+          "contents": [
+            17,
+            1,
+            17,
+            11
+          ]
+        },
+        "name": "controller"
+      }
+    }
   },
   {
-    "entityType": "InputVector -> OutputVector",
-    "entityProvenance": {
-      "tag": "Provenance",
-      "contents": [
-        17,
-        1,
-        17,
-        11
+    "tag": "Property",
+    "contents": {
+      "sharedData": {
+        "typeText": "Bool",
+        "provenance": {
+          "tag": "Provenance",
+          "contents": [
+            34,
+            1,
+            34,
+            5
+          ]
+        },
+        "name": "safe"
+      },
+      "quantifiedVariables": [
+        {
+          "sharedData": {
+            "typeText": "Tensor Real [2]",
+            "provenance": {
+              "tag": "Provenance",
+              "contents": [
+                35,
+                15,
+                35,
+                16
+              ]
+            },
+            "name": "x"
+          },
+          "quantifier": "Forall"
+        }
       ]
-    },
-    "entityName": "controller",
-    "entity": "Network"
+    }
   }
 ]

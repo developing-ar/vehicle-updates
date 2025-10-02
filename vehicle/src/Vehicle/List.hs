@@ -1,126 +1,212 @@
-module Vehicle.List where
+module Vehicle.List
+  ( ListOptions (..),
+    list,
+  )
+where
 
-import Control.Monad
-import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Writer (MonadWriter (tell), execWriterT)
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy.Char8 (unpack)
+import Data.Foldable (traverse_)
+import Data.List (singleton)
+import Data.Proxy (Proxy (..))
 import Data.Text (Text, pack)
 import GHC.Generics
-import Vehicle.Backend.Prelude
-import Vehicle.Compile.Error
+import Vehicle.Compile.Normalise.NBE (normaliseClosure, normaliseInEmptyEnv)
 import Vehicle.Compile.Prelude hiding (Dataset, Network, Parameter)
 import Vehicle.Compile.Print
-import Vehicle.Data.Builtin.Interface.Print
+import Vehicle.Data.Builtin.Core (BuiltinFunction (..), Quantifier)
+import Vehicle.Data.Builtin.Interface (Accessor (..))
+import Vehicle.Data.Code.Interface (IsArgs (..), QuantifyRatTensorArgs (QuantifyRatTensorArgs))
+import Vehicle.Data.Code.Value (Spine, VDecl, Value (..))
+import Vehicle.Data.Variable.Bound.Context.Name (MonadNameContext, getNameContext, runFreshNameContextT)
+import Vehicle.Data.Variable.Free.Context (MonadFreeContext, addDeclEntryToContext, runFreshFreeContextT)
 import Vehicle.Prelude.Logging.Instance
-import Vehicle.Syntax.Builtin (Builtin (BuiltinFunction), BuiltinFunction (QuantifyRatTensor))
+import Vehicle.Syntax.Builtin (Builtin (..))
 import Vehicle.TypeCheck (TypeCheckOptions (..), runCompileMonad, typeCheckUserProg)
 
-newtype ListOptions = ListOptions {specification :: FilePath}
+--------------------------------------------------------------------------------
+-- List mode
+
+newtype ListOptions = ListOptions
+  { specification :: FilePath
+  }
   deriving (Eq, Show)
 
 list :: (MonadStdIO IO) => LoggingSettings -> OutputAsJSON -> ListOptions -> IO ()
-list loggingSettings outputAsJSON ListOptions {..} = runCompileMonad loggingSettings outputAsJSON $ do
-  -- always typecheck first
-  (imports, typedProg) <-
-    typeCheckUserProg $
-      TypeCheckOptions
-        { specification = specification,
-          secondaryTypeSystem = Nothing
-        }
-  let mergedProg = mergeImports imports typedProg
-  printListableEntities mergedProg outputAsJSON
+list loggingSettings outputAsJSON ListOptions {..} =
+  runCompileMonad loggingSettings outputAsJSON $ do
+    -- Type check the program
+    (imports, typedProg) <-
+      typeCheckUserProg $
+        TypeCheckOptions
+          { specification = specification,
+            secondaryTypeSystem = Nothing
+          }
+    let Main decls = mergeImports imports typedProg
+
+    -- Search for entities
+    entities <- runFreshFreeContextT (Proxy @Builtin) $ execWriterT $ searchDecls decls
+
+    -- Produce the output (at the moment only support JSON)
+    programOutput $ pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON entities
+
+--------------------------------------------------------------------------------
+-- Program traversal
+
+type MonadList m =
+  ( MonadLogger m,
+    MonadWriter [ListableEntity] m,
+    MonadFreeContext Builtin m
+  )
 
 -- | Print all the listable entities in the program
-printListableEntities ::
-  (MonadIO m, MonadCompile m, PrintableBuiltin Builtin) =>
-  Prog Builtin ->
-  Bool ->
-  m ()
-printListableEntities (Main decls) outputAsJSON = do
-  let annotatedListEntities = filter (\decl -> isAbstractDecl decl || isPropertyDecl decl) decls
-  let listDecls =
-        foldl
-          convertListEntity
-          []
-          annotatedListEntities
-  quantifiedVars <- execWriterT (listQuantifiedVariables decls)
-  let allListEntities = listDecls ++ quantifiedVars
-  let outputDocs =
-        if outputAsJSON
-          then pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON allListEntities
-          else pretty allListEntities
-  programOutput outputDocs
+searchDecls :: (MonadList m) => [Decl Builtin] -> m ()
+searchDecls = \case
+  [] -> return ()
+  d : ds -> do
+    normDecl <- traverse normaliseInEmptyEnv d
+    searchDecl normDecl
+    addDeclEntryToContext (d, normDecl) $ searchDecls ds
+
+searchDecl :: (MonadList m) => VDecl Builtin -> m ()
+searchDecl decl = do
+  let sharedData = mkSharedData nameOf decl
+  case decl of
+    DefRecord {} -> return ()
+    DefAbstract _ _ sort _ -> case sort of
+      NetworkDef -> tell $ singleton $ Network $ NetworkSummary sharedData
+      DatasetDef -> tell $ singleton $ Dataset $ DatasetSummary sharedData
+      ParameterDef s -> tell $ singleton $ Parameter $ ParameterSummary sharedData (isInferable s)
+      PostulateDef -> return ()
+    DefFunction _ _ anns _ body
+      | AnnProperty `notElem` anns -> return ()
+      | otherwise -> do
+          quantifiers <- runFreshNameContextT $ execWriterT $ searchValue body
+          tell $ singleton $ Property $ PropertySummary sharedData quantifiers
+
+type MonadListBody m =
+  ( MonadNameContext m,
+    MonadWriter [QuantifiedVariableSummary] m,
+    MonadFreeContext Builtin m
+  )
+
+-- | Traverse the body to find all quantified variables
+searchValue :: (MonadListBody m) => Value Builtin -> m ()
+searchValue = \case
+  VBoundVar _ spine -> searchSpine spine
+  VFreeVar _ spine -> searchSpine spine
+  VBuiltin b spine -> do
+    case (b, getExpr accessSpine spine) of
+      (BuiltinFunction (QuantifyRatTensor q), Just (QuantifyRatTensorArgs _dims (VLam binder _))) -> do
+        tell $ singleton $ QuantifiedVariableSummary (mkSharedData getBinderName binder) q
+      _ -> return ()
+    searchSpine spine
+  VLam binder closure -> do
+    nameCtx <- getNameContext
+    value <- normaliseClosure nameCtx binder closure
+    searchValue value
+  VRecord _ fields -> traverse_ searchValue fields
+  VRecordAcc record _ -> searchValue record
+  -- Never traverse into types so the following cases shouldn't happen!
+  VUniverse {} -> unexpectedExprError pass "VUniverse"
+  VPi {} -> unexpectedExprError pass "VUniverse"
+  VMeta {} -> unexpectedExprError pass "VMeta"
   where
-    convertListEntity :: (PrintableBuiltin Builtin) => [ListEntity] -> Decl Builtin -> [ListEntity]
-    convertListEntity accList decl = case convertDeclToListEntity decl of
-      Nothing -> accList
-      Just listEntity -> listEntity : accList
+    pass = "list"
 
--- | Traverse the program to find all quantified variables
-listQuantifiedVariables :: (MonadWriter [ListEntity] m) => [GenericDecl (Expr Builtin)] -> m ()
-listQuantifiedVariables decls = forM_ decls traverseDeclsQ
-  where
-    traverseDeclsQ :: (MonadWriter [ListEntity] m) => GenericDecl (Expr Builtin) -> m ()
-    traverseDeclsQ decl = case bodyOf decl of
-      Nothing -> return ()
-      Just e -> do
-        _ <- traverseBuiltinsM filterQuantifiedVariables e
-        return ()
+searchSpine :: (MonadListBody m) => Spine Builtin -> m ()
+searchSpine = traverse_ (traverse_ searchValue)
 
-    filterQuantifiedVariables :: (MonadWriter [ListEntity] m) => BuiltinUpdate m Builtin Builtin
-    filterQuantifiedVariables p b args = case b of
-      BuiltinFunction (QuantifyRatTensor _) -> case args of
-        [_, Arg _ _ _ (Lam _ binder _)] -> case getBinderNameAndType binder of
-          Just (name, typ, prov) -> do
-            tell [ListEntity {entity = QuantifiedVariable, entityName = name, entityType = typ, entityProvenance = prov}]
-            return (Builtin p b)
-          Nothing -> return (Builtin p b)
-        _ -> return (Builtin p b)
-      _ -> return (Builtin p b)
+--------------------------------------------------------------------------------
+-- JSON output format
+--------------------------------------------------------------------------------
 
-    getBinderNameAndType :: Binder Builtin -> Maybe (Text, Text, Provenance)
-    getBinderNameAndType binder = case nameOf binder of
-      Nothing -> Nothing
-      Just v -> Just (v, pack $ show $ prettyFriendlyEmptyCtx (typeOf binder), provenanceOf binder)
+data ListableEntity
+  = Network NetworkSummary
+  | Dataset DatasetSummary
+  | Parameter ParameterSummary
+  | Property PropertySummary
+  deriving (Generic)
 
--- | Data Structure for listable entities
-data ListEntity = ListEntity
-  { entity :: ListableEntity,
-    entityName :: Text,
-    entityType :: Text,
-    entityProvenance :: Provenance
+instance ToJSON ListableEntity
+
+--------------------------------------------------------------------------------
+-- Shared data
+
+data SharedData = SharedData
+  { provenance :: Provenance,
+    name :: Text,
+    typeText :: Text
   }
-  deriving (Eq, Show, Generic)
+  deriving (Generic)
 
-instance ToJSON ListEntity
+instance ToJSON SharedData
 
-instance Pretty ListEntity where
-  pretty listEntity =
-    pretty (entity listEntity)
-      <+> pretty (entityName listEntity)
-      <+> pretty (entityType listEntity)
-      <+> pretty (entityProvenance listEntity)
+mkSharedData ::
+  ( HasProvenance entity,
+    HasType entity (Value Builtin)
+  ) =>
+  (entity -> Name) ->
+  entity ->
+  SharedData
+mkSharedData getName entity =
+  SharedData
+    { name = getName entity,
+      typeText = pack $ show $ prettyFriendlyEmptyCtx (typeOf entity),
+      provenance = provenanceOf entity
+    }
 
-declToListableEntity :: Decl Builtin -> Maybe ListableEntity
-declToListableEntity b = case b of
-  DefAbstract _ _ sort _ -> case sort of
-    NetworkDef -> Just Network
-    DatasetDef -> Just Dataset
-    ParameterDef _ -> Just Parameter
-    PostulateDef -> Nothing
-  DefFunction _ _ anns _ _ -> if AnnProperty `elem` anns then Just Property else Nothing
-  DefRecord {} -> Nothing
+--------------------------------------------------------------------------------
+-- Network
 
-convertDeclToListEntity :: (PrintableBuiltin Builtin) => Decl Builtin -> Maybe ListEntity
-convertDeclToListEntity decl = case declToListableEntity decl of
-  Nothing -> Nothing
-  Just listableEntity ->
-    Just $
-      ListEntity
-        { entity = listableEntity,
-          entityName = identifierName $ identifierOf decl,
-          entityType = pack $ show $ prettyFriendlyEmptyCtx (typeOf decl),
-          entityProvenance = provenanceOf decl
-        }
+newtype NetworkSummary = NetworkSummary
+  { sharedData :: SharedData
+  }
+  deriving (Generic)
+
+instance ToJSON NetworkSummary
+
+--------------------------------------------------------------------------------
+-- Data
+
+newtype DatasetSummary = DatasetSummary
+  { sharedData :: SharedData
+  }
+  deriving (Generic)
+
+instance ToJSON DatasetSummary
+
+--------------------------------------------------------------------------------
+-- Parameter
+
+data ParameterSummary = ParameterSummary
+  { sharedData :: SharedData,
+    inferable :: Bool
+  }
+  deriving (Generic)
+
+instance ToJSON ParameterSummary
+
+--------------------------------------------------------------------------------
+-- Property
+
+data PropertySummary = PropertySummary
+  { sharedData :: SharedData,
+    quantifiedVariables :: [QuantifiedVariableSummary]
+  }
+  deriving (Generic)
+
+instance ToJSON PropertySummary
+
+--------------------------------------------------------------------------------
+-- Quantified variable
+
+data QuantifiedVariableSummary = QuantifiedVariableSummary
+  { sharedData :: SharedData,
+    quantifier :: Quantifier
+  }
+  deriving (Generic)
+
+instance ToJSON QuantifiedVariableSummary
