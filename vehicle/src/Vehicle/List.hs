@@ -1,6 +1,8 @@
 module Vehicle.List where
 
+import Control.Monad
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Writer (MonadWriter (tell), execWriterT)
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy.Char8 (unpack)
@@ -12,6 +14,7 @@ import Vehicle.Compile.Prelude hiding (Dataset, Network, Parameter)
 import Vehicle.Compile.Print
 import Vehicle.Data.Builtin.Interface.Print
 import Vehicle.Prelude.Logging.Instance
+import Vehicle.Syntax.Builtin (Builtin (BuiltinFunction), BuiltinFunction (QuantifyRatTensor))
 import Vehicle.TypeCheck (TypeCheckOptions (..), runCompileMonad, typeCheckUserProg)
 
 newtype ListOptions = ListOptions {specification :: FilePath}
@@ -29,9 +32,10 @@ list loggingSettings outputAsJSON ListOptions {..} = runCompileMonad loggingSett
   let mergedProg = mergeImports imports typedProg
   printListableEntities mergedProg outputAsJSON
 
+-- | Print all the listable entities in the program
 printListableEntities ::
-  (MonadIO m, MonadCompile m, PrintableBuiltin builtin) =>
-  Prog builtin ->
+  (MonadIO m, MonadCompile m, PrintableBuiltin Builtin) =>
+  Prog Builtin ->
   Bool ->
   m ()
 printListableEntities (Main decls) outputAsJSON = do
@@ -41,16 +45,48 @@ printListableEntities (Main decls) outputAsJSON = do
           convertListEntity
           []
           annotatedListEntities
+  quantifiedVars <- execWriterT (listQuantifiedVariables decls)
+  let allListEntities = quantifiedVars ++ listDecls
   let outputDocs =
         if outputAsJSON
-          then pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON listDecls
-          else pretty listDecls
+          then pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON allListEntities
+          else pretty allListEntities
   programOutput outputDocs
   where
-    convertListEntity :: (PrintableBuiltin builtin) => [ListEntity] -> Decl builtin -> [ListEntity]
+    convertListEntity :: (PrintableBuiltin Builtin) => [ListEntity] -> Decl Builtin -> [ListEntity]
     convertListEntity accList decl = case convertDeclToListEntity decl of
       Nothing -> accList
       Just listEntity -> listEntity : accList
+
+-- | Traverse the program to find all quantified variables
+listQuantifiedVariables :: (MonadWriter [ListEntity] m) => [GenericDecl (Expr Builtin)] -> m ()
+listQuantifiedVariables decls = forM_ decls traverseDeclsQ
+  where
+    traverseDeclsQ :: (MonadWriter [ListEntity] m) => GenericDecl (Expr Builtin) -> m ()
+    traverseDeclsQ decl = case bodyOf decl of
+      Nothing -> return ()
+      Just e -> do
+        _ <- traverseBuiltinsM filterQuantifiedVariables e
+        return ()
+
+    filterQuantifiedVariables :: (MonadWriter [ListEntity] m) => BuiltinUpdate m Builtin Builtin
+    filterQuantifiedVariables p b args = case b of
+      BuiltinFunction (QuantifyRatTensor _) -> do
+        -- Just tell for each matching arg, no result collection
+        forM_ args $ \case
+          Arg _ _ _ (Lam _ binder _) -> case getBinderNameAndType binder of
+            Just (name, typ, prov) ->
+              tell [ListEntity {entity = QuantifiedVariable, entityName = name, entityType = typ, entityProvenance = prov}]
+            Nothing -> return ()
+          _ -> return ()
+        -- Always return the original builtin
+        return (Builtin p b)
+      _ -> return (Builtin p b)
+
+    getBinderNameAndType :: Binder Builtin -> Maybe (Text, Text, Provenance)
+    getBinderNameAndType binder = case nameOf binder of
+      Nothing -> Just ("", pack $ show $ prettyFriendlyEmptyCtx (typeOf binder), provenanceOf binder)
+      Just v -> Just (v, pack $ show $ prettyFriendlyEmptyCtx (typeOf binder), provenanceOf binder)
 
 -- | Data Structure for listable entities
 data ListEntity = ListEntity
@@ -70,7 +106,7 @@ instance Pretty ListEntity where
       <+> pretty (entityType listEntity)
       <+> pretty (entityProvenance listEntity)
 
-declToListableEntity :: Decl builtin -> Maybe ListableEntity
+declToListableEntity :: Decl Builtin -> Maybe ListableEntity
 declToListableEntity b = case b of
   DefAbstract _ _ sort _ -> case sort of
     NetworkDef -> Just Network
@@ -80,7 +116,7 @@ declToListableEntity b = case b of
   DefFunction _ _ anns _ _ -> if AnnProperty `elem` anns then Just Property else Nothing
   DefRecord {} -> Nothing
 
-convertDeclToListEntity :: (PrintableBuiltin builtin) => Decl builtin -> Maybe ListEntity
+convertDeclToListEntity :: (PrintableBuiltin Builtin) => Decl Builtin -> Maybe ListEntity
 convertDeclToListEntity decl = case declToListableEntity decl of
   Nothing -> Nothing
   Just listableEntity ->
