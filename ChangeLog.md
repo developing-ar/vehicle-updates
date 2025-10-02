@@ -4,17 +4,13 @@
 
 ### Command-line interface
 
-* (BREAKING) For `list` the `properties` and `resources` subcommand are depreciated. The `list` command only outputs as JSON including changes to the JSON schema.
+* (BREAKING) The subcommands `properties` and `resources` for `vehicle list` have been removed. The `vehicle list` command now outputs all resources as well as quantified variables as JSON.
 
 ### Python interface
 
-* (BREAKING) Depreciated `list_resources` and `list_properties`, to instead use the `list` function.
+* (BREAKING) Removed `vehicle_lang.list_resources` and `vehicle_lang.list_properties`, in favour of the `vehicle_lang.list` function.
 
-* The `verify` command outputs as JSON.
-
-## Version 0.20.1
-
-* Changes to undocumented internal APIs.
+* The `verify` command now produces output as JSON.
 
 ## Version 0.20.0
 
