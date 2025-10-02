@@ -71,20 +71,13 @@ listQuantifiedVariables decls = forM_ decls traverseDeclsQ
 
     filterQuantifiedVariables :: (MonadWriter [ListEntity] m) => BuiltinUpdate m Builtin Builtin
     filterQuantifiedVariables p b args = case b of
-      BuiltinFunction (QuantifyRatTensor _) -> do
-        -- Traverse over all args and collect results
-        results <- forM args $ \case
-          Arg _ _ _ (Lam _ binder body) -> case getBinderNameAndType binder of
-            Just (name, typ, prov) -> do
-              tell [ListEntity {entity = QuantifiedVariable, entityName = name, entityType = typ, entityProvenance = prov}]
-              return body
-            Nothing -> return (Builtin p b)
-          _ -> return (Builtin p b)
-
-        -- If we had any matches, return the last body, otherwise return original builtin
-        case results of
-          [] -> return (Builtin p b)
-          _ -> return (last results)
+      BuiltinFunction (QuantifyRatTensor _) -> case args of
+        [_, Arg _ _ _ (Lam _ binder _)] -> case getBinderNameAndType binder of
+          Just (name, typ, prov) -> do
+            tell [ListEntity {entity = QuantifiedVariable, entityName = name, entityType = typ, entityProvenance = prov}]
+            return (Builtin p b)
+          Nothing -> return (Builtin p b)
+        _ -> return (Builtin p b)
       _ -> return (Builtin p b)
 
     getBinderNameAndType :: Binder Builtin -> Maybe (Text, Text, Provenance)
