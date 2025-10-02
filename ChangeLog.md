@@ -1,5 +1,17 @@
 # Changelog for Vehicle
 
+## Version 0.21.0
+
+### Command-line interface
+
+* (BREAKING) For `list` the `properties` and `resources` subcommand are depreciated. The `list` command only outputs as JSON including changes to the JSON schema.
+
+### Python interface
+
+* (BREAKING) Depreciated `list_resources` and `list_properties`, to instead use the `list` function.
+
+* The `verify` command outputs as JSON.
+
 ## Version 0.20.1
 
 * Changes to undocumented internal APIs.
