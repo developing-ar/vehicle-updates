@@ -45,7 +45,7 @@ import Options.Applicative
     switch,
     value,
   )
-import Vehicle.Backend.Prelude (DifferentiableLogicID, ITP, ListableEntities (..), SecondaryTypeSystem (..), Target (..), findTarget)
+import Vehicle.Backend.Prelude (DifferentiableLogicID, ITP, SecondaryTypeSystem (..), Target (..), findTarget)
 import Vehicle.Compile (CompileOptions (..))
 import Vehicle.Export (ExportOptions (..))
 import Vehicle.List (ListOptions (..))
@@ -216,8 +216,7 @@ listDescription =
 listParser :: Parser ListOptions
 listParser =
   ListOptions
-    <$> listModeParser
-    <*> specificationParser
+    <$> specificationParser
 
 listParserInfo :: ParserInfo ModeOptions
 listParserInfo = info (List <$> listParser) listDescription
@@ -418,22 +417,6 @@ typeSystemParser =
                       )
                 )
           )
-
-listModeParser :: Parser ListableEntities
-listModeParser =
-  hsubparser $
-    command
-      "resources"
-      ( info
-          (pure ExternalResources)
-          (progDesc "List all networks, datasets, and parameters in the specification.")
-      )
-      <> command
-        "properties"
-        ( info
-            (pure Properties)
-            (progDesc "List all properties in the specification.")
-        )
 
 specificationParser :: Parser FilePath
 specificationParser =

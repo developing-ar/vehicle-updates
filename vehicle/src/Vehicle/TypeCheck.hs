@@ -132,7 +132,7 @@ loadLibrary library = do
     libraryFile <- findLibraryContentFile library
     typeCheckOrLoadProg StdLib mempty libraryFile
 
-printPropertyTypes :: (MonadIO m, MonadCompile m, PrintableBuiltin builtin) => Either CompileError (Prog builtin) -> m ()
+printPropertyTypes :: (MonadStdIO m, MonadCompile m, PrintableBuiltin builtin) => Either CompileError (Prog builtin) -> m ()
 printPropertyTypes = \case
   Left err -> throwError err
   Right (Main decls) -> do

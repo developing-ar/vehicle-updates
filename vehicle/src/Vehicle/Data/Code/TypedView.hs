@@ -176,7 +176,7 @@ toBoolValue expr = case expr of
   (getExpr accessCompareRatTensorReduced -> Just args) -> fromComparison $ Right args
   (getExpr accessCompareNat -> Just args) -> VCompareNat args
   (getExpr accessCompareIndex -> Just args) -> VCompareIndex args
-  (getExpr accessQuantifyRatTensor -> Just (op, dims, VLam binder closure)) -> VQuantifyRatTensor op dims binder closure
+  (getExpr accessQuantifyRatTensor -> Just (q, QuantifyRatTensorArgs dims (VLam binder closure))) -> VQuantifyRatTensor q dims binder closure
   (getExpr accessReduceAnd -> Just args) -> VReduceAndTensor args
   (getExpr accessReduceOr -> Just args) -> VReduceOrTensor args
   (getExpr accessAtTensor -> Just args) -> VBoolAt args
@@ -192,7 +192,7 @@ fromBoolValue = \case
   VCompareNat args -> mkExpr accessCompareNat args
   VCompareIndex args -> mkExpr accessCompareIndex args
   VCompareRatTensor args -> toComparison args
-  VQuantifyRatTensor q dims binder closure -> mkExpr accessQuantifyRatTensor (q, dims, VLam binder closure)
+  VQuantifyRatTensor q dims binder closure -> mkExpr accessQuantifyRatTensor (q, QuantifyRatTensorArgs dims (VLam binder closure))
   VReduceAndTensor args -> mkExpr accessReduceAnd args
   VReduceOrTensor args -> mkExpr accessReduceOr args
   VBoolIf args -> mkExpr accessIf args
@@ -277,7 +277,7 @@ toBoolTensorValue expr = case expr of
   (getExpr accessCompareRatTensorReduced -> Just args) -> VBoolTensorCompareRatReduced args
   (getExpr accessCompareNat -> Just args) -> VBoolTensorCompareNat args
   (getExpr accessCompareIndex -> Just args) -> VBoolTensorCompareIndex args
-  (getExpr accessQuantifyRatTensor -> Just (op, dims, VLam binder closure)) -> VBoolTensorQuantifyRat op dims binder closure
+  (getExpr accessQuantifyRatTensor -> Just (q, QuantifyRatTensorArgs dims (VLam binder closure))) -> VBoolTensorQuantifyRat q dims binder closure
   (getExpr accessReduceAnd -> Just args) -> VBoolTensorReduceAnd args
   (getExpr accessReduceOr -> Just args) -> VBoolTensorReduceOr args
   (getExpr accessAtTensor -> Just args) -> VBoolTensorAt args
@@ -297,7 +297,7 @@ fromBoolTensorValue = \case
   VBoolTensorCompareIndex args -> mkExpr accessCompareIndex args
   VBoolTensorCompareRatPointwise args -> mkExpr accessCompareRatTensorPointwise args
   VBoolTensorCompareRatReduced args -> mkExpr accessCompareRatTensorReduced args
-  VBoolTensorQuantifyRat q dims binder closure -> mkExpr accessQuantifyRatTensor (q, dims, VLam binder closure)
+  VBoolTensorQuantifyRat q dims binder closure -> mkExpr accessQuantifyRatTensor (q, QuantifyRatTensorArgs dims (VLam binder closure))
   VBoolTensorReduceAnd args -> mkExpr accessReduceAnd args
   VBoolTensorReduceOr args -> mkExpr accessReduceOr args
   VBoolTensorBoolIf args -> mkExpr accessIf args
