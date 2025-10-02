@@ -1,0 +1,86 @@
+[
+  {
+    "entityType": "Vector Bool n",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        92,
+        1,
+        92,
+        7
+      ]
+    },
+    "entityName": "robust",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Vector Label n",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        81,
+        1,
+        81,
+        15
+      ]
+    },
+    "entityName": "trainingLabels",
+    "entity": "Dataset"
+  },
+  {
+    "entityType": "Vector Image n",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        78,
+        1,
+        78,
+        15
+      ]
+    },
+    "entityName": "trainingImages",
+    "entity": "Dataset"
+  },
+  {
+    "entityType": "Nat",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        72,
+        1,
+        72,
+        2
+      ]
+    },
+    "entityName": "n",
+    "entity": "Parameter"
+  },
+  {
+    "entityType": "Real",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        37,
+        1,
+        37,
+        8
+      ]
+    },
+    "entityName": "epsilon",
+    "entity": "Parameter"
+  },
+  {
+    "entityType": "Image -> Tensor Real [10]",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        22,
+        1,
+        22,
+        11
+      ]
+    },
+    "entityName": "classifier",
+    "entity": "Network"
+  }
+]

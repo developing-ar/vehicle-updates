@@ -46,7 +46,7 @@ printListableEntities (Main decls) outputAsJSON = do
           []
           annotatedListEntities
   quantifiedVars <- execWriterT (listQuantifiedVariables decls)
-  let allListEntities = quantifiedVars ++ listDecls
+  let allListEntities = listDecls ++ quantifiedVars
   let outputDocs =
         if outputAsJSON
           then pretty $ unpack $ encodePretty' prettyJSONConfig $ toJSON allListEntities

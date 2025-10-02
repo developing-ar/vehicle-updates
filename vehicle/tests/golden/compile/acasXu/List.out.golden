@@ -1,0 +1,156 @@
+[
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        322,
+        1,
+        322,
+        11
+      ]
+    },
+    "entityName": "property10",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        301,
+        1,
+        301,
+        10
+      ]
+    },
+    "entityName": "property9",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        279,
+        1,
+        279,
+        10
+      ]
+    },
+    "entityName": "property8",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        257,
+        1,
+        257,
+        10
+      ]
+    },
+    "entityName": "property7",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        236,
+        1,
+        236,
+        10
+      ]
+    },
+    "entityName": "property6",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        215,
+        1,
+        215,
+        10
+      ]
+    },
+    "entityName": "property5",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        193,
+        1,
+        193,
+        10
+      ]
+    },
+    "entityName": "property4",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        172,
+        1,
+        172,
+        10
+      ]
+    },
+    "entityName": "property3",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        147,
+        1,
+        147,
+        10
+      ]
+    },
+    "entityName": "property2",
+    "entity": "Property"
+  },
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        134,
+        1,
+        134,
+        10
+      ]
+    },
+    "entityName": "property1",
+    "entity": "Property"
+  },
+  {
+    "entityType": "InputVector -> OutputVector",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        59,
+        1,
+        59,
+        7
+      ]
+    },
+    "entityName": "acasXu",
+    "entity": "Network"
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "entityType": "Bool",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        34,
+        1,
+        34,
+        5
+      ]
+    },
+    "entityName": "safe",
+    "entity": "Property"
+  },
+  {
+    "entityType": "InputVector -> OutputVector",
+    "entityProvenance": {
+      "tag": "Provenance",
+      "contents": [
+        17,
+        1,
+        17,
+        11
+      ]
+    },
+    "entityName": "controller",
+    "entity": "Network"
+  }
+]
