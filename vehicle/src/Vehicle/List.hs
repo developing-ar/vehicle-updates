@@ -9,7 +9,6 @@ import Data.Aeson (ToJSON (..))
 import Data.Aeson.Encode.Pretty (encodePretty')
 import Data.ByteString.Lazy.Char8 (unpack)
 import Data.Foldable (traverse_)
-import Data.List (singleton)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text, pack)
 import GHC.Generics
@@ -76,15 +75,15 @@ searchDecl decl = do
   case decl of
     DefRecord {} -> return ()
     DefAbstract _ _ sort _ -> case sort of
-      NetworkDef -> tell $ singleton $ Network $ NetworkSummary sharedData
-      DatasetDef -> tell $ singleton $ Dataset $ DatasetSummary sharedData
-      ParameterDef s -> tell $ singleton $ Parameter $ ParameterSummary sharedData (isInferable s)
+      NetworkDef -> tell [Network $ NetworkSummary sharedData]
+      DatasetDef -> tell [Dataset $ DatasetSummary sharedData]
+      ParameterDef s -> tell [Parameter $ ParameterSummary sharedData (isInferable s)]
       PostulateDef -> return ()
     DefFunction _ _ anns _ body
       | AnnProperty `notElem` anns -> return ()
       | otherwise -> do
           quantifiers <- runFreshNameContextT $ execWriterT $ searchValue body
-          tell $ singleton $ Property $ PropertySummary sharedData quantifiers
+          tell [Property $ PropertySummary sharedData quantifiers]
 
 type MonadListBody m =
   ( MonadNameContext m,
@@ -100,7 +99,7 @@ searchValue = \case
   VBuiltin b spine -> do
     case (b, getExpr accessSpine spine) of
       (BuiltinFunction (QuantifyRatTensor q), Just (QuantifyRatTensorArgs _dims (VLam binder _))) -> do
-        tell $ singleton $ QuantifiedVariableSummary (mkSharedData getBinderName binder) q
+        tell [QuantifiedVariableSummary (mkSharedData getBinderName binder) q]
       _ -> return ()
     searchSpine spine
   VLam binder closure -> do
