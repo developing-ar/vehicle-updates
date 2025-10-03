@@ -323,7 +323,7 @@ writeWitnessToFile verificationCache address (UserVariableAssignment assignments
   let witnessFolder = verificationCache </> layoutAsString (pretty address) <> "-assignments"
   liftIO $ createDirectoryIfMissing True witnessFolder
   forM_ assignments $ \(var, tensor) -> do
-    let file = witnessFolder </> show var
+    let file = witnessFolder </> layoutAsString (pretty var)
     let dims = Vector.fromList (shapeOf tensor)
     -- TODO got to be a better way to do this conversion...
     let unboxedVector = Vector.fromList $ BoxedVector.toList (fmap realToFrac (Tensor.toVector tensor))
